@@ -1,0 +1,3 @@
+import 'package:flutter/material.dart';
+import '../main.dart';
+class AppHeader extends StatelessWidget{final String title;const AppHeader({super.key,required this.title});@override Widget build(BuildContext c)=>Container(decoration:const BoxDecoration(color:maroon,borderRadius:BorderRadius.only(bottomLeft:Radius.circular(32),bottomRight:Radius.circular(32))),padding:const EdgeInsets.fromLTRB(24,56,24,28),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Center(child:Text('100ᵗʰ DPU AIU VC\nConference\n2026',textAlign:TextAlign.center,style:TextStyle(color:Colors.white,fontSize:30,fontWeight:FontWeight.w800,height:1.15))),const SizedBox(height:20),Text(title,style:const TextStyle(color:Colors.white,fontSize:28,fontWeight:FontWeight.w700))]);}

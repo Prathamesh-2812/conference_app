@@ -1,0 +1,23 @@
+name: conference_app
+description: Full-featured multi-conference mobile application.
+publish_to: 'none'
+version: 1.0.0+1
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  http: ^1.4.0
+  shared_preferences: ^2.5.3
+  intl: ^0.20.2
+  url_launcher: ^6.3.1
+  qr_flutter: ^4.1.0
+  image_picker: ^1.1.2
+  socket_io_client: ^3.1.2
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+flutter:
+  uses-material-design: true
