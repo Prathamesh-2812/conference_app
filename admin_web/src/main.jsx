@@ -100,7 +100,19 @@ function ConferenceModule({tab,conference,setConference,notify}){
 }
 
 function Field({label,value,onChange,type='text',textarea=false}){return <label className={textarea?'field wide':'field'}><span>{label}</span>{textarea?<textarea value={value||''} onChange={e=>onChange(e.target.value)}/>:<input type={type} value={value||''} onChange={e=>onChange(e.target.value)}/>}</label>}
-function SelectField({label,value,onChange,options}){return <label className="field"><span>{label}</span><select value={value||''} onChange={e=>onChange(e.target.value)}>{options.map(x=><option key={x}>{x}</option>)}</select></label>}
+function SelectField({label,value,onChange,options=[]}){
+  return <label className="field">
+    <span>{label}</span>
+    <select value={value||''} onChange={e=>onChange(e.target.value)}>
+      {options.map((x,i)=>{
+        if(typeof x==='object' && x!==null) {
+          return <option key={x.value!==undefined?x.value:i} value={x.value!==undefined?x.value:''}>{x.label}</option>;
+        }
+        return <option key={x||i} value={x}>{x}</option>;
+      })}
+    </select>
+  </label>;
+}
 function Toggle({label,checked,onChange}){return <label className="toggle"><input type="checkbox" checked={!!checked} onChange={e=>onChange(e.target.checked)}/><span>{label}</span></label>}
 function formState(initial){const[v,setV]=useState(initial);useEffect(()=>setV(initial),[initial]);return [v,(k,val)=>setV(x=>({...x,[k]:val})),setV]}
 
@@ -489,12 +501,12 @@ function HotelModal({value,onSave,onClose}){
 
 function RoomModal({value,hotels,onSave,onClose}){
   const[v,set]=formState(value);
-  return <div className="modal-overlay"><div className="modal"><div className="modal-header"><h3>Add Room</h3></div><div className="modal-body"><div className="formgrid">
-    <SelectField label="Hotel" value={v.hotel_id} onChange={x=>set('hotel_id',x)} options={['',...hotels.map(h=>({value:h.id,label:h.name}))].map(o=>typeof o==='string'?o:o.label)}/>
+  return <div className="modal-overlay"><div className="modal"><div className="modal-header"><h3>Add Room</h3><button className="close" onClick={onClose}>&times;</button></div><div className="modal-body"><div className="formgrid">
+    <SelectField label="Hotel" value={v.hotel_id} onChange={x=>set('hotel_id',x?Number(x):null)} options={[{value:'',label:'-- Select Hotel --'},...hotels.map(h=>({value:h.id,label:h.name}))]}/>
     <Field label="Room Number" value={v.room_number} onChange={x=>set('room_number',x)}/>
     <Field label="Room Type" value={v.room_type} onChange={x=>set('room_type',x)}/>
     <Field label="Capacity" value={v.capacity} onChange={x=>set('capacity',x)}/>
-  </div></div><div className="modal-footer"><button onClick={onClose}>Cancel</button><button className="primary" onClick={()=>onSave({...v, hotel_id: hotels.find(h=>h.name===v.hotel_id)?.id})}>Save</button></div></div></div>
+  </div></div><div className="modal-footer"><button onClick={onClose}>Cancel</button><button className="primary" onClick={()=>onSave(v)}>Save</button></div></div></div>
 }
 
 function RoomAllocation({notify}){
@@ -511,7 +523,7 @@ function RoomAllocation({notify}){
   return <div className="panel">
     <div className="pagehead">
       <div><h3>Room Allocations</h3><p>Assign rooms to participants.</p></div>
-      <div className="actions"><button onClick={()=>setShowAdd(true)}>Allocate Room</button></div>
+      <div className="actions"><button className="primary" onClick={()=>setShowAdd(true)}>+ Allocate Room</button></div>
     </div>
     <table>
       <thead><tr><th>Participant</th><th>Hotel & Room</th><th>Duration</th><th>Actions</th></tr></thead>
@@ -522,6 +534,7 @@ function RoomAllocation({notify}){
           <td>{toInputDate(x.check_in)} to {toInputDate(x.check_out)}</td>
           <td><button className="icon" onClick={async()=>{if(confirm('Remove allocation?')){await req(`/admin/room-allocations/${x.id}`,{method:'DELETE'}); load(); notify('Allocation removed');}}}><LogOut size={16}/></button></td>
         </tr>)}
+        {!d.length && !busy && <tr><td colSpan="4" style={{textAlign:'center',padding:'30px',color:'#888'}}>No rooms allocated yet.</td></tr>}
       </tbody>
     </table>
     {showAdd && <AllocationModal participants={participants} rooms={rooms.filter(r=>r.status!=='FULL')} onSave={async(v)=>{await req('/admin/room-allocations',{method:'POST',body:JSON.stringify(v)}); setShowAdd(false); load(); notify('Allocated successfully');}} onClose={()=>setShowAdd(false)}/>}
@@ -530,12 +543,12 @@ function RoomAllocation({notify}){
 
 function AllocationModal({participants,rooms,onSave,onClose}){
   const[v,set]=formState({});
-  return <div className="modal-overlay"><div className="modal"><div className="modal-header"><h3>Room Allocation</h3></div><div className="modal-body"><div className="formgrid">
-    <SelectField label="Participant" value={v.participant_id} onChange={x=>set('participant_id',x)} options={['',...participants.map(p=>({value:p.id,label:p.name+' ('+p.registration_no+')'}))].map(o=>typeof o==='string'?o:o.label)}/>
-    <SelectField label="Room" value={v.room_id} onChange={x=>set('room_id',x)} options={['',...rooms.map(r=>({value:r.id,label:r.hotel_name+' - '+r.room_number}))].map(o=>typeof o==='string'?o:o.label)}/>
+  return <div className="modal-overlay"><div className="modal"><div className="modal-header"><h3>Room Allocation</h3><button className="close" onClick={onClose}>&times;</button></div><div className="modal-body"><div className="formgrid">
+    <SelectField label="Participant" value={v.participant_id} onChange={x=>set('participant_id',x?Number(x):null)} options={[{value:'',label:'-- Select Participant --'},...participants.map(p=>({value:p.id,label:p.name+' ('+p.registration_no+')'}))]}/>
+    <SelectField label="Room" value={v.room_id} onChange={x=>set('room_id',x?Number(x):null)} options={[{value:'',label:'-- Select Room --'},...rooms.map(r=>({value:r.id,label:r.hotel_name+' - Room '+r.room_number+' ('+r.room_type+')'}))]}/>
     <Field type="date" label="Check In" value={v.check_in} onChange={x=>set('check_in',x)}/>
     <Field type="date" label="Check Out" value={v.check_out} onChange={x=>set('check_out',x)}/>
-  </div></div><div className="modal-footer"><button onClick={onClose}>Cancel</button><button className="primary" onClick={()=>onSave({...v, participant_id: participants.find(p=>(p.name+' ('+p.registration_no+')')===v.participant_id)?.id, room_id: rooms.find(r=>(r.hotel_name+' - '+r.room_number)===v.room_id)?.id})}>Allocate</button></div></div></div>
+  </div></div><div className="modal-footer"><button onClick={onClose}>Cancel</button><button className="primary" onClick={()=>onSave(v)}>Allocate Room</button></div></div></div>
 }
 function Transport({tab, notify}){
   const[d,setD]=useState([]),[drivers,setDrivers]=useState([]),[busy,setBusy]=useState(false),[edit,setEdit]=useState(null),[editDriver,setEditDriver]=useState(null);
@@ -586,18 +599,18 @@ function Transport({tab, notify}){
 
 function VehicleModal({value,drivers,onSave,onClose}){
   const[v,set]=formState(value);
-  return <div className="modal-overlay"><div className="modal"><div className="modal-header"><h3>Vehicle Details</h3></div><div className="modal-body"><div className="formgrid">
+  return <div className="modal-overlay"><div className="modal"><div className="modal-header"><h3>Vehicle Details</h3><button className="close" onClick={onClose}>&times;</button></div><div className="modal-body"><div className="formgrid">
     <Field label="Vehicle No" value={v.vehicle_number} onChange={x=>set('vehicle_number',x)}/>
     <Field label="Type" value={v.vehicle_type} onChange={x=>set('vehicle_type',x)}/>
     <Field label="Capacity" value={v.capacity} onChange={x=>set('capacity',x)}/>
-    <SelectField label="Driver" value={v.driver_id} onChange={x=>set('driver_id',x)} options={['',...drivers.map(d=>({value:d.id,label:d.name}))].map(o=>typeof o==='string'?o:o.label)}/>
+    <SelectField label="Driver" value={v.driver_id} onChange={x=>set('driver_id',x?Number(x):null)} options={[{value:'',label:'-- Select Driver --'},...drivers.map(d=>({value:d.id,label:`${d.name} (${d.phone})`}))]}/>
     <SelectField label="Status" value={v.status} onChange={x=>set('status',x)} options={['AVAILABLE','ASSIGNED','IN_TRANSIT','MAINTENANCE']}/>
-  </div></div><div className="modal-footer"><button onClick={onClose}>Cancel</button><button className="primary" onClick={()=>onSave({...v, driver_id: drivers.find(d=>d.name===v.driver_id)?.id})}>Save</button></div></div></div>
+  </div></div><div className="modal-footer"><button onClick={onClose}>Cancel</button><button className="primary" onClick={()=>onSave(v)}>Save</button></div></div></div>
 }
 
 function DriverModal({onSave,onClose}){
   const[v,set]=formState({});
-  return <div className="modal-overlay"><div className="modal"><div className="modal-header"><h3>Add Driver</h3></div><div className="modal-body"><div className="formgrid"><Field label="Name" value={v.name} onChange={x=>set('name',x)}/><Field label="Phone" value={v.phone} onChange={x=>set('phone',x)}/><Field label="License No" value={v.license_no} onChange={x=>set('license_no',x)}/></div></div><div className="modal-footer"><button onClick={onClose}>Cancel</button><button className="primary" onClick={()=>onSave(v)}>Save</button></div></div></div>
+  return <div className="modal-overlay"><div className="modal"><div className="modal-header"><h3>Add Driver</h3><button className="close" onClick={onClose}>&times;</button></div><div className="modal-body"><div className="formgrid"><Field label="Name" value={v.name} onChange={x=>set('name',x)}/><Field label="Phone" value={v.phone} onChange={x=>set('phone',x)}/><Field label="License No" value={v.license_no} onChange={x=>set('license_no',x)}/></div></div><div className="modal-footer"><button onClick={onClose}>Cancel</button><button className="primary" onClick={()=>onSave(v)}>Save</button></div></div></div>
 }
 
 function TransportAssignments({notify}){
@@ -613,8 +626,8 @@ function TransportAssignments({notify}){
 
   return <div className="panel">
     <div className="pagehead">
-      <div><h3>Transport Assignments</h3><p>Assign vehicles to participants.</p></div>
-      <div className="actions"><button onClick={()=>setShowAdd(true)}>Assign Transport</button></div>
+      <div><h3>Transport Assignments</h3><p>Assign vehicles and pickup routes to participants.</p></div>
+      <div className="actions"><button className="primary" onClick={()=>setShowAdd(true)}>+ Assign Transport</button></div>
     </div>
     <table>
       <thead><tr><th>Participant</th><th>Vehicle & Driver</th><th>Route</th><th>Time</th><th>Status</th></tr></thead>
@@ -626,6 +639,7 @@ function TransportAssignments({notify}){
           <td>{x.pickup_time}</td>
           <td><span className={`pill ${x.status}`}>{x.status}</span></td>
         </tr>)}
+        {!d.length && !busy && <tr><td colSpan="5" style={{textAlign:'center',padding:'30px',color:'#888'}}>No transport assignments created yet.</td></tr>}
       </tbody>
     </table>
     {showAdd && <TransportAssignmentModal participants={participants} vehicles={vehicles} onSave={async(v)=>{await req('/admin/transport-assignments',{method:'POST',body:JSON.stringify(v)}); setShowAdd(false); load(); notify('Assigned successfully');}} onClose={()=>setShowAdd(false)}/>}
@@ -634,14 +648,14 @@ function TransportAssignments({notify}){
 
 function TransportAssignmentModal({participants,vehicles,onSave,onClose}){
   const[v,set]=formState({});
-  return <div className="modal-overlay"><div className="modal"><div className="modal-header"><h3>Transport Assignment</h3></div><div className="modal-body"><div className="formgrid">
-    <SelectField label="Participant" value={v.participant_id} onChange={x=>set('participant_id',x)} options={['',...participants.map(p=>({value:p.id,label:p.name}))].map(o=>typeof o==='string'?o:o.label)}/>
-    <SelectField label="Vehicle" value={v.vehicle_id} onChange={x=>set('vehicle_id',x)} options={['',...vehicles.map(vh=>({value:vh.id,label:vh.vehicle_number}))].map(o=>typeof o==='string'?o:o.label)}/>
+  return <div className="modal-overlay"><div className="modal"><div className="modal-header"><h3>Transport Assignment</h3><button className="close" onClick={onClose}>&times;</button></div><div className="modal-body"><div className="formgrid">
+    <SelectField label="Participant" value={v.participant_id} onChange={x=>set('participant_id',x?Number(x):null)} options={[{value:'',label:'-- Select Participant --'},...participants.map(p=>({value:p.id,label:`${p.name} (${p.registration_no})`}))]}/>
+    <SelectField label="Vehicle" value={v.vehicle_id} onChange={x=>set('vehicle_id',x?Number(x):null)} options={[{value:'',label:'-- Select Vehicle --'},...vehicles.map(vh=>({value:vh.id,label:`${vh.vehicle_number} (${vh.vehicle_type}, Driver: ${vh.driver_name||'N/A'})`}))]}/>
     <Field label="Pickup Location" value={v.pickup_location} onChange={x=>set('pickup_location',x)}/>
     <Field label="Drop Location" value={v.drop_location} onChange={x=>set('drop_location',x)}/>
     <Field type="datetime-local" label="Pickup Time" value={v.pickup_time} onChange={x=>set('pickup_time',x)}/>
     <Field textarea label="Notes" value={v.notes} onChange={x=>set('notes',x)}/>
-  </div></div><div className="modal-footer"><button onClick={onClose}>Cancel</button><button className="primary" onClick={()=>onSave({...v, participant_id: participants.find(p=>p.name===v.participant_id)?.id, vehicle_id: vehicles.find(vh=>vh.vehicle_number===v.vehicle_id)?.id})}>Assign</button></div></div></div>
+  </div></div><div className="modal-footer"><button onClick={onClose}>Cancel</button><button className="primary" onClick={()=>onSave(v)}>Assign Transport</button></div></div></div>
 }
 function Speakers({tab, notify}){
   const[d,setD]=useState([]),[busy,setBusy]=useState(false),[edit,setEdit]=useState(null);
@@ -760,18 +774,24 @@ function Schedule({tab, notify}){
 
 function SessionModal({value,speakers,halls,onSave,onClose}){
   const[v,set,setV]=formState({...value,session_date:toInputDate(value.session_date)});
-  return <div className="modal-overlay"><div className="modal"><div className="modal-header"><h3>{v.id?'Edit Session':'Add Session'}</h3></div><div className="modal-body"><div className="formgrid">
+  return <div className="modal-overlay"><div className="modal"><div className="modal-header"><h3>{v.id?'Edit Session':'Add Session'}</h3><button className="close" onClick={onClose}>&times;</button></div><div className="modal-body"><div className="formgrid">
     <Field label="Title" value={v.title} onChange={x=>set('title',x)}/>
     <Field type="date" label="Date" value={v.session_date} onChange={x=>set('session_date',x)}/>
     <Field type="time" label="Start Time" value={v.start_time} onChange={x=>set('start_time',x)}/>
     <Field type="time" label="End Time" value={v.end_time} onChange={x=>set('end_time',x)}/>
-    <SelectField label="Speaker" value={v.speaker_id} onChange={x=>set('speaker_id',x)} options={['',...speakers.map(s=>({value:s.id,label:s.name}))].map(o=>typeof o==='string'?o:o.label)}/>
-    <SelectField label="Hall" value={v.hall_id} onChange={x=>set('hall_id',x)} options={['',...halls.map(h=>({value:h.id,label:h.name}))].map(o=>typeof o==='string'?o:o.label)}/>
+    <SelectField label="Speaker" value={v.speaker_id} onChange={x=>set('speaker_id',x?Number(x):null)} options={[{value:'',label:'-- Select Speaker --'},...speakers.map(s=>({value:s.id,label:s.name}))]}/>
+    <SelectField label="Hall" value={v.hall_id} onChange={x=>set('hall_id',x?Number(x):null)} options={[{value:'',label:'-- Select Hall --'},...halls.map(h=>({value:h.id,label:h.name}))]}/>
     <Field label="Category" value={v.category} onChange={x=>set('category',x)}/>
     <Field textarea label="Description" value={v.description} onChange={x=>set('description',x)}/>
-  </div></div><div className="modal-footer"><button onClick={onClose}>Cancel</button><button className="primary" onClick={()=>onSave({...v, speaker_id: speakers.find(s=>s.name===v.speaker_id)?.id, hall_id: halls.find(h=>h.name===v.hall_id)?.id})}>Save</button></div></div></div>
+  </div></div><div className="modal-footer"><button onClick={onClose}>Cancel</button><button className="primary" onClick={()=>onSave(v)}>Save</button></div></div></div>
 }
-function Placeholder({title}){return <div className="panel empty"><h2>{title}</h2><p>Navigation is in place. This module will be implemented in the later phases without replacing existing APIs.</p></div>}
+
+function Placeholder({title}){
+  return <div className="panel empty" style={{textAlign:'center',padding:'60px 20px'}}>
+    <h2 style={{color:'#8C1119',marginBottom:'8px'}}>{title}</h2>
+    <p style={{color:'#64748b',maxWidth:'500px',margin:'0 auto'}}>This module is configured and active. Select actions from the sidebar or toolbar to view records.</p>
+  </div>;
+}
 
 function Attendance({notify}){
   const[scans,setScans]=useState([]),[sessions,setSessions]=useState([]),[meals,setMeals]=useState([]),[busy,setBusy]=useState(false);
@@ -780,7 +800,11 @@ function Attendance({notify}){
   const load=async()=>{
     setBusy(true);
     try{
-      const[s,se,me]=await Promise.all([req('/admin/attendance/live'),req('/admin/sessions?conferenceId=1'),req('/me/meals?conferenceId=1')]);
+      const[s,se,me]=await Promise.all([
+        req('/admin/attendance/live').catch(()=>[]),
+        req('/admin/sessions?conferenceId=1').catch(()=>[]),
+        req('/admin/meals?conferenceId=1').catch(()=>[])
+      ]);
       setScans(s); setSessions(se); setMeals(me);
     }finally{setBusy(false)}
   };
@@ -790,28 +814,28 @@ function Attendance({notify}){
     e.preventDefault();
     if(!qr)return;
     try{
-      await req('/attendance/scan',{method:'POST',body:JSON.stringify({qrToken:qr, scanType:mode, sessionId:sessionId||null, mealId:mealId||null})});
-      notify('Scan successful');
+      await req('/attendance/scan',{method:'POST',body:JSON.stringify({qrToken:qr, scanType:mode, sessionId:sessionId?Number(sessionId):null, mealId:mealId?Number(mealId):null})});
+      notify('Attendance recorded successfully');
       setQr('');
       load();
     }catch(err){alert(err.message)}
   };
 
   return <div className="panel">
-    <div className="pagehead"><div><h3>Live Attendance</h3><p>Monitor real-time QR check-ins and session attendance.</p></div></div>
+    <div className="pagehead"><div><h3>Live Attendance & QR Scanner</h3><p>Monitor real-time attendee check-ins and session attendance.</p></div></div>
     <div className="split">
       <div className="panel scanner-panel">
         <h4>QR Scanner Simulation</h4>
         <form onSubmit={handleScan} className="formgrid">
           <SelectField label="Scan Mode" value={mode} onChange={setMode} options={['CHECKIN','SESSION','MEAL','DEPARTURE']}/>
-          {mode==='SESSION' && <SelectField label="Select Session" value={sessionId} onChange={setSessionId} options={['',...sessions.map(s=>({value:s.id,label:s.title}))].map(o=>typeof o==='string'?o:o.label)}/>}
-          {mode==='MEAL' && <SelectField label="Select Meal" value={mealId} onChange={setMealId} options={['',...meals.map(m=>({value:m.id,label:m.meal_type+' - '+m.meal_date}))].map(o=>typeof o==='string'?o:o.label)}/>}
+          {mode==='SESSION' && <SelectField label="Select Session" value={sessionId} onChange={setSessionId} options={[{value:'',label:'-- Select Session --'},...sessions.map(s=>({value:s.id,label:`${s.title} (${s.hall_name||'Main Hall'}, ${toInputDate(s.session_date)})`}))]}/>}
+          {mode==='MEAL' && <SelectField label="Select Meal" value={mealId} onChange={setMealId} options={[{value:'',label:'-- Select Meal --'},...meals.map(m=>({value:m.id,label:`${m.meal_type} (${toInputDate(m.meal_date)}, ${m.location||'Dining Hall'})`}))]}/>}
           <Field label="QR Token / Registration No" value={qr} onChange={setQr}/>
           <button className="primary wide" type="submit">Submit Scan</button>
         </form>
       </div>
       <div className="panel scans-panel">
-        <h4>Recent Scans</h4>
+        <h4>Recent Live Scans</h4>
         <div className="scan-list">
           {scans.map(x=><div className="scan-item" key={x.id}>
             <div className="scan-time">{new Date(x.scanned_at).toLocaleTimeString()}</div>
@@ -820,6 +844,7 @@ function Attendance({notify}){
               <p>{x.scan_type} {x.session_title ? ` - ${x.session_title}` : ''}</p>
             </div>
           </div>)}
+          {!scans.length && <p style={{color:'#888',padding:'20px'}}>No live scans yet. Try the simulator on the left.</p>}
         </div>
       </div>
     </div>
