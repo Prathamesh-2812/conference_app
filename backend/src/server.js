@@ -430,6 +430,18 @@ app.get('/api/polls',auth,asyncRoute(async(req,res)=>{const [r]=await pool.query
 app.post('/api/polls/:id/vote',auth,[body('optionId').isInt()],validate,asyncRoute(async(req,res)=>{const [[p]]=await pool.query('SELECT id FROM participants WHERE user_id=? LIMIT 1',[req.user.id]);if(!p)return res.status(400).json({message:'Participant profile not found'});await pool.query('INSERT INTO poll_votes(poll_id,option_id,participant_id) VALUES(?,?,?) ON DUPLICATE KEY UPDATE option_id=VALUES(option_id)',[req.params.id,req.body.optionId,p.id]);res.json({message:'Vote recorded'})}));
 app.get('/api/conversations',auth,asyncRoute(async(req,res)=>{const [r]=await pool.query('SELECT c.id,c.title,c.created_at FROM conversations c JOIN conversation_members cm ON cm.conversation_id=c.id WHERE cm.user_id=? ORDER BY c.created_at DESC',[req.user.id]);res.json(r)}));
 app.get('/api/conversations/:id/messages',auth,asyncRoute(async(req,res)=>{const [r]=await pool.query('SELECT m.*,u.name sender_name FROM messages m JOIN conversation_members cm ON cm.conversation_id=m.conversation_id JOIN users u ON u.id=m.sender_id WHERE m.conversation_id=? AND cm.user_id=? ORDER BY m.created_at',[req.params.id,req.user.id]);res.json(r)}));
+app.get('/api/admin/notices',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
+  const [r]=await pool.query('SELECT * FROM notices WHERE conference_id=? ORDER BY created_at DESC',[req.query.conferenceId||1]);
+  res.json(r);
+}));
+
+app.post('/api/admin/notices',auth,roles('ADMIN','SUPER_ADMIN'),[body('title').notEmpty(),body('message').notEmpty()],validate,asyncRoute(async(req,res)=>{
+  const [r]=await pool.query('INSERT INTO notices(conference_id,title,message,type,target_role,target_user_id) VALUES(?,?,?,?,?,?)',
+    [req.body.conferenceId||1, req.body.title, req.body.message, req.body.type||'GENERAL', req.body.target_role||null, req.body.target_user_id||null]);
+  io.emit('new_notice',{id:r.insertId, title:req.body.title, message:req.body.message, type:req.body.type||'GENERAL'});
+  created(res,{id:r.insertId},'Notice published');
+}));
+
 app.delete('/api/admin/notices/:id',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
   await pool.query('DELETE FROM notices WHERE id=?',[req.params.id]);
   ok(res,null,'Notice deleted');
@@ -440,9 +452,19 @@ app.get('/api/admin/gallery/albums',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute
   res.json(r);
 }));
 
+app.get('/api/admin/gallery',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
+  const [r]=await pool.query(`
+    SELECT ph.*, u.name as uploader_name
+    FROM photos ph
+    LEFT JOIN users u ON u.id = ph.uploaded_by
+    WHERE ph.conference_id=?
+    ORDER BY ph.created_at DESC`, [req.query.conferenceId||1]);
+  res.json(r);
+}));
+
 app.post('/api/admin/gallery',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
   const [r]=await pool.query('INSERT INTO photos(conference_id,album,url,caption,uploaded_by) VALUES(?,?,?,?,?)',
-    [req.body.conferenceId||1, req.body.album, req.body.url, req.body.caption, req.user.id]);
+    [req.body.conferenceId||1, req.body.album||'General', req.body.url, req.body.caption||'', req.user.id]);
   created(res,{id:r.insertId},'Photo added');
 }));
 
@@ -450,6 +472,7 @@ app.delete('/api/admin/gallery/:id',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute
   await pool.query('DELETE FROM photos WHERE id=?',[req.params.id]);
   ok(res,null,'Photo deleted');
 }));
+
 app.get('/api/certificates/verify/:certificateNumber',asyncRoute(async(req,res)=>{
   const [[c]]=await pool.query(`
     SELECT cert.*, u.name, p.registration_no, conf.name as conference_name
@@ -472,23 +495,89 @@ app.get('/api/admin/certificates',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(a
   res.json(r);
 }));
 
-app.get('/api/admin/reports/participants',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
-  const [r]=await pool.query('SELECT u.name, u.email, p.registration_no, p.category, p.status FROM participants p JOIN users u ON u.id=p.user_id');
+app.post('/api/admin/certificates/:participantId/issue',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
+  const certNo = req.body.certificateNo || `CERT-${Date.now().toString().slice(-6)}-${Math.floor(Math.random()*1000)}`;
+  const [r]=await pool.query(`
+    INSERT INTO certificates(participant_id, certificate_no, title, issued_at)
+    VALUES(?, ?, 'Certificate of Participation', NOW())
+    ON DUPLICATE KEY UPDATE certificate_no=VALUES(certificate_no), issued_at=NOW()
+  `, [req.params.participantId, certNo]);
+  created(res,{id:r.insertId, certificateNo:certNo},'Certificate issued');
+}));
+
+app.get('/api/admin/reports/:type',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
+  const type = req.params.type;
+  if(type === 'attendance'){
+    const [r]=await pool.query(`
+      SELECT u.name as Participant, p.registration_no as Registration_No, a.scan_type as Scan_Type, s.title as Session, a.scanned_at as Scanned_At
+      FROM attendance a
+      JOIN participants p ON p.id=a.participant_id
+      JOIN users u ON u.id=p.user_id
+      LEFT JOIN sessions s ON s.id=a.session_id
+      ORDER BY a.scanned_at DESC
+    `);
+    return res.json(r);
+  }
+  if(type === 'accommodation'){
+    const [r]=await pool.query(`
+      SELECT u.name as Participant, p.registration_no as Registration_No, h.name as Hotel, r.room_number as Room, r.room_type as Room_Type, ra.check_in as Check_In, ra.check_out as Check_Out
+      FROM room_allocations ra
+      JOIN participants p ON p.id=ra.participant_id
+      JOIN users u ON u.id=p.user_id
+      JOIN rooms r ON r.id=ra.room_id
+      JOIN hotels h ON h.id=r.hotel_id
+    `);
+    return res.json(r);
+  }
+  if(type === 'transport'){
+    const [r]=await pool.query(`
+      SELECT u.name as Participant, p.registration_no as Registration_No, v.vehicle_number as Vehicle, v.vehicle_type as Type, d.name as Driver, t.pickup_location as Pickup, t.drop_location as Drop_Location, t.pickup_time as Time, t.status as Status
+      FROM transport_assignments t
+      JOIN participants p ON p.id=t.participant_id
+      JOIN users u ON u.id=p.user_id
+      LEFT JOIN vehicles v ON v.id=t.vehicle_id
+      LEFT JOIN drivers d ON d.id=v.driver_id
+    `);
+    return res.json(r);
+  }
+  if(type === 'meals'){
+    const [r]=await pool.query(`
+      SELECT m.meal_date as Date, m.meal_type as Meal, m.location as Location, COUNT(ms.id) as Attendees
+      FROM meals m
+      LEFT JOIN meal_scans ms ON ms.meal_id=m.id
+      GROUP BY m.id
+    `);
+    return res.json(r);
+  }
+  if(type === 'certificates'){
+    const [r]=await pool.query(`
+      SELECT u.name as Participant, p.registration_no as Registration_No, cert.certificate_no as Certificate_No, cert.issued_at as Issued_At
+      FROM certificates cert
+      JOIN participants p ON p.id=cert.participant_id
+      JOIN users u ON u.id=p.user_id
+    `);
+    return res.json(r);
+  }
+  // default participants
+  const [r]=await pool.query(`
+    SELECT u.name as Name, u.email as Email, u.phone as Phone, u.university as University, p.registration_no as Reg_No, p.category as Category, p.status as Status, p.payment_status as Payment
+    FROM participants p
+    JOIN users u ON u.id=p.user_id
+  `);
   res.json(r);
 }));
 
-app.get('/api/admin/reports/attendance',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
-  const [r]=await pool.query(`
-    SELECT a.*, u.name as participant_name, s.title as session_title
-    FROM attendance a
-    JOIN participants p ON p.id=a.participant_id
-    JOIN users u ON u.id=p.user_id
-    LEFT JOIN sessions s ON s.id=a.session_id`);
-  res.json(r);
-}));
 app.get('/api/admin/conversations',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
   const [r]=await pool.query('SELECT c.*, (SELECT body FROM messages WHERE conversation_id=c.id ORDER BY created_at DESC LIMIT 1) as last_message FROM conversations c WHERE c.conference_id=?',[req.query.conferenceId||1]);
   res.json(r);
+}));
+
+app.post('/api/admin/messages',auth,roles('ADMIN','SUPER_ADMIN'),[body('conversationId').isInt(),body('body').notEmpty()],validate,asyncRoute(async(req,res)=>{
+  const [r]=await pool.query('INSERT INTO messages(conversation_id,sender_id,message_type,body) VALUES(?,?,?,?)',
+    [req.body.conversationId, req.user.id, 'TEXT', req.body.body]);
+  const [[u]]=await pool.query('SELECT name FROM users WHERE id=?',[req.user.id]);
+  io.to(`conversation:${req.body.conversationId}`).emit('new_message',{id:r.insertId, conversationId:req.body.conversationId, senderId:req.user.id, sender_name:u?.name||'Admin', body:req.body.body});
+  created(res,{id:r.insertId},'Message sent');
 }));
 
 app.get('/api/admin/users',auth,roles('SUPER_ADMIN'),asyncRoute(async(req,res)=>{
