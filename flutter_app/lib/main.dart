@@ -208,6 +208,12 @@ class HomeScreen extends StatelessWidget {
                     onTap: () => go(context, const ScheduleScreen()),
                   ),
                   CardButton(
+                    icon: Icons.face_retouching_natural,
+                    title: 'AI Smart Photo Gallery',
+                    subtitle: 'Find your photos with AI selfie face match',
+                    onTap: () => go(context, const Scaffold(body: GalleryScreen())),
+                  ),
+                  CardButton(
                     icon: Icons.location_on,
                     title: 'Directions & Venue',
                     subtitle: 'Open conference location in Maps',
