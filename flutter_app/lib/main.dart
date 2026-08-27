@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'dart:convert';
+import 'package:image_picker/image_picker.dart';
 import 'config.dart';
 import 'services/api_service.dart';
 
@@ -613,7 +615,692 @@ class NoticesScreen extends StatelessWidget {
     );
   }
 }
-class GalleryScreen extends StatelessWidget{const GalleryScreen({super.key});@override Widget build(BuildContext c)=>SafeArea(top:false,child:Column(children:[const Header(title:'Event Gallery'),Expanded(child:FutureBuilder(future:ApiService.get('/gallery?conferenceId=1'),builder:(c,s){if(s.connectionState==ConnectionState.waiting)return const Center(child:CircularProgressIndicator());if(s.hasError)return const Center(child:Text('Unable to load gallery'));final d=s.data as List;return GridView.builder(padding:const EdgeInsets.all(10),gridDelegate:const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount:2,crossAxisSpacing:8,mainAxisSpacing:8),itemCount:d.length,itemBuilder:(c,i)=>ClipRRect(borderRadius:BorderRadius.circular(14),child:Image.network(d[i]['url'],fit:BoxFit.cover,errorBuilder:(_,__,___)=>Container(color:Colors.grey.shade200,child:const Icon(Icons.image)))));} ))]));}
+class GalleryScreen extends StatefulWidget {
+  const GalleryScreen({super.key});
+
+  @override
+  State<GalleryScreen> createState() => _GalleryScreenState();
+}
+
+class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  final ImagePicker _picker = ImagePicker();
+  bool _isMatching = false;
+  List<dynamic> _matchedPhotos = [];
+  String? _selfiePreview;
+  String _activeAlbum = 'ALL';
+  List<String> _albums = ['ALL'];
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _loadInitialMatchedPhotos();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadInitialMatchedPhotos() async {
+    try {
+      final res = await ApiService.get('/gallery/my-photos?conferenceId=1');
+      if (res is Map && res['matches'] != null) {
+        setState(() {
+          _matchedPhotos = res['matches'] as List;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _scanFaceAndFindPhotos(ImageSource source) async {
+    try {
+      final XFile? photo = await _picker.pickImage(
+        source: source,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
+
+      if (photo == null) return;
+
+      setState(() {
+        _isMatching = true;
+      });
+
+      final bytes = await photo.readAsBytes();
+      final base64Image = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+
+      setState(() {
+        _selfiePreview = photo.path;
+      });
+
+      final res = await ApiService.post('/gallery/match-selfie', {
+        'conferenceId': 1,
+        'selfie': base64Image,
+      });
+
+      if (res is Map && res['matches'] != null) {
+        setState(() {
+          _matchedPhotos = res['matches'] as List;
+          _isMatching = false;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'AI Face Recognition found ${_matchedPhotos.length} photos of you!',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              backgroundColor: maroon,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } else {
+        setState(() => _isMatching = false);
+      }
+    } catch (e) {
+      setState(() => _isMatching = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Matching error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _openPhotoViewer(BuildContext context, dynamic photo, {bool isMatched = false}) {
+    final photoUrl = photo['url'] ?? '';
+    final caption = photo['caption'] ?? 'Conference Moment';
+    final album = photo['album'] ?? 'General';
+    final confidence = isMatched ? (photo['confidencePercent'] ?? '95% Match') : null;
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.9),
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Align(
+              alignment: Alignment.topRight,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: InteractiveViewer(
+                minScale: 0.8,
+                maxScale: 3.5,
+                child: Image.network(
+                  photoUrl,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => Container(
+                    height: 250,
+                    color: Colors.grey.shade800,
+                    child: const Center(child: Icon(Icons.broken_image, color: Colors.white, size: 48)),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: maroon,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          album,
+                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      if (confidence != null) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade700,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.face_retouching_natural, color: Colors.white, size: 13),
+                              const SizedBox(width: 4),
+                              Text(
+                                '$confidence',
+                                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    caption,
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.black87),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: maroon,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          icon: const Icon(Icons.download_rounded, size: 20),
+                          label: const Text('Download High-Res Photo', style: TextStyle(fontWeight: FontWeight.bold)),
+                          onPressed: () {
+                            launchUrl(Uri.parse(photoUrl), mode: LaunchMode.externalApplication);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Downloading full-resolution photo...'),
+                                backgroundColor: maroon,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Column(
+        children: [
+          const Header(title: 'Event Gallery & AI Match'),
+          Container(
+            color: Colors.white,
+            child: TabBar(
+              controller: _tabController,
+              labelColor: maroon,
+              unselectedLabelColor: Colors.grey.shade600,
+              indicatorColor: maroon,
+              indicatorWeight: 3,
+              labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+              tabs: const [
+                Tab(
+                  icon: Icon(Icons.face_retouching_natural),
+                  text: 'Find My Photos',
+                ),
+                Tab(
+                  icon: Icon(Icons.photo_library_outlined),
+                  text: 'All Photos',
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                // Tab 1: AI Selfie Search & Personal Matches
+                _buildAiSelfieTab(),
+                // Tab 2: All Conference Gallery Photos
+                _buildAllPhotosTab(),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAiSelfieTab() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        // AI Scanner Card
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF8C1119), Color(0xFF5B0A0F)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: maroon.withOpacity(0.25),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.camera_enhance, color: gold, size: 28),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'AI Face Recognition Search',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 17),
+                        ),
+                        Text(
+                          'Take a quick selfie to find all your conference photos',
+                          style: TextStyle(color: Color(0xFFF1E5D1), fontSize: 12.5),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              if (_isMatching)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Column(
+                      children: [
+                        CircularProgressIndicator(color: gold),
+                        SizedBox(height: 10),
+                        Text(
+                          'Scanning conference photos with AI...',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: gold,
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        icon: const Icon(Icons.camera_alt, size: 18),
+                        label: const Text('Take Selfie', style: TextStyle(fontWeight: FontWeight.w800)),
+                        onPressed: () => _scanFaceAndFindPhotos(ImageSource.camera),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: const BorderSide(color: Colors.white70),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        icon: const Icon(Icons.photo_library, size: 18),
+                        label: const Text('Choose Photo', style: TextStyle(fontWeight: FontWeight.w800)),
+                        onPressed: () => _scanFaceAndFindPhotos(ImageSource.gallery),
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // Matched Photos Section Header
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Your Matched Photos (${_matchedPhotos.length})',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF1E293B)),
+            ),
+            if (_matchedPhotos.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.green.shade200),
+                ),
+                child: Text(
+                  'AI Verified',
+                  style: TextStyle(color: Colors.green.shade800, fontWeight: FontWeight.bold, fontSize: 11),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        if (_matchedPhotos.isEmpty && !_isMatching)
+          Container(
+            padding: const EdgeInsets.all(32),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Column(
+              children: [
+                Icon(Icons.face_unlock_outlined, size: 54, color: Colors.grey.shade400),
+                const SizedBox(height: 12),
+                const Text(
+                  'No matched photos found yet',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Tap "Take Selfie" above to let AI scan all conference pictures for your face.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+          )
+        else
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: 0.85,
+            ),
+            itemCount: _matchedPhotos.length,
+            itemBuilder: (context, index) {
+              final item = _matchedPhotos[index];
+              final url = item['url'] ?? '';
+              final caption = item['caption'] ?? 'Conference moment';
+              final confidence = item['confidencePercent'] ?? '94% Match';
+
+              return GestureDetector(
+                onTap: () => _openPhotoViewer(context, item, isMatched: true),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.06),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: Image.network(
+                          url,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            color: Colors.grey.shade200,
+                            child: const Icon(Icons.broken_image, color: Colors.grey),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.7),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: gold.withOpacity(0.6)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.verified, color: gold, size: 12),
+                              const SizedBox(width: 4),
+                              Text(
+                                confidence,
+                                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  caption,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                              const Icon(Icons.download_rounded, color: Colors.white, size: 16),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+      ],
+    );
+  }
+
+  Widget _buildAllPhotosTab() {
+    return FutureBuilder(
+      future: ApiService.get('/gallery?conferenceId=1'),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return const Center(child: Text('Unable to load conference gallery'));
+        }
+
+        final photos = snapshot.data is List ? (snapshot.data as List) : [];
+        if (photos.isEmpty) {
+          return const Center(child: Text('No conference photos uploaded yet'));
+        }
+
+        // Extract distinct albums
+        final distinctAlbums = {'ALL', ...photos.map((p) => (p['album'] ?? 'General').toString())}.toList();
+
+        final filtered = _activeAlbum == 'ALL'
+            ? photos
+            : photos.where((p) => p['album'] == _activeAlbum).toList();
+
+        return Column(
+          children: [
+            // Album category chips
+            Container(
+              height: 48,
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                itemCount: distinctAlbums.length,
+                itemBuilder: (context, idx) {
+                  final album = distinctAlbums[idx];
+                  final isSelected = _activeAlbum == album;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text(album),
+                      selected: isSelected,
+                      selectedColor: maroon,
+                      backgroundColor: Colors.grey.shade200,
+                      labelStyle: TextStyle(
+                        color: isSelected ? Colors.white : Colors.black87,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        fontSize: 12,
+                      ),
+                      onSelected: (_) => setState(() => _activeAlbum = album),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            // Photos Grid
+            Expanded(
+              child: GridView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                  childAspectRatio: 0.9,
+                ),
+                itemCount: filtered.length,
+                itemBuilder: (context, index) {
+                  final item = filtered[index];
+                  final url = item['url'] ?? '';
+                  final caption = item['caption'] ?? 'Conference moment';
+                  final album = item['album'] ?? 'General';
+
+                  return GestureDetector(
+                    onTap: () => _openPhotoViewer(context, item, isMatched: false),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            child: Image.network(
+                              url,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                color: Colors.grey.shade200,
+                                child: const Icon(Icons.broken_image, color: Colors.grey),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            top: 8,
+                            left: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.65),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                album,
+                                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      caption,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                                  const Icon(Icons.fullscreen, color: Colors.white, size: 18),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
 
 class ChatScreen extends StatelessWidget{const ChatScreen({super.key});@override Widget build(BuildContext c)=>SafeArea(top:false,child:Column(children:[const Header(title:'Messages'),Expanded(child:ListView(padding:const EdgeInsets.all(18),children:[CardButton(icon:Icons.person,title:'Dr. Pallavi Kiran Shinde',subtitle:'Conference Liaison Faculty • Chat with your liaison',onTap:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>const ConversationScreen()))),const SizedBox(height:20),const Center(child:Text('Real-time chat is enabled by the backend Socket.IO layer.',style:TextStyle(color:muted)))]))]));}
 class ConversationScreen extends StatefulWidget{const ConversationScreen({super.key});@override State<ConversationScreen> createState()=>_ConversationScreenState();}

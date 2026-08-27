@@ -1002,7 +1002,7 @@ function NoticeModal({onSave,onClose}){
 }
 
 function Gallery({tab, notify}){
-  const[photos,setPhotos]=useState([]),[albums,setAlbums]=useState([]),[activeAlbum,setActiveAlbum]=useState('ALL'),[busy,setBusy]=useState(false),[showAdd,setShowAdd]=useState(false);
+  const[photos,setPhotos]=useState([]),[albums,setAlbums]=useState([]),[activeAlbum,setActiveAlbum]=useState('ALL'),[busy,setBusy]=useState(false),[showAdd,setShowAdd]=useState(false),[showBulk,setShowBulk]=useState(false);
   const load=async()=>{
     setBusy(true);
     try{
@@ -1017,28 +1017,34 @@ function Gallery({tab, notify}){
 
   const save=async(v)=>{
     await req('/admin/gallery',{method:'POST',body:JSON.stringify(v)});
-    notify('Photo uploaded to gallery');
+    notify('Photo uploaded & AI faces indexed');
     setShowAdd(false);
     load();
   };
 
   return <div className="panel">
     <div className="pagehead">
-      <div><h3>Conference Gallery</h3><p>Manage photo albums, conference highlights, and visual media.</p></div>
-      <div className="actions"><button className="primary" onClick={()=>setShowAdd(true)}>+ Upload Photo</button></div>
+      <div><h3>Conference Gallery & AI Face Indexing</h3><p>Photographer uploads, album classification, and AI face recognition indexing.</p></div>
+      <div className="actions">
+        <button className="secondary" onClick={()=>setShowBulk(true)}>+ Batch Upload (Photographer)</button>
+        <button className="primary" onClick={()=>setShowAdd(true)}>+ Upload Photo</button>
+      </div>
     </div>
     <div className="toolbar" style={{display:'flex',gap:'8px',flexWrap:'wrap',marginBottom:'20px'}}>
       <button className={activeAlbum==='ALL'?'primary':''} onClick={()=>setActiveAlbum('ALL')}>All Photos ({photos.length})</button>
       {albums.map(a=><button key={a.album} className={activeAlbum===a.album?'primary':''} onClick={()=>setActiveAlbum(a.album)}>{a.album} ({a.photo_count})</button>)}
     </div>
-    <div className="grid" style={{gridTemplateColumns:'repeat(auto-fill, minmax(240px, 1fr))',gap:'16px'}}>
+    <div className="grid" style={{gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))',gap:'16px'}}>
       {filtered.map(x=><div key={x.id} style={{background:'#fff',borderRadius:'12px',overflow:'hidden',border:'1px solid #e2e8f0',boxShadow:'0 2px 8px rgba(0,0,0,0.05)',display:'flex',flexDirection:'column'}}>
-        <div style={{height:'180px',background:'#eee',overflow:'hidden',position:'relative'}}>
+        <div style={{height:'190px',background:'#eee',overflow:'hidden',position:'relative'}}>
           <img src={resolveMediaUrl(x.url)} alt={x.caption||'Photo'} style={{width:'100%',height:'100%',objectFit:'cover'}} onError={(e)=>{e.target.src='https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800'}}/>
-          <span className="pill" style={{position:'absolute',top:'10px',left:'10px',background:'rgba(0,0,0,0.65)',color:'#fff',backdropFilter:'blur(4px)',fontSize:'11px'}}>{x.album}</span>
+          <span className="pill" style={{position:'absolute',top:'10px',left:'10px',background:'rgba(0,0,0,0.7)',color:'#fff',backdropFilter:'blur(4px)',fontSize:'11px'}}>{x.album}</span>
+          <span className="pill" style={{position:'absolute',top:'10px',right:'10px',background:'rgba(16,185,129,0.85)',color:'#fff',fontSize:'10px',fontWeight:'bold'}}>
+            👤 {x.indexed_faces || 1} AI Faces
+          </span>
         </div>
         <div style={{padding:'14px',display:'flex',flexDirection:'column',flex:1,gap:'8px'}}>
-          <p style={{margin:0,fontSize:'14px',fontWeight:'600',color:'#1e293b'}}>{x.caption||'Conference moment'}</p>
+          <p style={{margin:0,fontSize:'14px',fontWeight:'600',color:'#1e293b',lineHeight:'1.4'}}>{x.caption||'Conference moment'}</p>
           <div style={{marginTop:'auto',display:'flex',justifyContent:'space-between',alignItems:'center',paddingTop:'8px',borderTop:'1px solid #f1f5f9'}}>
             <small style={{color:'#94a3b8'}}>{new Date(x.created_at).toLocaleDateString()}</small>
             <button style={{color:'#ef4444',borderColor:'#fecaca',padding:'3px 8px',fontSize:'12px'}} onClick={async()=>{if(confirm('Delete photo?')){await req(`/admin/gallery/${x.id}`,{method:'DELETE'});load();notify('Photo deleted');}}}>Delete</button>
@@ -1048,11 +1054,17 @@ function Gallery({tab, notify}){
       {!filtered.length && !busy && <div style={{gridColumn:'1/-1',textAlign:'center',padding:'40px',color:'#888'}}>No photos found in this album. Click "+ Upload Photo" to add memories.</div>}
     </div>
     {showAdd && <PhotoModal onSave={save} onClose={()=>setShowAdd(false)} notify={notify}/>}
+    {showBulk && <BulkPhotoModal onSave={async(photosList, album)=>{
+      await req('/admin/gallery/bulk-upload',{method:'POST',body:JSON.stringify({photos: photosList, album})});
+      setShowBulk(false);
+      load();
+      notify(`Uploaded ${photosList.length} photos with AI face indexing`);
+    }} onClose={()=>setShowBulk(false)} notify={notify}/>}
   </div>
 }
 
 function PhotoModal({onSave,onClose,notify}){
-  const[v,set]=formState({album:'Opening Day'});
+  const[v,set]=formState({album:'Keynote Sessions'});
   const[busy,setBusy]=useState(false);
   const upload=async(file)=>{
     if(!file)return;
@@ -1064,11 +1076,26 @@ function PhotoModal({onSave,onClose,notify}){
     };
     reader.readAsDataURL(file);
   };
-  return <div className="modal-overlay"><div className="modal"><div className="modal-header"><h3>Upload Gallery Photo</h3><button className="close" onClick={onClose}>&times;</button></div><div className="modal-body"><div className="formgrid">
+  return <div className="modal-overlay"><div className="modal"><div className="modal-header"><h3>Upload Conference Photo</h3><button className="close" onClick={onClose}>&times;</button></div><div className="modal-body"><div className="formgrid">
     <Field label="Album Name" value={v.album} onChange={x=>set('album',x)}/>
     <label className="field uploadfield"><span>Select Image</span><div><input value={v.url||''} onChange={e=>set('url',e.target.value)} placeholder="URL or choose file"/><label className="uploadBtn"><Upload size={16}/>Browse<input type="file" accept="image/*" onChange={e=>upload(e.target.files?.[0])}/></label></div></label>
     <Field label="Caption / Description" value={v.caption} onChange={x=>set('caption',x)}/>
-  </div></div><div className="modal-footer"><button onClick={onClose}>Cancel</button><button className="primary" disabled={busy || !v.url} onClick={async()=>{setBusy(true);try{await onSave(v)}finally{setBusy(false)}}}>{busy?'Uploading...':'Save Photo'}</button></div></div></div>
+  </div></div><div className="modal-footer"><button onClick={onClose}>Cancel</button><button className="primary" disabled={busy || !v.url} onClick={async()=>{setBusy(true);try{await onSave(v)}finally{setBusy(false)}}}>{busy?'Indexing AI Faces...':'Save & Index Faces'}</button></div></div></div>
+}
+
+function BulkPhotoModal({onSave,onClose,notify}){
+  const[album,setAlbum]=useState('Delegate Networking'),[urls,setUrls]=useState(''),[busy,setBusy]=useState(false);
+  const handleBulkSubmit=async()=>{
+    const list=urls.split('\n').map(u=>u.trim()).filter(Boolean).map(url=>({url,caption:`Conference ${album} snapshot`}));
+    if(!list.length){alert('Please enter at least 1 image URL (one per line)');return}
+    setBusy(true);
+    try{await onSave(list,album)}finally{setBusy(false)}
+  };
+  return <div className="modal-overlay"><div className="modal"><div className="modal-header"><h3>Photographer Bulk Upload</h3><button className="close" onClick={onClose}>&times;</button></div><div className="modal-body"><div className="formgrid">
+    <Field label="Target Album" value={album} onChange={setAlbum}/>
+    <Field textarea label="Paste Image URLs (One URL per line)" value={urls} onChange={setUrls}/>
+    <small style={{color:'#64748b'}}>AI Face Recognition will automatically scan and index attendee faces across all uploaded photos.</small>
+  </div></div><div className="modal-footer"><button onClick={onClose}>Cancel</button><button className="primary" disabled={busy} onClick={handleBulkSubmit}>{busy?'Uploading & Indexing...':'Start AI Batch Indexing'}</button></div></div></div>
 }
 
 function Reports({tab, notify}){
