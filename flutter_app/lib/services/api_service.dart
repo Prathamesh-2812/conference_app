@@ -61,6 +61,20 @@ class ApiService {
     return data;
   }
 
+  static Future<Map<String, dynamic>> conference() async {
+    final data = await get('/conference');
+
+    if (data is! Map) {
+      throw Exception('Invalid conference response from server');
+    }
+
+    if (data['success'] == true && data['data'] is Map) {
+      return Map<String, dynamic>.from(data['data'] as Map);
+    }
+
+    return Map<String, dynamic>.from(data);
+  }
+
   static Future<dynamic> post(
     String path,
     Map<String, dynamic> body,

@@ -16,10 +16,29 @@ CREATE TABLE users (
 );
 CREATE TABLE conferences (
  id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255) NOT NULL, short_name VARCHAR(100), description TEXT,
- start_date DATE, end_date DATE, venue VARCHAR(255), address TEXT, banner_url TEXT, logo_url TEXT,
- active TINYINT(1) DEFAULT 1, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+ welcome_message TEXT, about_conference TEXT, start_date DATE, end_date DATE, registration_start_date DATE, registration_end_date DATE,
+ contact_person VARCHAR(150), contact_phone VARCHAR(30), contact_email VARCHAR(190), website VARCHAR(255), organizer VARCHAR(255),
+ host_institution VARCHAR(255), theme VARCHAR(150), status ENUM('DRAFT','PUBLISHED','ARCHIVED','ACTIVE','INACTIVE') DEFAULT 'ACTIVE',
+ venue VARCHAR(255), address TEXT, banner_url TEXT, logo_url TEXT,
+ active TINYINT(1) DEFAULT 1, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP
 );
-CREATE TABLE venues (id INT AUTO_INCREMENT PRIMARY KEY, conference_id INT NOT NULL, name VARCHAR(150), address TEXT, latitude DECIMAL(10,7), longitude DECIMAL(10,7), FOREIGN KEY(conference_id) REFERENCES conferences(id) ON DELETE CASCADE);
+CREATE TABLE conference_settings (
+ id INT AUTO_INCREMENT PRIMARY KEY, conference_id INT NOT NULL UNIQUE,
+ enable_registration TINYINT(1) DEFAULT 1, enable_chat TINYINT(1) DEFAULT 1, enable_gallery TINYINT(1) DEFAULT 1,
+ enable_attendance TINYINT(1) DEFAULT 1, enable_qr TINYINT(1) DEFAULT 1, enable_push_notifications TINYINT(1) DEFAULT 0,
+ enable_certificates TINYINT(1) DEFAULT 1, enable_polls TINYINT(1) DEFAULT 0, enable_feedback TINYINT(1) DEFAULT 1,
+ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+ FOREIGN KEY(conference_id) REFERENCES conferences(id) ON DELETE CASCADE
+);
+CREATE TABLE conference_branding (
+ id INT AUTO_INCREMENT PRIMARY KEY, conference_id INT NOT NULL UNIQUE,
+ conference_logo TEXT, organizer_logo TEXT, banner TEXT, splash_screen TEXT, favicon TEXT,
+ primary_color VARCHAR(20) DEFAULT '#8C1119', secondary_color VARCHAR(20) DEFAULT '#C8A45A',
+ accent_color VARCHAR(20) DEFAULT '#2E6F95', background_color VARCHAR(20) DEFAULT '#FCFAF5',
+ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+ FOREIGN KEY(conference_id) REFERENCES conferences(id) ON DELETE CASCADE
+);
+CREATE TABLE venues (id INT AUTO_INCREMENT PRIMARY KEY, conference_id INT NOT NULL UNIQUE, name VARCHAR(150), address TEXT, city VARCHAR(100), state VARCHAR(100), country VARCHAR(100), pincode VARCHAR(20), latitude DECIMAL(10,7), longitude DECIMAL(10,7), google_maps_url TEXT, parking_information TEXT, directions TEXT, contact_number VARCHAR(30), FOREIGN KEY(conference_id) REFERENCES conferences(id) ON DELETE CASCADE);
 CREATE TABLE halls (id INT AUTO_INCREMENT PRIMARY KEY, venue_id INT NOT NULL, name VARCHAR(150), capacity INT, FOREIGN KEY(venue_id) REFERENCES venues(id) ON DELETE CASCADE);
 CREATE TABLE speakers (id INT AUTO_INCREMENT PRIMARY KEY, conference_id INT NOT NULL, user_id INT NULL, name VARCHAR(150), designation VARCHAR(200), organization VARCHAR(255), bio TEXT, photo TEXT, email VARCHAR(190), phone VARCHAR(30), FOREIGN KEY(conference_id) REFERENCES conferences(id) ON DELETE CASCADE, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL);
 CREATE TABLE sessions (id INT AUTO_INCREMENT PRIMARY KEY, conference_id INT NOT NULL, hall_id INT NULL, speaker_id INT NULL, title VARCHAR(255), description TEXT, session_date DATE, start_time TIME, end_time TIME, category VARCHAR(100), FOREIGN KEY(conference_id) REFERENCES conferences(id) ON DELETE CASCADE, FOREIGN KEY(hall_id) REFERENCES halls(id) ON DELETE SET NULL, FOREIGN KEY(speaker_id) REFERENCES speakers(id) ON DELETE SET NULL);
@@ -57,8 +76,10 @@ CREATE TABLE messages (id BIGINT AUTO_INCREMENT PRIMARY KEY, conversation_id BIG
 CREATE TABLE emergency_contacts (id INT AUTO_INCREMENT PRIMARY KEY, conference_id INT NOT NULL, name VARCHAR(150), type VARCHAR(50), phone VARCHAR(30), FOREIGN KEY(conference_id) REFERENCES conferences(id) ON DELETE CASCADE);
 CREATE TABLE audit_logs (id BIGINT AUTO_INCREMENT PRIMARY KEY, user_id INT NULL, action VARCHAR(100), entity VARCHAR(100), entity_id BIGINT, details JSON, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL);
 
-INSERT INTO conferences(name,short_name,description,start_date,end_date,venue,address,active) VALUES ('100th DPU AIU VC Conference 2026','DPU AIU VC 2026','100th AIU Annual General Body Meet & National Conference of Vice Chancellors','2026-04-27','2026-04-30','Dr. D. Y. Patil Vidyapeeth, Pimpri, Pune','Pimpri, Pune, Maharashtra',1);
-INSERT INTO venues(conference_id,name,address,latitude,longitude) VALUES (1,'D.Y. Patil Vidyapeeth','Pimpri, Pune, Maharashtra',18.6275,73.8009);
+INSERT INTO conferences(name,short_name,description,welcome_message,about_conference,start_date,end_date,registration_start_date,registration_end_date,contact_person,contact_phone,contact_email,website,organizer,host_institution,theme,status,venue,address,banner_url,logo_url,active) VALUES ('100th DPU AIU VC Conference 2026','DPU AIU VC 2026','100th AIU Annual General Body Meet & National Conference of Vice Chancellors','DPU welcomes you to the 100th AIU Annual General Body Meet & National Conference of Vice Chancellors.','A national higher education leadership conference hosted by Dr. D. Y. Patil Vidyapeeth, Pimpri, Pune.','2026-04-27','2026-04-30','2026-01-01','2026-04-15','Conference Help Desk','1800123456','admin@conference.local','https://dpu.edu.in','Dr. D. Y. Patil Vidyapeeth','Dr. D. Y. Patil Vidyapeeth, Pimpri, Pune','Higher education leadership','ACTIVE','Dr. D. Y. Patil Vidyapeeth, Pimpri, Pune','Pimpri, Pune, Maharashtra','https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=1600',NULL,1);
+INSERT INTO conference_settings(conference_id,enable_registration,enable_chat,enable_gallery,enable_attendance,enable_qr,enable_push_notifications,enable_certificates,enable_polls,enable_feedback) VALUES (1,1,1,1,1,1,0,1,0,1);
+INSERT INTO conference_branding(conference_id,conference_logo,banner,primary_color,secondary_color,accent_color,background_color) VALUES (1,NULL,'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=1600','#8C1119','#C8A45A','#2E6F95','#FCFAF5');
+INSERT INTO venues(conference_id,name,address,city,state,country,pincode,latitude,longitude,google_maps_url,parking_information,directions,contact_number) VALUES (1,'D.Y. Patil Vidyapeeth','Pimpri, Pune, Maharashtra','Pune','Maharashtra','India','411018',18.6275,73.8009,'https://www.google.com/maps/search/?api=1&query=Dr.+D.+Y.+Patil+Vidyapeeth+Pimpri+Pune','Parking assistance is available near the main entrance.','Use the main Pimpri campus entrance and follow conference signage.','1800123456');
 INSERT INTO halls(venue_id,name,capacity) VALUES (1,'Main Auditorium',1200),(1,'Conference Hall A',300),(1,'Conference Hall B',300);
 INSERT INTO speakers(conference_id,name,designation,organization,bio,email,phone) VALUES
 (1,'Dr. Rakesh Kumar Sharma','Vice Chancellor','D.Y. Patil University','Distinguished academic leader and conference host','vc@dypatilkolhapur.org','9820619211'),
