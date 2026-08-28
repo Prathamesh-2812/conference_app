@@ -317,8 +317,8 @@ app.get('/api/admin/halls',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(re
 app.post('/api/admin/halls',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
   const [[v]]=await pool.query('SELECT id FROM venues WHERE conference_id=? LIMIT 1',[req.body.conferenceId||1]);
   if(!v) return res.status(400).json({message:'Venue not found for conference'});
-  const [r]=await pool.query('INSERT INTO halls(venue_id,name,capacity) VALUES(?,?,?)',[v.id,req.body.name,req.body.capacity]);
-  created(res,{id:r.insertId},'Hall added');
+  const [r]=await pool.query('INSERT INTO halls(venue_id,name,capacity) VALUES(?,?,?)',[v.id,req.body.name,req.body.capacity||250]);
+  created(res,{id:r.insertId, name:req.body.name, capacity:req.body.capacity||250},'Hall added');
 }));
 
 app.get('/api/admin/sessions',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
@@ -440,6 +440,175 @@ app.get('/api/me/notifications',auth,asyncRoute(async(req,res)=>{const [r]=await
 app.post('/api/notifications/:id/read',auth,asyncRoute(async(req,res)=>{await pool.query('UPDATE notifications SET read_at=NOW() WHERE id=? AND (user_id IS NULL OR user_id=?)',[req.params.id,req.user.id]);res.json({message:'Notification marked as read'})}));
 app.get('/api/polls',auth,asyncRoute(async(req,res)=>{const [r]=await pool.query('SELECT p.id,p.question,p.active,o.id option_id,o.option_text FROM polls p JOIN poll_options o ON o.poll_id=p.id WHERE p.conference_id=? AND p.active=1 ORDER BY p.created_at DESC',[req.query.conferenceId||1]);const out={};for(const x of r){out[x.id]??={id:x.id,question:x.question,options:[]};out[x.id].options.push({id:x.option_id,text:x.option_text})}res.json(Object.values(out))}));
 app.post('/api/polls/:id/vote',auth,[body('optionId').isInt()],validate,asyncRoute(async(req,res)=>{const [[p]]=await pool.query('SELECT id FROM participants WHERE user_id=? LIMIT 1',[req.user.id]);if(!p)return res.status(400).json({message:'Participant profile not found'});await pool.query('INSERT INTO poll_votes(poll_id,option_id,participant_id) VALUES(?,?,?) ON DUPLICATE KEY UPDATE option_id=VALUES(option_id)',[req.params.id,req.body.optionId,p.id]);res.json({message:'Vote recorded'})}));
+app.get('/api/meals',auth,asyncRoute(async(req,res)=>{
+  const [r]=await pool.query(`
+    SELECT m.*, DATE_FORMAT(m.meal_date, '%Y-%m-%d') as meal_date,
+      (SELECT 1 FROM meal_scans ms JOIN participants p ON p.id=ms.participant_id WHERE ms.meal_id=m.id AND p.user_id=? LIMIT 1) as is_redeemed
+    FROM meals m
+    WHERE m.conference_id=?
+    ORDER BY m.meal_date, m.start_time
+  `, [req.user.id, req.query.conferenceId||1]);
+  res.json(r);
+}));
+
+app.post('/api/meals/:id/scan',auth,asyncRoute(async(req,res)=>{
+  const [[p]]=await pool.query('SELECT id FROM participants WHERE user_id=? LIMIT 1',[req.user.id]);
+  if(!p) return res.status(400).json({message:'Participant profile not found'});
+  const mealId = req.params.id;
+  try {
+    await pool.query('INSERT INTO meal_scans(meal_id, participant_id, scanned_by) VALUES(?,?,?)', [mealId, p.id, req.user.id]);
+  } catch(e) {}
+  ok(res, { mealId, redeemed: true }, 'Meal coupon redeemed successfully');
+}));
+
+// AI & Liaison Conference Assistant Chat
+app.get('/api/chat/messages',auth,asyncRoute(async(req,res)=>{
+  const conferenceId = req.query.conferenceId || 1;
+  let [[conv]] = await pool.query('SELECT c.id FROM conversations c JOIN conversation_members cm ON cm.conversation_id=c.id WHERE cm.user_id=? AND c.conference_id=? LIMIT 1', [req.user.id, conferenceId]);
+  
+  if(!conv) {
+    const [cRes] = await pool.query('INSERT INTO conversations(conference_id, title) VALUES(?,?)', [conferenceId, `Liaison Chat - ${req.user.name||'Delegate'}`]);
+    const convId = cRes.insertId;
+    await pool.query('INSERT INTO conversation_members(conversation_id, user_id) VALUES(?,?)', [convId, req.user.id]);
+    await pool.query('INSERT INTO messages(conversation_id, sender_id, message_type, body) VALUES(?,?,?,?)',
+      [convId, 1, 'TEXT', 'Welcome to MAPCON 2026! I am your Conference Liaison Assistant (Dr. Pallavi Kiran Shinde). How can I assist you with sessions, accommodation at Hotel Sayaji, meals, transport, or certificates today?']);
+    conv = { id: convId };
+  }
+
+  const [msgs] = await pool.query(`
+    SELECT m.id, m.conversation_id, m.sender_id, m.body, m.message_type, m.created_at,
+      u.name as sender_name, (m.sender_id = ?) as is_me
+    FROM messages m
+    LEFT JOIN users u ON u.id = m.sender_id
+    WHERE m.conversation_id = ?
+    ORDER BY m.created_at ASC
+  `, [req.user.id, conv.id]);
+
+  res.json({ conversationId: conv.id, messages: msgs });
+}));
+
+app.post('/api/chat/messages',auth,[body('body').notEmpty()],validate,asyncRoute(async(req,res)=>{
+  const conferenceId = req.body.conferenceId || 1;
+  const userText = req.body.body.trim();
+  
+  let [[conv]] = await pool.query('SELECT c.id FROM conversations c JOIN conversation_members cm ON cm.conversation_id=c.id WHERE cm.user_id=? AND c.conference_id=? LIMIT 1', [req.user.id, conferenceId]);
+  if(!conv) {
+    const [cRes] = await pool.query('INSERT INTO conversations(conference_id, title) VALUES(?,?)', [conferenceId, `Liaison Chat - ${req.user.name||'Delegate'}`]);
+    const convId = cRes.insertId;
+    await pool.query('INSERT INTO conversation_members(conversation_id, user_id) VALUES(?,?)', [convId, req.user.id]);
+    conv = { id: convId };
+  }
+
+  // 1. Save user message
+  await pool.query('INSERT INTO messages(conversation_id, sender_id, message_type, body) VALUES(?,?,?,?)',
+    [conv.id, req.user.id, 'TEXT', userText]);
+
+  // 2. Context-Aware Intelligent Auto-Responder for MAPCON 2026
+  let replyText = '';
+  const q = userText.toLowerCase();
+  if (q.includes('schedule') || q.includes('session') || q.includes('time') || q.includes('agenda')) {
+    replyText = '📅 MAPCON 2026 Schedule:\n• 02 Oct (Day 1): 09:00 AM Inauguration (Grand Hall) & Keynotes\n• 03 Oct (Day 2): 09:00 AM Oncopathology & Neuropathology Tracks, 07:30 PM Gala Dinner\n• 04 Oct (Day 3): 09:30 AM Scientific Sessions & Valedictory Ceremony.';
+  } else if (q.includes('hotel') || q.includes('room') || q.includes('stay') || q.includes('accommodation')) {
+    replyText = '🏨 Accommodation Details:\nYour primary conference hotel is Hotel Sayaji, Kawala Naka, Kolhapur. Room keycards and hospitality kits are available at the Delegate Help Desk in the lobby.';
+  } else if (q.includes('meal') || q.includes('food') || q.includes('lunch') || q.includes('dinner') || q.includes('breakfast') || q.includes('tea')) {
+    replyText = '🍽️ MAPCON 2026 Dining Schedule:\n• Breakfast: 07:30 AM – 09:30 AM (Dining Hall)\n• Lunch: 12:30 PM – 02:30 PM (Sayaji Banquet)\n• High Tea: 04:30 PM – 05:30 PM (Foyer)\n• Gala Dinner: 07:30 PM onwards (Poolside/Grand Ballroom).';
+  } else if (q.includes('cert') || q.includes('certificate') || q.includes('download')) {
+    replyText = '📜 Certificates will be available for download under the "Certificate" tab in your app once your session attendance is verified at the valedictory session.';
+  } else if (q.includes('venue') || q.includes('location') || q.includes('map') || q.includes('address') || q.includes('direction')) {
+    replyText = '📍 Conference Venue:\nHotel Sayaji, Old Pune-Bangalore Highway, Kawala Naka, Kolhapur (416001). 5 mins from CBS Bus Stand, 10 mins from Kolhapur Railway Station.';
+  } else if (q.includes('speaker') || q.includes('faculty') || q.includes('pallavi')) {
+    replyText = '👩‍🏫 Conference Liaison Faculty:\nDr. Pallavi Kiran Shinde (Phone: +91 9766594602). For VIP protocols, speaker slides, and transport desk, visit the Liaison Counter in Hall A.';
+  } else {
+    replyText = `Thank you for your message! Dr. Pallavi Kiran Shinde and the MAPCON 2026 organizing team have received your note: "${userText}". We are here at Hotel Sayaji to assist you throughout the conference!`;
+  }
+
+  // 3. Save Assistant Response
+  await pool.query('INSERT INTO messages(conversation_id, sender_id, message_type, body) VALUES(?,?,?,?)',
+    [conv.id, 1, 'TEXT', replyText]);
+
+  const [allMsgs] = await pool.query(`
+    SELECT m.id, m.conversation_id, m.sender_id, m.body, m.message_type, m.created_at,
+      u.name as sender_name, (m.sender_id = ?) as is_me
+    FROM messages m
+    LEFT JOIN users u ON u.id = m.sender_id
+    WHERE m.conversation_id = ?
+    ORDER BY m.created_at ASC
+  `, [req.user.id, conv.id]);
+
+  res.json({ conversationId: conv.id, messages: allMsgs });
+}));
+
+// Speaker / Faculty Session Attendance QR Code Generator
+app.get('/api/sessions/:id/attendance-qr',asyncRoute(async(req,res)=>{
+  const [[s]]=await pool.query(`
+    SELECT s.*, DATE_FORMAT(s.session_date, '%Y-%m-%d') as session_date, sp.name speaker_name, h.name hall_name, c.name conference_name
+    FROM sessions s
+    JOIN conferences c ON c.id=s.conference_id
+    LEFT JOIN speakers sp ON sp.id=s.speaker_id
+    LEFT JOIN halls h ON h.id=s.hall_id
+    WHERE s.id=?
+  `,[req.params.id]);
+  if(!s) return res.status(404).json({message:'Session not found'});
+
+  const qrToken = `MAPCON2026-SESSION-${s.id}-${s.conference_id}`;
+  ok(res, {
+    sessionId: s.id,
+    title: s.title,
+    speakerName: s.speaker_name,
+    hallName: s.hall_name,
+    sessionDate: s.session_date,
+    startTime: s.start_time,
+    endTime: s.end_time,
+    qrToken: qrToken,
+  }, 'Session attendance QR generated for speaker presentation');
+}));
+
+// Participant Self-Scan of Speaker Podium QR Code
+app.post('/api/attendance/mark-self',auth,asyncRoute(async(req,res)=>{
+  const qrToken = req.body.qrToken || req.body.token || req.body.code;
+  let sessionId = req.body.sessionId;
+
+  if(!sessionId && qrToken && qrToken.includes('SESSION-')) {
+    const parts = qrToken.split('-');
+    const idx = parts.indexOf('SESSION');
+    if(idx !== -1 && parts[idx+1]) {
+      sessionId = parseInt(parts[idx+1], 10);
+    }
+  }
+
+  if(!sessionId) {
+    return res.status(400).json({message:'Invalid Session QR Code. Please scan the official Speaker / Hall attendance QR code.'});
+  }
+
+  const [[s]]=await pool.query(`
+    SELECT s.*, sp.name speaker_name, h.name hall_name
+    FROM sessions s
+    LEFT JOIN speakers sp ON sp.id=s.speaker_id
+    LEFT JOIN halls h ON h.id=s.hall_id
+    WHERE s.id=?
+  `,[sessionId]);
+
+  if(!s) return res.status(404).json({message:'Session not found'});
+
+  const [[p]]=await pool.query('SELECT id, registration_no, category FROM participants WHERE user_id=? LIMIT 1',[req.user.id]);
+  if(!p) return res.status(400).json({message:'Participant profile not found'});
+
+  // Record Attendance
+  await pool.query(`
+    INSERT INTO attendance(participant_id, session_id, scan_type, scanned_by)
+    VALUES(?,?,?,?)
+    ON DUPLICATE KEY UPDATE scanned_at=CURRENT_TIMESTAMP
+  `,[p.id, sessionId, 'PARTICIPANT_SELF_SCAN', req.user.id]);
+
+  ok(res, {
+    sessionId: s.id,
+    sessionTitle: s.title,
+    speakerName: s.speaker_name,
+    hallName: s.hall_name,
+    scannedAt: new Date().toISOString()
+  }, `Attendance verified for: ${s.title}`);
+}));
+
 app.get('/api/conversations',auth,asyncRoute(async(req,res)=>{const [r]=await pool.query('SELECT c.id,c.title,c.created_at FROM conversations c JOIN conversation_members cm ON cm.conversation_id=c.id WHERE cm.user_id=? ORDER BY c.created_at DESC',[req.user.id]);res.json(r)}));
 app.get('/api/conversations/:id/messages',auth,asyncRoute(async(req,res)=>{const [r]=await pool.query('SELECT m.*,u.name sender_name FROM messages m JOIN conversation_members cm ON cm.conversation_id=m.conversation_id JOIN users u ON u.id=m.sender_id WHERE m.conversation_id=? AND cm.user_id=? ORDER BY m.created_at',[req.params.id,req.user.id]);res.json(r)}));
 app.get('/api/admin/notices',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{

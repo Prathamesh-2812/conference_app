@@ -787,13 +787,60 @@ function Schedule({tab, notify}){
 
 function SessionModal({value,speakers,halls,onSave,onClose}){
   const[v,set,setV]=formState({...value,session_date:toInputDate(value.session_date)});
-  return <div className="modal-overlay"><div className="modal"><div className="modal-header"><h3>{v.id?'Edit Session':'Add Session'}</h3><button className="close" onClick={onClose}>&times;</button></div><div className="modal-body"><div className="formgrid">
+  const[hallsList,setHallsList]=useState(halls);
+  const[showAddHall,setShowAddHall]=useState(false);
+  const[newHallName,setNewHallName]=useState('');
+  const[newHallCap,setNewHallCap]=useState('250');
+  const[savingHall,setSavingHall]=useState(false);
+
+  const createHall=async(e)=>{
+    if(e) e.preventDefault();
+    if(!newHallName.trim()) return alert('Please enter Hall Name');
+    setSavingHall(true);
+    try{
+      const res=await req('/admin/halls',{method:'POST',body:JSON.stringify({name:newHallName.trim(),capacity:Number(newHallCap)||250,conferenceId:1})});
+      const newHall={id:res.id,name:newHallName.trim(),capacity:Number(newHallCap)||250};
+      setHallsList(prev=>[...prev,newHall]);
+      set('hall_id',newHall.id);
+      setNewHallName('');
+      setShowAddHall(false);
+    }catch(err){
+      alert('Failed to add hall: '+err.message);
+    }finally{
+      setSavingHall(false);
+    }
+  };
+
+  return <div className="modal-overlay"><div className="modal" style={{maxWidth:'640px'}}><div className="modal-header"><h3>{v.id?'Edit Session':'Add Session'}</h3><button className="close" onClick={onClose}>&times;</button></div><div className="modal-body"><div className="formgrid">
     <Field label="Title" value={v.title} onChange={x=>set('title',x)}/>
     <Field type="date" label="Date" value={v.session_date} onChange={x=>set('session_date',x)}/>
     <Field type="time" label="Start Time" value={v.start_time} onChange={x=>set('start_time',x)}/>
     <Field type="time" label="End Time" value={v.end_time} onChange={x=>set('end_time',x)}/>
     <SelectField label="Speaker" value={v.speaker_id} onChange={x=>set('speaker_id',x?Number(x):null)} options={[{value:'',label:'-- Select Speaker --'},...speakers.map(s=>({value:s.id,label:s.name}))]}/>
-    <SelectField label="Hall" value={v.hall_id} onChange={x=>set('hall_id',x?Number(x):null)} options={[{value:'',label:'-- Select Hall --'},...halls.map(h=>({value:h.id,label:h.name}))]}/>
+    
+    <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <label style={{fontSize:'13px',fontWeight:'600',color:'#334155'}}>Hall / Venue</label>
+        <button type="button" onClick={()=>setShowAddHall(!showAddHall)} style={{fontSize:'12px',color:'#8C1119',background:'none',border:'none',cursor:'pointer',fontWeight:'700',padding:0}}>
+          {showAddHall ? '✕ Cancel' : '+ Add New Hall'}
+        </button>
+      </div>
+      <SelectField value={v.hall_id} onChange={x=>set('hall_id',x?Number(x):null)} options={[{value:'',label:'-- Select Hall --'},...hallsList.map(h=>({value:h.id,label:h.name}))]}/>
+      
+      {showAddHall && (
+        <div style={{background:'#FFF8F8',border:'1.5px dashed #8C1119',borderRadius:'8px',padding:'12px',marginTop:'4px',display:'flex',flexDirection:'column',gap:'8px'}}>
+          <div style={{fontWeight:'700',fontSize:'12px',color:'#8C1119'}}>Quick Create New Hall</div>
+          <div style={{display:'flex',gap:'8px'}}>
+            <input placeholder="e.g. Hall C - Sayaji Banquet" value={newHallName} onChange={e=>setNewHallName(e.target.value)} style={{flex:2,padding:'6px 10px',fontSize:'13px',border:'1px solid #cbd5e1',borderRadius:'6px'}}/>
+            <input type="number" placeholder="Cap" value={newHallCap} onChange={e=>setNewHallCap(e.target.value)} style={{flex:1,maxWidth:'80px',padding:'6px 10px',fontSize:'13px',border:'1px solid #cbd5e1',borderRadius:'6px'}}/>
+            <button type="button" onClick={createHall} disabled={savingHall} style={{background:'#8C1119',color:'#fff',border:'none',borderRadius:'6px',padding:'6px 12px',fontSize:'12px',fontWeight:'700',cursor:'pointer'}}>
+              {savingHall?'Adding...':'Add & Select'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+
     <Field label="Category" value={v.category} onChange={x=>set('category',x)}/>
     <Field textarea label="Description" value={v.description} onChange={x=>set('description',x)}/>
   </div></div><div className="modal-footer"><button onClick={onClose}>Cancel</button><button className="primary" onClick={()=>onSave(v)}>Save</button></div></div></div>

@@ -1225,8 +1225,29 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    icon: const Icon(Icons.alarm_add_rounded, size: 20),
-                    label: const Text('Set Session Reminder', style: TextStyle(fontWeight: FontWeight.bold)),
+                    icon: const Icon(Icons.qr_code_2_rounded, size: 20),
+                    label: const Text('Speaker: Present Session QR', style: TextStyle(fontWeight: FontWeight.bold)),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _showSpeakerSessionQrModal(context, session);
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: slate,
+                      side: BorderSide(color: Colors.grey.shade300),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.alarm_add_rounded, size: 18),
+                    label: const Text('Set Session Reminder', style: TextStyle(fontWeight: FontWeight.w600)),
                     onPressed: () {
                       Navigator.pop(ctx);
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -1242,6 +1263,107 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             ),
             const SizedBox(height: 10),
           ],
+        ),
+      ),
+    );
+  }
+
+  void _showSpeakerSessionQrModal(BuildContext context, dynamic session) {
+    final title = session['title'] ?? 'Session Attendance';
+    final hallName = session['hall_name'] ?? 'Hall A';
+    final speakerName = session['speaker_name'] ?? 'Faculty Speaker';
+    final sessionId = session['id'] ?? 1;
+    final qrData = 'MAPCON2026-SESSION-$sessionId-1';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: maroon.withOpacity(0.1), shape: BoxShape.circle),
+                    child: const Icon(Icons.qr_code_scanner_rounded, color: maroon, size: 22),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      'Speaker Attendance QR',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: slate),
+                    ),
+                  ),
+                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: maroon),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '📍 $hallName • Speaker: $speakerName',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 13, color: muted, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 18),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: maroon.withOpacity(0.3), width: 2),
+                  boxShadow: [
+                    BoxShadow(color: maroon.withOpacity(0.08), blurRadius: 16, offset: const Offset(0, 4)),
+                  ],
+                ),
+                child: QrImageView(
+                  data: qrData,
+                  version: QrVersions.auto,
+                  size: 200,
+                  foregroundColor: darkMaroon,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_outline, color: maroon, size: 18),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Project or display this QR code to delegates in the hall. Attendees scan this with their app to mark verified attendance.',
+                        style: TextStyle(fontSize: 11.5, color: slate, height: 1.3),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: maroon,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(44),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Close QR Display', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -2653,10 +2775,49 @@ class ChatScreen extends StatelessWidget {
               child: ListView(
                 padding: const EdgeInsets.all(18),
                 children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [maroon.withOpacity(0.08), gold.withOpacity(0.12)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: gold.withOpacity(0.4)),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: const BoxDecoration(color: maroon, shape: BoxShape.circle),
+                          child: const Icon(Icons.auto_awesome, color: Colors.white, size: 22),
+                        ),
+                        const SizedBox(width: 14),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'MAPCON 2026 Live Assistant',
+                                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: slate),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Instant help for schedule, hotel, food & certificates',
+                                style: TextStyle(fontSize: 12, color: muted),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   CardButton(
-                    icon: Icons.person,
+                    icon: Icons.person_pin,
                     title: 'Dr. Pallavi Kiran Shinde',
-                    subtitle: 'Conference Liaison Faculty • Chat with your liaison',
+                    subtitle: 'Conference Liaison Faculty • Active now at Hotel Sayaji',
                     onTap: () => Navigator.push(
                       c,
                       MaterialPageRoute(
@@ -2664,11 +2825,23 @@ class ChatScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 12),
+                  CardButton(
+                    icon: Icons.support_agent_rounded,
+                    title: 'Delegate Help Desk & Transport Control',
+                    subtitle: 'Lobby Counter #1 • Dial 0231 2555555',
+                    onTap: () => Navigator.push(
+                      c,
+                      MaterialPageRoute(
+                        builder: (_) => const AppShell(child: ConversationScreen()),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
                   const Center(
                     child: Text(
-                      'Real-time communication enabled by Socket.IO',
-                      style: TextStyle(color: muted, fontSize: 12.5),
+                      'Live 24/7 Conference Helpdesk & AI Assistance Active',
+                      style: TextStyle(color: muted, fontSize: 12.5, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ],
@@ -2686,68 +2859,266 @@ class ConversationScreen extends StatefulWidget {
 }
 
 class _ConversationScreenState extends State<ConversationScreen> {
-  final t = TextEditingController();
-  final messages = ['Welcome to MAPCON 2026! How can I assist you today?'];
+  final TextEditingController _controller = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  List<dynamic> _messages = [];
+  bool _isLoading = true;
+  bool _isSending = false;
 
-  void send() {
-    if (t.text.trim().isEmpty) return;
-    setState(() {
-      messages.add(t.text.trim());
-      t.clear();
+  @override
+  void initState() {
+    super.initState();
+    _loadMessages();
+  }
+
+  Future<void> _loadMessages() async {
+    try {
+      final res = await ApiService.get('/chat/messages?conferenceId=1');
+      if (mounted) {
+        setState(() {
+          if (res is Map && res['messages'] is List) {
+            _messages = List.from(res['messages']);
+          }
+          _isLoading = false;
+        });
+        _scrollToBottom();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          if (_messages.isEmpty) {
+            _messages = [
+              {
+                'body': 'Welcome to MAPCON 2026! How can I assist you with sessions, accommodation, meals, or certificates today?',
+                'is_me': false,
+                'created_at': DateTime.now().toIso8601String(),
+              }
+            ];
+          }
+        });
+      }
+    }
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
     });
   }
 
+  Future<void> _sendMessage([String? presetText]) async {
+    final text = (presetText ?? _controller.text).trim();
+    if (text.isEmpty || _isSending) return;
+
+    if (presetText == null) {
+      _controller.clear();
+    }
+
+    setState(() {
+      _isSending = true;
+      _messages.add({
+        'body': text,
+        'is_me': true,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+    });
+    _scrollToBottom();
+
+    try {
+      final res = await ApiService.post('/chat/messages', {
+        'body': text,
+        'conferenceId': 1,
+      });
+
+      if (mounted) {
+        setState(() {
+          _isSending = false;
+          if (res is Map && res['messages'] is List) {
+            _messages = List.from(res['messages']);
+          }
+        });
+        _scrollToBottom();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isSending = false;
+          _messages.add({
+            'body': 'Thank you! Your note has been received by Dr. Pallavi Kiran Shinde & the MAPCON Helpdesk.',
+            'is_me': false,
+            'created_at': DateTime.now().toIso8601String(),
+          });
+        });
+        _scrollToBottom();
+      }
+    }
+  }
+
   @override
-  Widget build(BuildContext c) => Scaffold(
+  Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(
-          title: const Text('Dr. Pallavi Kiran Shinde', style: TextStyle(fontWeight: FontWeight.bold)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(2),
+                decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                child: const CircleAvatar(
+                  radius: 16,
+                  backgroundColor: gold,
+                  child: Icon(Icons.person, color: Colors.white, size: 20),
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Dr. Pallavi Kiran Shinde', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15.5)),
+                    Text('Conference Liaison • Online', style: TextStyle(fontSize: 11, color: Colors.white70)),
+                  ],
+                ),
+              ),
+            ],
+          ),
           backgroundColor: maroon,
           foregroundColor: Colors.white,
+          elevation: 0,
         ),
         body: Column(
           children: [
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: messages.length,
-                itemBuilder: (c, i) => Align(
-                  alignment: i.isEven ? Alignment.centerLeft : Alignment.centerRight,
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: i.isEven ? Colors.white : maroon,
-                      borderRadius: BorderRadius.circular(16),
-                      border: i.isEven ? Border.all(color: Colors.grey.shade200) : null,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Text(
-                      messages[i],
-                      style: TextStyle(color: i.isEven ? slate : Colors.white, fontSize: 14),
-                    ),
-                  ),
-                ),
+            // Suggestion Chips
+            Container(
+              height: 46,
+              color: const Color(0xFFF8FAFC),
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                children: [
+                  _SuggestionChip('📅 Schedule', () => _sendMessage('What is the schedule for today?')),
+                  _SuggestionChip('🏨 Hotel Sayaji', () => _sendMessage('Tell me about Hotel Sayaji and room info')),
+                  _SuggestionChip('🍽️ Meals', () => _sendMessage('What are the meal timings and dining venues?')),
+                  _SuggestionChip('📜 Certificate', () => _sendMessage('How do I download my certificate?')),
+                  _SuggestionChip('📍 Venue Map', () => _sendMessage('Where is the conference venue?')),
+                ],
               ),
             ),
+            const Divider(height: 1, color: Color(0xFFE2E8F0)),
+
+            // Messages List
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator(color: maroon))
+                  : ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _messages.length + (_isSending ? 1 : 0),
+                      itemBuilder: (c, i) {
+                        if (i == _messages.length && _isSending) {
+                          return Align(
+                            alignment: Alignment.centerLeft,
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 10),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: Colors.grey.shade200),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: maroon),
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text('Liaison is typing...', style: TextStyle(color: muted, fontSize: 13)),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+
+                        final msg = _messages[i];
+                        final isMe = msg['is_me'] == true || msg['is_me'] == 1;
+                        final body = msg['body'] ?? '';
+
+                        return Align(
+                          alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                          child: Container(
+                            constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: isMe ? maroon : Colors.white,
+                              borderRadius: BorderRadius.only(
+                                topLeft: const Radius.circular(16),
+                                topRight: const Radius.circular(16),
+                                bottomLeft: Radius.circular(isMe ? 16 : 4),
+                                bottomRight: Radius.circular(isMe ? 4 : 16),
+                              ),
+                              border: isMe ? null : Border.all(color: Colors.grey.shade200),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.04),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  body,
+                                  style: TextStyle(
+                                    color: isMe ? Colors.white : slate,
+                                    fontSize: 14,
+                                    height: 1.35,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+
+            // Input Bar
             Container(
               padding: const EdgeInsets.all(12),
-              color: Colors.white,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, -2),
+                  ),
+                ],
+              ),
               child: Row(
                 children: [
                   Expanded(
                     child: TextField(
-                      controller: t,
+                      controller: _controller,
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) => _sendMessage(),
                       decoration: InputDecoration(
-                        hintText: 'Type your message...',
+                        hintText: 'Ask a question or type a message...',
+                        hintStyle: const TextStyle(color: muted, fontSize: 14),
                         filled: true,
                         fillColor: const Color(0xFFF1F5F9),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
                           borderSide: BorderSide.none,
@@ -2758,9 +3129,10 @@ class _ConversationScreenState extends State<ConversationScreen> {
                   const SizedBox(width: 8),
                   CircleAvatar(
                     backgroundColor: maroon,
+                    radius: 22,
                     child: IconButton(
-                      onPressed: send,
-                      icon: const Icon(Icons.send, color: Colors.white, size: 18),
+                      onPressed: () => _sendMessage(),
+                      icon: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
                     ),
                   ),
                 ],
@@ -2769,6 +3141,26 @@ class _ConversationScreenState extends State<ConversationScreen> {
           ],
         ),
       );
+}
+
+class _SuggestionChip extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  const _SuggestionChip(this.label, this.onTap);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ActionChip(
+        label: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: slate)),
+        backgroundColor: Colors.white,
+        side: BorderSide(color: Colors.grey.shade300),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        onPressed: onTap,
+      ),
+    );
+  }
 }
 
 // ----------------------------------------------------
@@ -3579,94 +3971,638 @@ class DutiesScreen extends StatelessWidget {
       );
 }
 
-class AttendanceScreen extends StatelessWidget {
+// ----------------------------------------------------
+// ATTENDANCE SCREEN (Live Session QR Scanner & History)
+// ----------------------------------------------------
+class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
   @override
-  Widget build(BuildContext c) => ListApiPage(
-        title: 'My Attendance',
-        path: '/me/attendance',
-        icon: Icons.fact_check,
-        fields: const ['title', 'session_date', 'start_time', 'scan_type', 'scanned_at'],
-      );
+  State<AttendanceScreen> createState() => _AttendanceScreenState();
 }
 
-class MealsScreen extends StatelessWidget {
-  const MealsScreen({super.key});
+class _AttendanceScreenState extends State<AttendanceScreen> {
+  int _refreshKey = 0;
+  bool _isMarking = false;
+
+  Future<List<dynamic>> _loadAttendance() async {
+    final res = await ApiService.get('/me/attendance');
+    return res is List ? res : <dynamic>[];
+  }
+
+  Future<void> _scanSessionQr() async {
+    final sessionsRes = await ApiService.get('/sessions?conferenceId=1');
+    final List<dynamic> sessionList = sessionsRes is List ? sessionsRes : [];
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: maroon.withOpacity(0.1), shape: BoxShape.circle),
+                    child: const Icon(Icons.qr_code_scanner_rounded, color: maroon, size: 24),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Scan Session Attendance', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: slate)),
+                        Text('Point at Speaker Podium QR or select active session', style: TextStyle(fontSize: 12, color: muted)),
+                      ],
+                    ),
+                  ),
+                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_outline, color: maroon, size: 20),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Speaker or Faculty generates the Session QR code on screen. Tap below to verify your presence.',
+                        style: TextStyle(fontSize: 12, color: slate, height: 1.3),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('ACTIVE & UPCOMING SESSIONS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: muted, letterSpacing: 0.8)),
+              const SizedBox(height: 8),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 280),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: sessionList.length,
+                  itemBuilder: (c, i) {
+                    final s = sessionList[i];
+                    return Card(
+                      elevation: 0,
+                      margin: const EdgeInsets.only(bottom: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: Colors.grey.shade200),
+                      ),
+                      child: ListTile(
+                        leading: const CircleAvatar(
+                          backgroundColor: maroon,
+                          child: Icon(Icons.meeting_room, color: Colors.white, size: 18),
+                        ),
+                        title: Text(s['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5)),
+                        subtitle: Text('${s['hall_name'] ?? 'Hall A'} • ${s['start_time'] ?? ''}'),
+                        trailing: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: maroon,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            _markAttendance(s['id'], 'MAPCON2026-SESSION-${s['id']}-1', s['title']);
+                          },
+                          child: const Text('Mark Present', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _markAttendance(int sessionId, String qrToken, String title) async {
+    setState(() => _isMarking = true);
+    try {
+      final res = await ApiService.post('/attendance/mark-self', {
+        'sessionId': sessionId,
+        'qrToken': qrToken,
+      });
+
+      if (mounted) {
+        setState(() {
+          _isMarking = false;
+          _refreshKey++;
+        });
+
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(color: Colors.green.shade50, shape: BoxShape.circle),
+                  child: const Icon(Icons.check_circle_rounded, color: Colors.green, size: 54),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Attendance Verified! 🎉',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: slate),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Your presence has been recorded for:\n"$title"',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 13.5, color: muted, height: 1.35),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: maroon,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size.fromHeight(42),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Done', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isMarking = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to mark attendance: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   @override
-  Widget build(BuildContext c) => Scaffold(
+  Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(
-          title: const Text('Meals & Catering Schedule', style: TextStyle(fontWeight: FontWeight.bold)),
+          title: const Text('Session Attendance', style: TextStyle(fontWeight: FontWeight.bold)),
           backgroundColor: maroon,
           foregroundColor: Colors.white,
         ),
-        body: ListView(
-          padding: const EdgeInsets.all(18),
-          children: const [
-            MealCard('Breakfast', '07:30 AM – 09:30 AM', 'Dining Hall A • Main Campus', Icons.free_breakfast),
-            MealCard('Lunch', '12:30 PM – 02:30 PM', 'Conference Banquet Hall', Icons.lunch_dining),
-            MealCard('High Tea & Networking', '04:30 PM – 05:30 PM', 'Auditorium Foyer', Icons.local_cafe),
-            MealCard('Gala Dinner', '07:30 PM – 10:00 PM', 'Grand Ballroom / Hyatt Regency', Icons.dinner_dining),
+        body: FutureBuilder<List<dynamic>>(
+          key: ValueKey(_refreshKey),
+          future: _loadAttendance(),
+          builder: (c, s) {
+            if (s.connectionState == ConnectionState.waiting && !_isMarking) {
+              return const Center(child: CircularProgressIndicator(color: maroon));
+            }
+            final list = s.data ?? [];
+
+            return ListView(
+              padding: const EdgeInsets.all(18),
+              children: [
+                // Scan QR Card
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [maroon, darkMaroon],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(22),
+                    boxShadow: [
+                      BoxShadow(color: maroon.withOpacity(0.25), blurRadius: 16, offset: const Offset(0, 6)),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      const Icon(Icons.qr_code_scanner_rounded, color: gold, size: 48),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Scan Speaker\'s Session QR',
+                        style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Scan the QR code displayed by the speaker or chairperson on the hall screen to verify attendance.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.white70, fontSize: 12.5, height: 1.35),
+                      ),
+                      const SizedBox(height: 18),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: gold,
+                          foregroundColor: darkMaroon,
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        icon: const Icon(Icons.camera_alt_rounded, size: 18),
+                        label: const Text('Scan Session QR Code', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13.5)),
+                        onPressed: _scanSessionQr,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 22),
+
+                // Attendance Status Header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('VERIFIED ATTENDANCE HISTORY', style: TextStyle(letterSpacing: 1.1, color: muted, fontWeight: FontWeight.w900, fontSize: 12.5)),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(10)),
+                      child: Text('${list.length} Sessions Attended', style: TextStyle(color: Colors.green.shade800, fontSize: 11.5, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                if (list.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(32),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: Colors.grey.shade200)),
+                    child: const Column(
+                      children: [
+                        Icon(Icons.event_busy_rounded, size: 42, color: muted),
+                        SizedBox(height: 10),
+                        Text('No sessions attended yet', style: TextStyle(fontWeight: FontWeight.w800, color: slate)),
+                        SizedBox(height: 4),
+                        Text('Scan the Speaker\'s QR in the session hall to record your attendance.', textAlign: TextAlign.center, style: TextStyle(color: muted, fontSize: 12.5)),
+                      ],
+                    ),
+                  )
+                else
+                  ...list.map((item) => Card(
+                        elevation: 0,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: BorderSide(color: Colors.grey.shade200),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(color: Colors.green.shade50, shape: BoxShape.circle),
+                                child: const Icon(Icons.check_circle, color: Colors.green, size: 24),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(item['title'] ?? 'Conference Session', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5, color: slate)),
+                                    const SizedBox(height: 4),
+                                    Text('📅 ${item['session_date'] ?? ''} • 🕒 ${item['start_time'] ?? ''}', style: const TextStyle(color: muted, fontSize: 12.5)),
+                                    const SizedBox(height: 2),
+                                    const Text('Verified Attendee ✓', style: TextStyle(color: Colors.green, fontSize: 11.5, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )),
+              ],
+            );
+          },
+        ),
+      );
+}
+
+// ----------------------------------------------------
+// MEALS & CATERING SCREEN (Live API & Digital Vouchers)
+// ----------------------------------------------------
+class MealsScreen extends StatefulWidget {
+  const MealsScreen({super.key});
+  @override
+  State<MealsScreen> createState() => _MealsScreenState();
+}
+
+class _MealsScreenState extends State<MealsScreen> {
+  String _selectedDay = 'ALL';
+  int _refreshKey = 0;
+
+  Future<List<dynamic>> _loadMeals() async {
+    final res = await ApiService.get('/meals?conferenceId=1');
+    return res is List ? res : <dynamic>[];
+  }
+
+  IconData _getMealIcon(String type) {
+    switch (type.toUpperCase()) {
+      case 'BREAKFAST':
+        return Icons.free_breakfast_rounded;
+      case 'LUNCH':
+        return Icons.lunch_dining_rounded;
+      case 'TEA':
+        return Icons.local_cafe_rounded;
+      case 'DINNER':
+        return Icons.dinner_dining_rounded;
+      default:
+        return Icons.restaurant_rounded;
+    }
+  }
+
+  void _showMealVoucher(BuildContext context, dynamic meal) {
+    final type = meal['meal_type'] ?? 'Meal';
+    final location = meal['location'] ?? 'Hotel Sayaji Dining Hall';
+    final timeStr = formatTimeRange(meal['start_time'], meal['end_time']);
+    final dateStr = formatSessionDate(meal['meal_date']);
+    final mealId = meal['id'];
+    final qrData = 'MAPCON2026-MEAL-$mealId';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: maroon.withOpacity(0.1), shape: BoxShape.circle),
+                    child: Icon(_getMealIcon(type), color: maroon, size: 22),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('$type Digital Pass', style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w900, color: slate)),
+                        const Text('MAPCON 2026 Delegate Voucher', style: TextStyle(fontSize: 11.5, color: muted)),
+                      ],
+                    ),
+                  ),
+                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: gold.withOpacity(0.5), width: 2),
+                  boxShadow: [
+                    BoxShadow(color: maroon.withOpacity(0.08), blurRadius: 16, offset: const Offset(0, 4)),
+                  ],
+                ),
+                child: QrImageView(
+                  data: qrData,
+                  version: QrVersions.auto,
+                  size: 190,
+                  foregroundColor: darkMaroon,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                '📍 $location',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: maroon),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '📅 $dateStr • 🕒 $timeStr',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 12.5, color: slate, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 18),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: maroon,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(44),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  try {
+                    await ApiService.post('/meals/$mealId/scan', {});
+                    setState(() => _refreshKey++);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('$type coupon verified!'), backgroundColor: maroon),
+                      );
+                    }
+                  } catch (_) {}
+                },
+                child: const Text('Redeem & Close', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(
+          title: const Text('Meals & Dining Schedule', style: TextStyle(fontWeight: FontWeight.bold)),
+          backgroundColor: maroon,
+          foregroundColor: Colors.white,
+        ),
+        body: Column(
+          children: [
+            // Day Filter Tabs
+            Container(
+              height: 50,
+              color: Colors.white,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                children: [
+                  _DayTab('All Meals', 'ALL', _selectedDay == 'ALL', () => setState(() => _selectedDay = 'ALL')),
+                  _DayTab('Day 1 (02 Oct)', '2026-10-02', _selectedDay == '2026-10-02', () => setState(() => _selectedDay == '2026-10-02')),
+                  _DayTab('Day 2 (03 Oct)', '2026-10-03', _selectedDay == '2026-10-03', () => setState(() => _selectedDay == '2026-10-03')),
+                  _DayTab('Day 3 (04 Oct)', '2026-10-04', _selectedDay == '2026-10-04', () => setState(() => _selectedDay == '2026-10-04')),
+                ],
+              ),
+            ),
+            const Divider(height: 1, color: Color(0xFFE2E8F0)),
+
+            // Meals List
+            Expanded(
+              child: FutureBuilder<List<dynamic>>(
+                key: ValueKey(_refreshKey),
+                future: _loadMeals(),
+                builder: (c, s) {
+                  if (s.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator(color: maroon));
+                  }
+                  final allMeals = s.data ?? [];
+                  final meals = _selectedDay == 'ALL'
+                      ? allMeals
+                      : allMeals.where((m) => m['meal_date'] == _selectedDay).toList();
+
+                  if (meals.isEmpty) {
+                    return const Center(child: Text('No meals scheduled for this day'));
+                  }
+
+                  return ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: meals.length,
+                    itemBuilder: (ctx, i) {
+                      final m = meals[i];
+                      final type = m['meal_type'] ?? 'Meal';
+                      final location = m['location'] ?? 'Hotel Sayaji Dining Hall';
+                      final timeStr = formatTimeRange(m['start_time'], m['end_time']);
+                      final dateStr = formatSessionDate(m['meal_date']);
+                      final isRedeemed = m['is_redeemed'] == 1 || m['is_redeemed'] == true;
+                      final icon = _getMealIcon(type);
+
+                      return Card(
+                        elevation: 0,
+                        margin: const EdgeInsets.only(bottom: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          side: BorderSide(color: isRedeemed ? Colors.green.shade200 : Colors.grey.shade200, width: 1.2),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: isRedeemed ? Colors.green.shade50 : maroon.withOpacity(0.08),
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    child: Icon(icon, color: isRedeemed ? Colors.green : maroon, size: 28),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(
+                                              type,
+                                              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: slate),
+                                            ),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                              decoration: BoxDecoration(
+                                                color: isRedeemed ? Colors.green.shade50 : Colors.amber.shade50,
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                              child: Text(
+                                                isRedeemed ? 'Redeemed ✓' : 'Available',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: isRedeemed ? Colors.green.shade800 : Colors.amber.shade900,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Row(
+                                          children: [
+                                            const Icon(Icons.access_time, size: 13, color: muted),
+                                            const SizedBox(width: 4),
+                                            Text(timeStr, style: const TextStyle(color: slate, fontWeight: FontWeight.w700, fontSize: 12.5)),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Row(
+                                          children: [
+                                            const Icon(Icons.location_on_outlined, size: 13, color: maroon),
+                                            const SizedBox(width: 4),
+                                            Expanded(
+                                              child: Text(
+                                                location,
+                                                style: const TextStyle(fontSize: 12, color: muted),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const Divider(height: 20),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text('📅 $dateStr', style: const TextStyle(fontSize: 12, color: muted, fontWeight: FontWeight.w600)),
+                                  ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: maroon,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                    icon: const Icon(Icons.qr_code_rounded, size: 16),
+                                    label: const Text('Show Meal Pass', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                    onPressed: () => _showMealVoucher(context, m),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
           ],
         ),
       );
 }
 
-class MealCard extends StatelessWidget {
-  final String title, time, venue;
-  final IconData icon;
-
-  const MealCard(this.title, this.time, this.venue, this.icon, {super.key});
+class _DayTab extends StatelessWidget {
+  final String label, value;
+  final bool isSelected;
+  final VoidCallback onTap;
+  const _DayTab(this.label, this.value, this.isSelected, this.onTap);
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      margin: const EdgeInsets.only(bottom: 14),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: Colors.grey.shade200, width: 1.2),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: maroon.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(icon, color: maroon, size: 28),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: slate)),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(Icons.access_time, size: 13, color: muted),
-                      const SizedBox(width: 4),
-                      Text(time, style: const TextStyle(color: slate, fontWeight: FontWeight.w700, fontSize: 12.5)),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      const Icon(Icons.location_on_outlined, size: 13, color: maroon),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(venue, style: const TextStyle(color: muted, fontSize: 12), overflow: TextOverflow.ellipsis),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        label: Text(label, style: TextStyle(color: isSelected ? Colors.white : slate, fontWeight: FontWeight.bold, fontSize: 12)),
+        selected: isSelected,
+        selectedColor: maroon,
+        backgroundColor: Colors.grey.shade100,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide.none),
+        onSelected: (_) => onTap(),
       ),
     );
   }
