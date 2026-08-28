@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'config.dart';
 import 'services/api_service.dart';
 import 'services/webcam_service.dart';
+import 'services/qr_scanner_service.dart';
 
 const Color maroon = Color(0xFF8C1119);
 const Color cream = Color(0xFFFCFAF5);
@@ -3990,117 +3991,16 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   }
 
   Future<void> _scanSessionQr() async {
-    final sessionsRes = await ApiService.get('/sessions?conferenceId=1');
-    final List<dynamic> sessionList = sessionsRes is List ? sessionsRes : [];
-
-    if (!mounted) return;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(color: maroon.withOpacity(0.1), shape: BoxShape.circle),
-                    child: const Icon(Icons.qr_code_scanner_rounded, color: maroon, size: 24),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Scan Session Attendance', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: slate)),
-                        Text('Point at Speaker Podium QR or select active session', style: TextStyle(fontSize: 12, color: muted)),
-                      ],
-                    ),
-                  ),
-                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.info_outline, color: maroon, size: 20),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Speaker or Faculty generates the Session QR code on screen. Tap below to verify your presence.',
-                        style: TextStyle(fontSize: 12, color: slate, height: 1.3),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text('ACTIVE & UPCOMING SESSIONS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: muted, letterSpacing: 0.8)),
-              const SizedBox(height: 8),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 280),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: sessionList.length,
-                  itemBuilder: (c, i) {
-                    final s = sessionList[i];
-                    return Card(
-                      elevation: 0,
-                      margin: const EdgeInsets.only(bottom: 8),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(color: Colors.grey.shade200),
-                      ),
-                      child: ListTile(
-                        leading: const CircleAvatar(
-                          backgroundColor: maroon,
-                          child: Icon(Icons.meeting_room, color: Colors.white, size: 18),
-                        ),
-                        title: Text(s['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5)),
-                        subtitle: Text('${s['hall_name'] ?? 'Hall A'} • ${s['start_time'] ?? ''}'),
-                        trailing: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: maroon,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          onPressed: () {
-                            Navigator.pop(ctx);
-                            _markAttendance(s['id'], 'MAPCON2026-SESSION-${s['id']}-1', s['title']);
-                          },
-                          child: const Text('Mark Present', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    final scannedCode = await scanQrCodeWithCamera(context);
+    if (scannedCode != null && scannedCode.trim().isNotEmpty) {
+      await _markAttendanceByQr(scannedCode.trim());
+    }
   }
 
-  Future<void> _markAttendance(int sessionId, String qrToken, String title) async {
+  Future<void> _markAttendanceByQr(String qrToken) async {
     setState(() => _isMarking = true);
     try {
       final res = await ApiService.post('/attendance/mark-self', {
-        'sessionId': sessionId,
         'qrToken': qrToken,
       });
 
@@ -4110,10 +4010,15 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           _refreshKey++;
         });
 
+        final data = res is Map && res['data'] is Map ? res['data'] : <dynamic, dynamic>{};
+        final sessionTitle = data['sessionTitle'] ?? 'Session Verified';
+        final speakerName = data['speakerName'] ?? '';
+        final hallName = data['hallName'] ?? '';
+
         showDialog(
           context: context,
           builder: (ctx) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -4125,24 +4030,38 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 const SizedBox(height: 16),
                 const Text(
                   'Attendance Verified! 🎉',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: slate),
+                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: slate),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Your presence has been recorded for:\n"$title"',
+                  sessionTitle,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 13.5, color: muted, height: 1.35),
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: maroon),
+                ),
+                if (hallName.isNotEmpty || speakerName.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    '📍 $hallName ${speakerName.isNotEmpty ? '• Speaker: $speakerName' : ''}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 12.5, color: muted, fontWeight: FontWeight.w600),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                const Text(
+                  'Your presence in the hall has been recorded successfully.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12.5, color: muted),
                 ),
                 const SizedBox(height: 20),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: maroon,
                     foregroundColor: Colors.white,
-                    minimumSize: const Size.fromHeight(42),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    minimumSize: const Size.fromHeight(44),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Done', style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: const Text('Great!', style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
@@ -4153,7 +4072,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       if (mounted) {
         setState(() => _isMarking = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to mark attendance: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Attendance Verification Failed: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
