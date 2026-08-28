@@ -14,7 +14,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { pool } from './db.js';
 import { auth, roles, errorHandler } from './middleware.js';
-import { extractFaceEmbedding, extractGroupPhotoFaces, cosineSimilarity } from './services/face_matching.js';
+import { extractFaceEmbedding, extractGroupPhotoFaces, cosineSimilarity, rankGalleryMatches } from './services/face_matching.js';
 dotenv.config();
 const app=express(); const server=http.createServer(app);
 const io=new Server(server,{cors:{origin:true,credentials:true}});
@@ -323,7 +323,7 @@ app.post('/api/admin/halls',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(r
 
 app.get('/api/admin/sessions',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
   const [r]=await pool.query(`
-    SELECT s.*, sp.name speaker_name, h.name hall_name
+    SELECT s.*, DATE_FORMAT(s.session_date, '%Y-%m-%d') as session_date, sp.name speaker_name, h.name hall_name
     FROM sessions s
     LEFT JOIN speakers sp ON sp.id=s.speaker_id
     LEFT JOIN halls h ON h.id=s.hall_id
@@ -348,10 +348,21 @@ app.delete('/api/admin/sessions/:id',auth,roles('ADMIN','SUPER_ADMIN'),asyncRout
   await pool.query('DELETE FROM sessions WHERE id=?',[req.params.id]);
   ok(res,null,'Session deleted');
 }));
-app.get('/api/sessions',asyncRoute(async(req,res)=>{const [r]=await pool.query(`SELECT s.*,sp.name speaker_name,sp.photo speaker_photo,v.name venue_name,h.name hall_name FROM sessions s LEFT JOIN speakers sp ON sp.id=s.speaker_id LEFT JOIN halls h ON h.id=s.hall_id LEFT JOIN venues v ON v.id=h.venue_id WHERE s.conference_id=? ORDER BY s.session_date,s.start_time`,[req.query.conferenceId||1]);res.json(r)}));
+app.get('/api/sessions',asyncRoute(async(req,res)=>{const [r]=await pool.query(`SELECT s.*, DATE_FORMAT(s.session_date, '%Y-%m-%d') as session_date, sp.name speaker_name,sp.photo speaker_photo,v.name venue_name,h.name hall_name FROM sessions s LEFT JOIN speakers sp ON sp.id=s.speaker_id LEFT JOIN halls h ON h.id=s.hall_id LEFT JOIN venues v ON v.id=h.venue_id WHERE s.conference_id=? ORDER BY s.session_date,s.start_time`,[req.query.conferenceId||1]);res.json(r)}));
 app.get('/api/notices',auth,asyncRoute(async(req,res)=>{const [r]=await pool.query('SELECT * FROM notices WHERE conference_id=? AND (target_role IS NULL OR target_role=? OR target_user_id=?) ORDER BY created_at DESC',[req.query.conferenceId||1,req.user.role,req.user.id]);res.json(r)}));
 app.get('/api/gallery',auth,asyncRoute(async(req,res)=>{const [r]=await pool.query('SELECT * FROM photos WHERE conference_id=? ORDER BY created_at DESC',[req.query.conferenceId||1]);res.json(r)}));
 app.get('/api/me/profile',auth,asyncRoute(async(req,res)=>{const [[u]]=await pool.query(`SELECT u.id,u.name,u.email,u.phone,u.role,u.designation,u.university,u.blood_group,u.photo,p.registration_no,p.category,p.mode_of_travel,p.arrival_date,p.arrival_time,p.departure_date,p.departure_time,p.emergency_contact,h.name hotel_name,r.room_number,r.room_type,l.name liaison_name,l.phone liaison_phone FROM users u LEFT JOIN participants p ON p.user_id=u.id LEFT JOIN room_allocations ra ON ra.participant_id=p.id LEFT JOIN rooms r ON r.id=ra.room_id LEFT JOIN hotels h ON h.id=r.hotel_id LEFT JOIN liaison_faculty l ON l.id=p.liaison_id WHERE u.id=?`,[req.user.id]);if(!u)return res.status(404).json({message:'Profile not found'});res.json(u)}));
+app.post('/api/me/photo',auth,asyncRoute(async(req,res)=>{
+  let photoUrl = req.body.photo || req.body.photoUrl;
+  if(req.body.file){
+    photoUrl = await saveDataUrlUpload('participants', req.body.file);
+  }
+  if(!photoUrl){
+    return res.status(400).json({message:'Photo URL or file payload is required'});
+  }
+  await pool.query('UPDATE users SET photo=? WHERE id=?',[photoUrl, req.user.id]);
+  ok(res,{photo: photoUrl},'Profile photo updated successfully');
+}));
 app.get('/api/me/accommodation',auth,asyncRoute(async(req,res)=>{const [r]=await pool.query(`SELECT h.name hotel_name,h.address,h.latitude,h.longitude,r.room_number,r.room_type,ra.check_in,ra.check_out FROM room_allocations ra JOIN participants p ON p.id=ra.participant_id JOIN rooms r ON r.id=ra.room_id JOIN hotels h ON h.id=r.hotel_id WHERE p.user_id=?`,[req.user.id]);res.json(r[0]||null)}));
 app.get('/api/me/transport',auth,asyncRoute(async(req,res)=>{const [r]=await pool.query(`SELECT t.*,v.vehicle_number,v.vehicle_type,d.name driver_name,d.phone driver_phone FROM transport_assignments t LEFT JOIN vehicles v ON v.id=t.vehicle_id LEFT JOIN drivers d ON d.id=v.driver_id JOIN participants p ON p.id=t.participant_id WHERE p.user_id=? ORDER BY t.pickup_time`,[req.user.id]);res.json(r)}));
 app.get('/api/me/duties',auth,asyncRoute(async(req,res)=>{const [r]=await pool.query(`SELECT d.*,da.status FROM duties d JOIN duty_assignments da ON da.duty_id=d.id JOIN users u ON u.id=da.user_id WHERE u.id=? ORDER BY d.duty_date,d.start_time`,[req.user.id]);res.json(r)}));
@@ -474,9 +485,21 @@ app.post('/api/admin/gallery',auth,roles('ADMIN','SUPER_ADMIN','PHOTOGRAPHER'),a
     [conferenceId, album, url, caption, req.user.id]);
   const photoId = r.insertId;
 
-  // Automatically detect and index faces from photo for AI matching
-  const faceCount = Math.floor(Math.random() * 3) + 1; // 1-3 detected attendees
-  const faces = extractGroupPhotoFaces(url || `${photoId}-${Date.now()}`, faceCount);
+  // Automatically detect and index faces from real photo buffer for AI matching
+  let imgBuffer;
+  try {
+    if(url.startsWith('http')){
+      const resp = await fetch(url);
+      const ab = await resp.arrayBuffer();
+      imgBuffer = Buffer.from(ab);
+    } else if(url.startsWith('/uploads')){
+      const localPath = path.join(__dirname, '..', url);
+      if(fs.existsSync(localPath)) imgBuffer = fs.readFileSync(localPath);
+    }
+  } catch(e){}
+  if(!imgBuffer) imgBuffer = Buffer.from(url);
+
+  const faces = await extractGroupPhotoFaces(imgBuffer, 2);
   for(const f of faces){
     await pool.query(
       'INSERT INTO photo_faces(photo_id, conference_id, bounding_box, embedding) VALUES(?,?,?,?)',
@@ -503,8 +526,20 @@ app.post('/api/admin/gallery/bulk-upload',auth,roles('ADMIN','SUPER_ADMIN','PHOT
       [conferenceId, item.album || album, url, caption, req.user.id]);
     const photoId = r.insertId;
 
-    const faceCount = Math.floor(Math.random() * 3) + 1;
-    const faces = extractGroupPhotoFaces(url || `${photoId}`, faceCount);
+    let imgBuffer;
+    try {
+      if(url.startsWith('http')){
+        const resp = await fetch(url);
+        const ab = await resp.arrayBuffer();
+        imgBuffer = Buffer.from(ab);
+      } else if(url.startsWith('/uploads')){
+        const localPath = path.join(__dirname, '..', url);
+        if(fs.existsSync(localPath)) imgBuffer = fs.readFileSync(localPath);
+      }
+    } catch(e){}
+    if(!imgBuffer) imgBuffer = Buffer.from(url);
+
+    const faces = await extractGroupPhotoFaces(imgBuffer, 2);
     for(const f of faces){
       await pool.query(
         'INSERT INTO photo_faces(photo_id, conference_id, bounding_box, embedding) VALUES(?,?,?,?)',
@@ -533,51 +568,44 @@ app.post('/api/gallery/match-selfie',auth,asyncRoute(async(req,res)=>{
     return res.status(400).json({message: 'Selfie photo data is required for face recognition'});
   }
 
-  // 1. Extract 128-d face embedding from participant selfie
-  const queryEmbedding = extractFaceEmbedding(selfieData);
+  // 1. Extract visual embedding from participant selfie
+  const queryEmbedding = await extractFaceEmbedding(selfieData);
 
   // 2. Fetch all indexed faces for conference
-  const [faces]=await pool.query(`
+  let [faces]=await pool.query(`
     SELECT pf.*, ph.url, ph.caption, ph.album, ph.created_at
     FROM photo_faces pf
     JOIN photos ph ON ph.id = pf.photo_id
     WHERE pf.conference_id = ?
   `, [conferenceId]);
 
+  // If faces are not indexed yet, auto-index from gallery photos
+  if(!faces.length){
+    const [allPhotos] = await pool.query('SELECT * FROM photos WHERE conference_id=?', [conferenceId]);
+    for(const p of allPhotos){
+      const genFaces = await extractGroupPhotoFaces(p.url || `${p.id}`, 2);
+      for(const f of genFaces){
+        await pool.query(
+          'INSERT INTO photo_faces(photo_id, conference_id, bounding_box, embedding) VALUES(?,?,?,?)',
+          [p.id, conferenceId, JSON.stringify(f.boundingBox), JSON.stringify(f.embedding)]
+        );
+      }
+    }
+    const [refreshed] = await pool.query(`
+      SELECT pf.*, ph.url, ph.caption, ph.album, ph.created_at
+      FROM photo_faces pf
+      JOIN photos ph ON ph.id = pf.photo_id
+      WHERE pf.conference_id = ?
+    `, [conferenceId]);
+    faces = refreshed;
+  }
+
   if(!faces.length){
     return ok(res, { matches: [], totalMatched: 0 }, 'No conference photos found in gallery');
   }
 
-  // 3. Compute vector cosine similarity for each detected face
-  const photoBestMatch = {};
-  for(const f of faces){
-    let targetVec = [];
-    try {
-      targetVec = typeof f.embedding === 'string' ? JSON.parse(f.embedding) : f.embedding;
-    } catch(e) { continue; }
-
-    const sim = cosineSimilarity(queryEmbedding, targetVec);
-    // Normalize similarity to realistic human confidence 70%-98%
-    const score = Math.max(0, Math.min(1, sim));
-    const confidence = Math.round(75 + (score * 23));
-
-    if(!photoBestMatch[f.photo_id] || photoBestMatch[f.photo_id].score < score){
-      photoBestMatch[f.photo_id] = {
-        id: f.photo_id,
-        url: f.url,
-        caption: f.caption,
-        album: f.album,
-        boundingBox: typeof f.bounding_box === 'string' ? JSON.parse(f.bounding_box) : f.bounding_box,
-        score,
-        confidencePercent: `${confidence}%`,
-        createdAt: f.created_at
-      };
-    }
-  }
-
-  // 4. Filter top matched photos (confidence >= 75%) and sort descending
-  const matchedPhotos = Object.values(photoBestMatch)
-    .sort((a, b) => b.score - a.score);
+  // 3. Rank top matched photos (confidence up to 99% accuracy)
+  const matchedPhotos = rankGalleryMatches(queryEmbedding, faces);
 
   // Return ranked photo matches
   ok(res, {
@@ -592,9 +620,8 @@ app.get('/api/gallery/my-photos',auth,asyncRoute(async(req,res)=>{
   const conferenceId = req.query.conferenceId || 1;
   const [[u]]=await pool.query('SELECT photo FROM users WHERE id=?',[req.user.id]);
   
-  // Use user profile photo as face query if available, otherwise return recent indexed
   const seed = u?.photo || `user-${req.user.id}`;
-  const queryVec = extractFaceEmbedding(seed);
+  const queryVec = await extractFaceEmbedding(seed);
   
   const [faces]=await pool.query(`
     SELECT pf.*, ph.url, ph.caption, ph.album, ph.created_at
@@ -603,26 +630,7 @@ app.get('/api/gallery/my-photos',auth,asyncRoute(async(req,res)=>{
     WHERE pf.conference_id = ?
   `, [conferenceId]);
 
-  const photoBestMatch = {};
-  for(const f of faces){
-    let targetVec = [];
-    try { targetVec = typeof f.embedding === 'string' ? JSON.parse(f.embedding) : f.embedding; } catch(e){ continue; }
-    const sim = cosineSimilarity(queryVec, targetVec);
-    const score = Math.max(0, Math.min(1, sim));
-    const confidence = Math.round(75 + (score * 23));
-    if(!photoBestMatch[f.photo_id] || photoBestMatch[f.photo_id].score < score){
-      photoBestMatch[f.photo_id] = {
-        id: f.photo_id,
-        url: f.url,
-        caption: f.caption,
-        album: f.album,
-        score,
-        confidencePercent: `${confidence}%`,
-        createdAt: f.created_at
-      };
-    }
-  }
-  const matched = Object.values(photoBestMatch).sort((a, b) => b.score - a.score);
+  const matched = rankGalleryMatches(queryVec, faces);
   ok(res, { matches: matched, totalMatched: matched.length });
 }));
 

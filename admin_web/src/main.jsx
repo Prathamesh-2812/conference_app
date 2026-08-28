@@ -114,7 +114,20 @@ function SelectField({label,value,onChange,options=[]}){
   </label>;
 }
 function Toggle({label,checked,onChange}){return <label className="toggle"><input type="checkbox" checked={!!checked} onChange={e=>onChange(e.target.checked)}/><span>{label}</span></label>}
-function formState(initial){const[v,setV]=useState(initial);useEffect(()=>setV(initial),[initial]);return [v,(k,val)=>setV(x=>({...x,[k]:val})),setV]}
+function formState(initial){
+  const [v, setV] = useState(initial || {});
+  const prevJsonRef = React.useRef(JSON.stringify(initial || {}));
+  
+  useEffect(() => {
+    const currentJson = JSON.stringify(initial || {});
+    if (prevJsonRef.current !== currentJson) {
+      prevJsonRef.current = currentJson;
+      setV(initial || {});
+    }
+  }, [initial]);
+
+  return [v, (k, val) => setV(x => ({ ...x, [k]: val })), setV];
+}
 
 function ConferenceForm({value,onSave}){const[v,set,setV]=formState(value);return <FormShell icon={Building2} title="Conference Details" description="Edit the public conference profile consumed by Admin and Flutter." onReset={()=>setV(value)} onSave={()=>onSave(v)}><Field label="Conference Name" value={v.name} onChange={x=>set('name',x)}/><Field label="Short Name" value={v.shortName} onChange={x=>set('shortName',x)}/><Field label="Theme" value={v.theme} onChange={x=>set('theme',x)}/><SelectField label="Conference Status" value={v.status} onChange={x=>set('status',x)} options={['ACTIVE','DRAFT','PUBLISHED','ARCHIVED','INACTIVE']}/><Field type="date" label="Start Date" value={v.startDate} onChange={x=>set('startDate',x)}/><Field type="date" label="End Date" value={v.endDate} onChange={x=>set('endDate',x)}/><Field type="date" label="Registration Start" value={v.registrationStartDate} onChange={x=>set('registrationStartDate',x)}/><Field type="date" label="Registration End" value={v.registrationEndDate} onChange={x=>set('registrationEndDate',x)}/><Field label="Contact Person" value={v.contactPerson} onChange={x=>set('contactPerson',x)}/><Field label="Contact Phone" value={v.contactPhone} onChange={x=>set('contactPhone',x)}/><Field label="Contact Email" value={v.contactEmail} onChange={x=>set('contactEmail',x)}/><Field label="Website" value={v.website} onChange={x=>set('website',x)}/><Field label="Organizer" value={v.organizer} onChange={x=>set('organizer',x)}/><Field label="Host Institution" value={v.hostInstitution} onChange={x=>set('hostInstitution',x)}/><Field textarea label="Description" value={v.description} onChange={x=>set('description',x)}/><Field textarea label="Welcome Message" value={v.welcomeMessage} onChange={x=>set('welcomeMessage',x)}/><Field textarea label="About Conference" value={v.aboutConference} onChange={x=>set('aboutConference',x)}/></FormShell>}
 function VenueForm({value,onSave}){const[v,set,setV]=formState(value);return <FormShell icon={MapPin} title="Venue & Location" description="Publish map, address, parking, and direction data to the mobile app." onReset={()=>setV(value)} onSave={()=>onSave(v)}><Field label="Venue Name" value={v.name} onChange={x=>set('name',x)}/><Field label="City" value={v.city} onChange={x=>set('city',x)}/><Field label="State" value={v.state} onChange={x=>set('state',x)}/><Field label="Country" value={v.country} onChange={x=>set('country',x)}/><Field label="Pincode" value={v.pincode} onChange={x=>set('pincode',x)}/><Field label="Latitude" value={v.latitude} onChange={x=>set('latitude',x)}/><Field label="Longitude" value={v.longitude} onChange={x=>set('longitude',x)}/><Field label="Venue Contact Number" value={v.contactNumber} onChange={x=>set('contactNumber',x)}/><Field textarea label="Address" value={v.address} onChange={x=>set('address',x)}/><Field textarea label="Google Maps URL" value={v.googleMapsUrl} onChange={x=>set('googleMapsUrl',x)}/><Field textarea label="Parking Information" value={v.parkingInformation} onChange={x=>set('parkingInformation',x)}/><Field textarea label="Directions" value={v.directions} onChange={x=>set('directions',x)}/></FormShell>}

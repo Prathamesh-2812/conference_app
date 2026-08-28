@@ -9,7 +9,7 @@ String get apiBaseUrl {
   return 'http://localhost:5000/api';
 }
 
-const String conferenceName = '100th DPU AIU VC Conference 2026';
-const String conferenceShort = '100th DPU AIU VC Conference';
-const String defaultBanner = 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=1600';
-const String defaultMapUrl = 'https://www.google.com/maps/search/?api=1&query=Dr.+D.+Y.+Patil+Vidyapeeth+Pimpri+Pune';
+const String conferenceName = 'MAPCON 2026';
+const String conferenceShort = 'MAPCON 2026';
+const String defaultBanner = 'assets/images/banner.jpg';
+const String defaultMapUrl = 'https://www.google.com/maps/search/?api=1&query=Hotel+Sayaji+Kolhapur';
