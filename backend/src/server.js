@@ -404,6 +404,34 @@ app.get('/api/admin/attendance/live',auth,roles('ADMIN','SUPER_ADMIN'),asyncRout
   res.json(scans);
 }));
 
+app.get('/api/admin/sessions/:id/attendance',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
+  const sessionId = req.params.id;
+  const [[session]] = await pool.query(`
+    SELECT s.*, DATE_FORMAT(s.session_date, '%Y-%m-%d') as session_date, sp.name speaker_name, h.name hall_name
+    FROM sessions s
+    LEFT JOIN speakers sp ON sp.id=s.speaker_id
+    LEFT JOIN halls h ON h.id=s.hall_id
+    WHERE s.id=?
+  `, [sessionId]);
+  if (!session) return res.status(404).json({ message: 'Session not found' });
+
+  const [attendees] = await pool.query(`
+    SELECT a.id, a.scanned_at, a.scan_type, u.name as participant_name, u.email, p.registration_no, p.category, p.organization
+    FROM attendance a
+    JOIN participants p ON p.id=a.participant_id
+    JOIN users u ON u.id=p.user_id
+    WHERE a.session_id=?
+    ORDER BY a.scanned_at DESC
+  `, [sessionId]);
+
+  res.json({
+    session,
+    count: attendees.length,
+    qrToken: `MAPCON2026-SESSION-${session.id}-${session.conference_id}`,
+    attendees
+  });
+}));
+
 app.get('/api/admin/meals',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
   const [r]=await pool.query('SELECT * FROM meals WHERE conference_id=? ORDER BY meal_date, start_time',[req.query.conferenceId||1]);
   res.json(r);

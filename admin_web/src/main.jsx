@@ -1,6 +1,7 @@
 import React,{useEffect,useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import {Bell,Building2,Bus,CalendarDays,CheckCircle,ChevronDown,FileCheck,Hotel,Image,LayoutDashboard,Lock,LogOut,MapPin,Palette,RefreshCw,Search,Settings,Shield,Upload,Users} from 'lucide-react';
+import {Bell,Building2,Bus,CalendarDays,CheckCircle,ChevronDown,FileCheck,Hotel,Image,LayoutDashboard,Lock,LogOut,MapPin,Palette,RefreshCw,Search,Settings,Shield,Upload,Users,QrCode,Maximize2,Minimize2,Printer,Tv,UserCheck} from 'lucide-react';
+import {QRCodeSVG} from 'qrcode.react';
 import './style.css';
 
 const API=import.meta.env.VITE_API_URL||'http://localhost:5000/api';
@@ -739,7 +740,7 @@ function SpeakerModal({value,onSave,onClose,notify}){
 }
 
 function Schedule({tab, notify}){
-  const[d,setD]=useState([]),[halls,setHalls]=useState([]),[speakers,setSpeakers]=useState([]),[busy,setBusy]=useState(false),[edit,setEdit]=useState(null);
+  const[d,setD]=useState([]),[halls,setHalls]=useState([]),[speakers,setSpeakers]=useState([]),[busy,setBusy]=useState(false),[edit,setEdit]=useState(null),[projectQr,setProjectQr]=useState(null);
   const load=async()=>{
     setBusy(true);
     try{
@@ -761,11 +762,18 @@ function Schedule({tab, notify}){
 
   return <div className="panel">
     <div className="pagehead">
-      <div><h3>Event Schedule</h3><p>Manage conference sessions, halls, and tracks.</p></div>
-      <div className="actions"><button onClick={()=>setEdit({})}>Add Session</button></div>
+      <div><h3>Event Schedule</h3><p>Manage conference sessions, halls, and generate live attendee QR codes.</p></div>
+      <div className="actions" style={{display:'flex',gap:'8px'}}>
+        {d.length > 0 && (
+          <button style={{background:'#2E6F95',color:'#fff',display:'flex',alignItems:'center',gap:'6px'}} onClick={()=>setProjectQr(d[0])}>
+            <Tv size={16}/> Project Attendance QR
+          </button>
+        )}
+        <button onClick={()=>setEdit({})}>+ Add Session</button>
+      </div>
     </div>
     <table>
-      <thead><tr><th>Time</th><th>Session</th><th>Hall</th><th>Speaker</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Time</th><th>Session</th><th>Hall</th><th>Speaker</th><th>Live Attendance QR</th><th>Actions</th></tr></thead>
       <tbody>
         {d.map(x=><tr key={x.id}>
           <td>{toInputDate(x.session_date)}<br/>{x.start_time} - {x.end_time}</td>
@@ -773,16 +781,187 @@ function Schedule({tab, notify}){
           <td>{x.hall_name}</td>
           <td>{x.speaker_name}</td>
           <td>
+            <button
+              onClick={()=>setProjectQr(x)}
+              style={{background:'#FFF8F8',color:'#8C1119',border:'1.5px solid #8C1119',borderRadius:'8px',padding:'6px 12px',fontSize:'12px',fontWeight:'700',display:'inline-flex',alignItems:'center',gap:'6px',cursor:'pointer'}}
+            >
+              <QrCode size={14}/> Project QR Screen
+            </button>
+          </td>
+          <td>
             <div className="rowactions">
-              <button className="icon" onClick={()=>setEdit(x)}><Settings size={16}/></button>
-              <button className="icon" onClick={async()=>{if(confirm('Delete?')){await req(`/admin/sessions/${x.id}`,{method:'DELETE'});load()}}}><LogOut size={16}/></button>
+              <button className="icon" title="Edit Session" onClick={()=>setEdit(x)}><Settings size={16}/></button>
+              <button className="icon" title="Delete Session" onClick={async()=>{if(confirm('Delete?')){await req(`/admin/sessions/${x.id}`,{method:'DELETE'});load()}}}><LogOut size={16}/></button>
             </div>
           </td>
         </tr>)}
       </tbody>
     </table>
     {edit && <SessionModal value={edit} speakers={speakers} halls={halls} onSave={save} onClose={()=>setEdit(null)}/>}
+    {projectQr && <SessionQrModal session={projectQr} onClose={()=>setProjectQr(null)}/>}
   </div>
+}
+
+function SessionQrModal({session, onClose}){
+  const [data, setData] = useState(null);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadAttendance = async () => {
+    if (!session?.id) return;
+    try {
+      setRefreshing(true);
+      const res = await req(`/admin/sessions/${session.id}/attendance`);
+      setData(res);
+    } catch (_) {} finally {
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    loadAttendance();
+    const timer = setInterval(loadAttendance, 2500);
+    return () => clearInterval(timer);
+  }, [session?.id]);
+
+  const qrToken = `MAPCON2026-SESSION-${session.id}-1`;
+
+  const printQr = () => {
+    window.print();
+  };
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal" style={fullscreen ? {maxWidth:'96vw', height:'94vh', background:'#0F172A', color:'#fff', display:'flex', flexDirection:'column'} : {maxWidth:'780px'}}>
+        <div className="modal-header" style={fullscreen ? {borderBottom:'1px solid #334155', background:'#0F172A'} : {}}>
+          <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+            <div style={{background:'#8C1119',color:'#fff',padding:'8px',borderRadius:'10px',display:'flex'}}>
+              <QrCode size={22}/>
+            </div>
+            <div>
+              <h3 style={fullscreen ? {color:'#fff',fontSize:'20px',margin:0} : {fontSize:'18px',margin:0}}>
+                {fullscreen ? '📺 Official Session Attendance Projector Screen' : 'Session Attendance QR Code'}
+              </h3>
+              <p style={{fontSize:'12px',color:fullscreen ? '#94A3B8' : '#64748B',margin:'2px 0 0'}}>
+                Project this QR code on hall screen / podium. Attendees scan with mobile app to mark attendance.
+              </p>
+            </div>
+          </div>
+          <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
+            <button className="icon" title="Toggle Fullscreen Projector" onClick={()=>setFullscreen(!fullscreen)} style={fullscreen ? {color:'#fff',background:'#1E293B'} : {}}>
+              {fullscreen ? <Minimize2 size={18}/> : <Maximize2 size={18}/>}
+            </button>
+            <button className="icon" title="Print QR Standee" onClick={printQr} style={fullscreen ? {color:'#fff',background:'#1E293B'} : {}}>
+              <Printer size={18}/>
+            </button>
+            <button className="close" onClick={onClose} style={fullscreen ? {color:'#fff'} : {}}>&times;</button>
+          </div>
+        </div>
+
+        <div className="modal-body" style={{padding:'24px',overflowY:'auto',flex:1}}>
+          <div style={{display:'grid',gridTemplateColumns:fullscreen ? '1.1fr 1fr' : '1fr 1.1fr',gap:'24px',alignItems:'start'}}>
+            
+            {/* QR Code Presentation Box */}
+            <div style={{background:fullscreen ? '#1E293B' : '#FFF8F8',border:`2px solid ${fullscreen ? '#38BDF8' : '#8C1119'}`,borderRadius:'20px',padding:'24px',textAlign:'center',boxShadow:'0 10px 25px rgba(0,0,0,0.1)'}}>
+              <div style={{fontSize:'12px',fontWeight:'800',color:'#8C1119',letterSpacing:'1px',marginBottom:'12px',textTransform:'uppercase'}}>
+                MAPCON 2026 OFFICIAL ATTENDANCE QR
+              </div>
+              
+              <div style={{background:'#fff',padding:'16px',borderRadius:'16px',display:'inline-block',boxShadow:'0 4px 20px rgba(0,0,0,0.12)'}}>
+                <QRCodeSVG
+                  value={qrToken}
+                  size={fullscreen ? 280 : 210}
+                  level="H"
+                  includeMargin={true}
+                  fgColor="#5C070D"
+                />
+              </div>
+
+              <div style={{marginTop:'16px',fontSize:'13px',fontWeight:'700',color:fullscreen ? '#F1F5F9' : '#1E293B'}}>
+                Session Code: <span style={{fontFamily:'monospace',background:fullscreen ? '#0F172A' : '#F1F5F9',padding:'4px 10px',borderRadius:'6px',color:fullscreen ? '#38BDF8' : '#8C1119'}}>{qrToken}</span>
+              </div>
+
+              <div style={{marginTop:'14px',background:fullscreen ? '#0F172A' : '#F8FAFC',padding:'12px',borderRadius:'12px',fontSize:'12px',color:fullscreen ? '#94A3B8' : '#64748B',lineHeight:'1.4'}}>
+                📱 <b>Instructions for Delegates:</b><br/>
+                Open <b>MAPCON 2026 App</b> ➔ Go to <b>Attendance</b> ➔ Tap <b>Scan Session QR Code</b>
+              </div>
+            </div>
+
+            {/* Session Info & Live Attendees Counter */}
+            <div style={{display:'flex',flexDirection:'column',gap:'16px'}}>
+              <div style={{background:fullscreen ? '#1E293B' : '#F8FAFC',borderRadius:'16px',padding:'18px',border:`1px solid ${fullscreen ? '#334155' : '#E2E8F0'}`}}>
+                <div style={{fontSize:'11px',fontWeight:'800',color:'#8C1119',letterSpacing:'0.8px',textTransform:'uppercase'}}>
+                  Session Details
+                </div>
+                <h4 style={{fontSize:'17px',fontWeight:'900',color:fullscreen ? '#F8FAFC' : '#1E293B',marginTop:'4px',marginBottom:'10px'}}>
+                  {session.title}
+                </h4>
+                <div style={{display:'flex',flexDirection:'column',gap:'6px',fontSize:'13px',color:fullscreen ? '#CBD5E1' : '#475569'}}>
+                  <div>📍 <b>Hall / Venue:</b> {session.hall_name || 'Main Auditorium'}</div>
+                  <div>👨‍🏫 <b>Speaker / Chairperson:</b> {session.speaker_name || 'Faculty'}</div>
+                  <div>🕒 <b>Schedule:</b> {toInputDate(session.session_date)} ({session.start_time} - {session.end_time})</div>
+                </div>
+              </div>
+
+              {/* Live Attendance Counter */}
+              <div style={{background:fullscreen ? '#1E293B' : '#F0FDF4',borderRadius:'16px',padding:'16px',border:`1.5px solid ${fullscreen ? '#16A34A' : '#BBF7D0'}`}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+                    <div style={{background:'#16A34A',color:'#fff',padding:'8px',borderRadius:'50%',display:'flex'}}>
+                      <UserCheck size={20}/>
+                    </div>
+                    <div>
+                      <div style={{fontSize:'11px',fontWeight:'800',color:'#16A34A',textTransform:'uppercase',letterSpacing:'0.5px'}}>Live Attendance Count</div>
+                      <div style={{fontSize:'22px',fontWeight:'900',color:fullscreen ? '#F0FDF4' : '#14532D'}}>
+                        {data ? data.count : 0} <span style={{fontSize:'13px',fontWeight:'600',color:fullscreen ? '#86EFAC' : '#166534'}}>Verified Attendees</span>
+                      </div>
+                    </div>
+                  </div>
+                  <button className="icon" title="Refresh count" onClick={loadAttendance} style={{color:'#16A34A'}}>
+                    <RefreshCw size={16} className={refreshing ? 'spin' : ''}/>
+                  </button>
+                </div>
+              </div>
+
+              {/* Real-Time Scanned Attendees Feed */}
+              <div style={{background:fullscreen ? '#1E293B' : '#fff',borderRadius:'16px',padding:'16px',border:`1px solid ${fullscreen ? '#334155' : '#E2E8F0'}`}}>
+                <div style={{fontSize:'12px',fontWeight:'800',color:fullscreen ? '#94A3B8' : '#64748B',marginBottom:'8px'}}>
+                  LIVE SCANNED ATTENDEES ({data?.attendees?.length || 0})
+                </div>
+                <div style={{maxHeight:fullscreen ? '280px' : '160px',overflowY:'auto',display:'flex',flexDirection:'column',gap:'6px'}}>
+                  {data?.attendees?.length ? (
+                    data.attendees.map(a => (
+                      <div key={a.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 12px',background:fullscreen ? '#0F172A' : '#F8FAFC',borderRadius:'8px',fontSize:'12.5px'}}>
+                        <div>
+                          <b style={{color:fullscreen ? '#F1F5F9' : '#1E293B'}}>{a.participant_name}</b>
+                          <div style={{fontSize:'11px',color:fullscreen ? '#94A3B8' : '#64748B'}}>{a.registration_no || 'Delegate'} • {a.category || 'Participant'}</div>
+                        </div>
+                        <div style={{fontSize:'11px',color:'#16A34A',fontWeight:'700'}}>
+                          ✓ {new Date(a.scanned_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{padding:'16px',textAlign:'center',color:fullscreen ? '#64748B' : '#94A3B8',fontSize:'12.5px'}}>
+                      Waiting for participants to scan this QR code...
+                    </div>
+                  )}
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <div className="modal-footer" style={fullscreen ? {borderTop:'1px solid #334155',background:'#0F172A'} : {}}>
+          <button onClick={onClose} style={fullscreen ? {background:'#334155',color:'#fff',border:'none'} : {}}>Close</button>
+          <button className="primary" onClick={()=>setFullscreen(!fullscreen)}>
+            {fullscreen ? 'Exit Fullscreen' : '⛶ Fullscreen Projector Mode'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function SessionModal({value,speakers,halls,onSave,onClose}){
@@ -856,6 +1035,7 @@ function Placeholder({title}){
 function Attendance({notify}){
   const[scans,setScans]=useState([]),[sessions,setSessions]=useState([]),[meals,setMeals]=useState([]),[busy,setBusy]=useState(false);
   const[mode,setMode]=useState('CHECKIN'),[sessionId,setSessionId]=useState(''),[mealId,setMealId]=useState(''),[qr,setQr]=useState('');
+  const[projectSession,setProjectSession]=useState(null);
 
   const load=async()=>{
     setBusy(true);
@@ -882,7 +1062,48 @@ function Attendance({notify}){
   };
 
   return <div className="panel">
-    <div className="pagehead"><div><h3>Live Attendance & QR Scanner</h3><p>Monitor real-time attendee check-ins and session attendance.</p></div></div>
+    <div className="pagehead">
+      <div><h3>Live Attendance & QR Scanner</h3><p>Monitor real-time attendee check-ins, generate session QR codes, and view live scans.</p></div>
+      {sessions.length > 0 && (
+        <div className="actions">
+          <button style={{background:'#8C1119',color:'#fff',display:'flex',alignItems:'center',gap:'6px'}} onClick={()=>setProjectSession(sessions[0])}>
+            <QrCode size={16}/> Project Session Attendance QR
+          </button>
+        </div>
+      )}
+    </div>
+
+    {/* Quick Session QR Generator Banner */}
+    <div style={{background:'linear-gradient(135deg, #FFF8F8 0%, #FFFDF8 100%)',border:'1.5px solid #C8A45A',borderRadius:'16px',padding:'18px 22px',marginBottom:'20px',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:'14px'}}>
+      <div style={{display:'flex',alignItems:'center',gap:'14px'}}>
+        <div style={{background:'#8C1119',color:'#C8A45A',padding:'12px',borderRadius:'14px',display:'flex'}}>
+          <Tv size={26}/>
+        </div>
+        <div>
+          <h4 style={{margin:0,fontSize:'16px',color:'#8C1119',fontWeight:'900'}}>Projector Mode: Session QR Code Display</h4>
+          <p style={{margin:'3px 0 0',fontSize:'13px',color:'#64748B'}}>Select any session below to project its official attendance QR code on the big screen.</p>
+        </div>
+      </div>
+      <div style={{display:'flex',gap:'10px',alignItems:'center'}}>
+        <select
+          onChange={(e)=>{
+            const found = sessions.find(s => s.id === Number(e.target.value));
+            if(found) setProjectSession(found);
+          }}
+          style={{padding:'8px 14px',fontSize:'13px',borderRadius:'8px',border:'1px solid #cbd5e1',fontWeight:'600'}}
+          defaultValue=""
+        >
+          <option value="" disabled>-- Select Session to Project --</option>
+          {sessions.map(s => <option key={s.id} value={s.id}>{s.title} ({s.hall_name||'Hall A'})</option>)}
+        </select>
+        {sessions.length > 0 && (
+          <button className="primary" onClick={()=>setProjectSession(sessions[0])} style={{display:'flex',alignItems:'center',gap:'6px'}}>
+            <Maximize2 size={14}/> Launch Projector
+          </button>
+        )}
+      </div>
+    </div>
+
     <div className="split">
       <div className="panel scanner-panel">
         <h4>QR Scanner Simulation</h4>
@@ -895,7 +1116,10 @@ function Attendance({notify}){
         </form>
       </div>
       <div className="panel scans-panel">
-        <h4>Recent Live Scans</h4>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}}>
+          <h4 style={{margin:0}}>Recent Live Scans ({scans.length})</h4>
+          <button className="icon" onClick={load} title="Refresh Scans"><RefreshCw size={15}/></button>
+        </div>
         <div className="scan-list">
           {scans.map(x=><div className="scan-item" key={x.id}>
             <div className="scan-time">{new Date(x.scanned_at).toLocaleTimeString()}</div>
@@ -904,10 +1128,12 @@ function Attendance({notify}){
               <p>{x.scan_type} {x.session_title ? ` - ${x.session_title}` : ''}</p>
             </div>
           </div>)}
-          {!scans.length && <p style={{color:'#888',padding:'20px'}}>No live scans yet. Try the simulator on the left.</p>}
+          {!scans.length && <p style={{color:'#888',padding:'20px'}}>No live scans yet. Try the simulator on the left or scan via mobile app.</p>}
         </div>
       </div>
     </div>
+
+    {projectSession && <SessionQrModal session={projectSession} onClose={()=>setProjectSession(null)}/>}
   </div>
 }
 
