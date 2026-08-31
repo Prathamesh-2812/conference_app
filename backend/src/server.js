@@ -15,6 +15,8 @@ import { fileURLToPath } from 'url';
 import { pool } from './db.js';
 import { auth, roles, errorHandler } from './middleware.js';
 import { extractFaceEmbedding, extractGroupPhotoFaces, cosineSimilarity, rankGalleryMatches } from './services/face_matching.js';
+import sharp from 'sharp';
+
 dotenv.config();
 const app=express(); const server=http.createServer(app);
 const io=new Server(server,{cors:{origin:true,credentials:true}});
@@ -367,7 +369,7 @@ app.get('/api/me/accommodation',auth,asyncRoute(async(req,res)=>{const [r]=await
 app.get('/api/me/transport',auth,asyncRoute(async(req,res)=>{const [r]=await pool.query(`SELECT t.*,v.vehicle_number,v.vehicle_type,d.name driver_name,d.phone driver_phone FROM transport_assignments t LEFT JOIN vehicles v ON v.id=t.vehicle_id LEFT JOIN drivers d ON d.id=v.driver_id JOIN participants p ON p.id=t.participant_id WHERE p.user_id=? ORDER BY t.pickup_time`,[req.user.id]);res.json(r)}));
 app.get('/api/me/duties',auth,asyncRoute(async(req,res)=>{const [r]=await pool.query(`SELECT d.*,da.status FROM duties d JOIN duty_assignments da ON da.duty_id=d.id JOIN users u ON u.id=da.user_id WHERE u.id=? ORDER BY d.duty_date,d.start_time`,[req.user.id]);res.json(r)}));
 app.get('/api/me/registration',auth,asyncRoute(async(req,res)=>{const [[r]]=await pool.query(`SELECT p.registration_no,p.category,p.status,p.payment_status,p.amount,p.qr_token,c.name conference_name,c.start_date,c.end_date FROM participants p JOIN conferences c ON c.id=p.conference_id WHERE p.user_id=? ORDER BY p.id DESC LIMIT 1`,[req.user.id]);res.json(r||null)}));
-app.get('/api/me/certificate',auth,asyncRoute(async(req,res)=>{const [[r]]=await pool.query(`SELECT cert.* FROM certificates cert JOIN participants p ON p.id=cert.participant_id WHERE p.user_id=? ORDER BY cert.issued_at DESC LIMIT 1`,[req.user.id]);res.json(r||null)}));
+app.get('/api/me/certificate',auth,asyncRoute(async(req,res)=>{const [[r]]=await pool.query(`SELECT cert.* FROM certificates cert JOIN participants p ON p.id=cert.participant_id WHERE p.user_id=? AND cert.certificate_url IS NOT NULL ORDER BY cert.id DESC LIMIT 1`,[req.user.id]);res.json(r||null)}));
 app.get('/api/me/attendance',auth,asyncRoute(async(req,res)=>{const [r]=await pool.query(`SELECT a.*,s.title,s.session_date,s.start_time FROM attendance a JOIN participants p ON p.id=a.participant_id JOIN sessions s ON s.id=a.session_id WHERE p.user_id=? ORDER BY s.session_date,s.start_time`,[req.user.id]);res.json(r)}));
 app.post('/api/attendance/scan',auth,roles('ADMIN','SUPER_ADMIN','VOLUNTEER'),[body('qrToken').notEmpty()],validate,asyncRoute(async(req,res)=>{
   const [[p]]=await pool.query('SELECT id, user_id FROM participants WHERE qr_token=?',[req.body.qrToken]);
@@ -856,12 +858,86 @@ app.get('/api/admin/certificates',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(a
 app.post('/api/admin/certificates/:participantId/issue',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
   const certNo = req.body.certificateNo || `CERT-${Date.now().toString().slice(-6)}-${Math.floor(Math.random()*1000)}`;
   const [r]=await pool.query(`
-    INSERT INTO certificates(participant_id, certificate_no, title, issued_at)
-    VALUES(?, ?, 'Certificate of Participation', NOW())
+    INSERT INTO certificates(participant_id, certificate_no, issued_at)
+    VALUES(?, ?, NOW())
     ON DUPLICATE KEY UPDATE certificate_no=VALUES(certificate_no), issued_at=NOW()
   `, [req.params.participantId, certNo]);
   created(res,{id:r.insertId, certificateNo:certNo},'Certificate issued');
 }));
+
+app.post('/api/admin/certificates/generate',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
+  const { template, participantIds, layout } = req.body;
+  if(!template || !participantIds || !participantIds.length || !layout){
+    return res.status(400).json({success:false,message:'Template, participantIds, and layout are required'});
+  }
+
+  const m=String(template).match(/^data:(image\/(?:png|jpe?g|webp));base64,(.+)$/);
+  if(!m)return res.status(422).json({success:false,message:'Only JPG, PNG and WEBP image templates are supported'});
+  const ext={ 'image/png':'png','image/jpeg':'jpg','image/jpg':'jpg','image/webp':'webp'}[m[1]];
+  const templateBuffer=Buffer.from(m[2],'base64');
+
+  const metadata = await sharp(templateBuffer).metadata();
+  const width = metadata.width || 1200;
+  const height = metadata.height || 800;
+
+  const certDir=path.join(uploadRoot,'certificates');
+  await fs.mkdir(certDir,{recursive:true});
+
+  const results=[];
+  for(const pId of participantIds){
+    const [[p]]=await pool.query(`
+      SELECT p.*, u.name
+      FROM participants p
+      JOIN users u ON u.id = p.user_id
+      WHERE p.id = ?
+    `,[pId]);
+    if(!p)continue;
+
+    const certNo = `CERT-${Date.now().toString().slice(-6)}-${Math.floor(Math.random()*1000)}`;
+    const svgOverlay = `
+      <svg width="${width}" height="${height}">
+        <style>
+          .nameText { font-family: 'Arial', sans-serif; font-weight: bold; fill: ${layout.nameColor || '#000000'}; font-size: ${layout.nameSize || 48}px; text-anchor: middle; }
+          .regText { font-family: 'Arial', sans-serif; fill: ${layout.regColor || '#000000'}; font-size: ${layout.regSize || 24}px; text-anchor: middle; }
+          .certText { font-family: 'Arial', sans-serif; fill: ${layout.certColor || '#000000'}; font-size: ${layout.certSize || 20}px; text-anchor: middle; }
+        </style>
+        <text x="50%" y="${height * (layout.nameY / 100)}" class="nameText">${p.name}</text>
+        <text x="50%" y="${height * (layout.regY / 100)}" class="regText">Registration No: ${p.registration_no}</text>
+        <text x="50%" y="${height * (layout.certY / 100)}" class="certText">Certificate No: ${certNo}</text>
+      </svg>
+    `;
+
+    const filename = `cert-${Date.now()}-${pId}.${ext}`;
+    const destPath = path.join(certDir,filename);
+
+    await sharp(templateBuffer)
+      .composite([{ input: Buffer.from(svgOverlay), top: 0, left: 0 }])
+      .toFile(destPath);
+
+    const certUrl = `/uploads/certificates/${filename}`;
+    await pool.query(`
+      INSERT INTO certificates(participant_id, certificate_no, certificate_url, issued_at)
+      VALUES(?, ?, ?, NOW())
+      ON DUPLICATE KEY UPDATE certificate_no=VALUES(certificate_no), certificate_url=VALUES(certificate_url), issued_at=NOW()
+    `,[pId, certNo, certUrl]);
+
+    results.push({ participantId: pId, name: p.name, certificateNo: certNo, certificateUrl: certUrl });
+  }
+
+  ok(res,{results},`Generated ${results.length} certificates`);
+}));
+
+app.delete('/api/admin/certificates/:id',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
+  const [[cert]]=await pool.query('SELECT certificate_url FROM certificates WHERE id=?',[req.params.id]);
+  if(cert && cert.certificate_url){
+    const filePath=path.join(uploadRoot,cert.certificate_url.replace('/uploads/',''));
+    await fs.unlink(filePath).catch(()=>{});
+  }
+  await pool.query('DELETE FROM certificates WHERE id=?',[req.params.id]);
+  ok(res,null,'Certificate deleted successfully');
+}));
+
+
 
 app.get('/api/admin/reports/:type',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
   const type = req.params.type;

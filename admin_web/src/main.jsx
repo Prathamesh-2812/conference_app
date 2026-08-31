@@ -1211,23 +1211,311 @@ function DutyAssignmentModal({duties,users,onSave,onClose}){
 
 function Certificates({tab, notify}){
   const[d,setD]=useState([]),[participants,setParticipants]=useState([]),[busy,setBusy]=useState(false),[showAdd,setShowAdd]=useState(false);
+  const[subTab,setSubTab]=useState('issued');
+  
+  // Generator states
+  const[template,setTemplate]=useState(null);
+  const[layout,setLayout]=useState({
+    nameY: 45, nameSize: 32, nameColor: '#8C1119',
+    regY: 55, regSize: 18, regColor: '#2E6F95',
+    certY: 65, certSize: 16, certColor: '#64748b'
+  });
+  const[selectedIds,setSelectedIds]=useState([]);
+  const[searchQuery,setSearchQuery]=useState('');
+  const[generating,setGenerating]=useState(false);
+
   const load=async()=>{setBusy(true); try{const[c,p]=await Promise.all([req('/admin/certificates'),req('/admin/participants?conferenceId=1')]);setD(c); setParticipants(p);}finally{setBusy(false)}};
   useEffect(()=>{load()},[]);
   useEffect(()=>{if(tab==='Issue Certificate')setShowAdd(true)},[tab]);
+
+  const handleSelectAll = (checked) => {
+    if(checked) {
+      setSelectedIds(participants.map(p => p.id));
+    } else {
+      setSelectedIds([]);
+    }
+  };
+
+  const handleSelectParticipant = (id, checked) => {
+    if(checked) {
+      setSelectedIds(prev => [...prev, id]);
+    } else {
+      setSelectedIds(prev => prev.filter(x => x !== id));
+    }
+  };
+
+  const filteredParticipants = participants.filter(p => 
+    p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    (p.registration_no && p.registration_no.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
+  const handleGenerate = async () => {
+    if(!template) return alert('Please upload a template image first');
+    if(!selectedIds.length) return alert('Please select at least one participant');
+    
+    setGenerating(true);
+    try {
+      await req('/admin/certificates/generate', {
+        method: 'POST',
+        body: JSON.stringify({
+          template,
+          participantIds: selectedIds,
+          layout
+        })
+      });
+      notify(`Successfully generated ${selectedIds.length} certificates!`);
+      setSelectedIds([]);
+      setTemplate(null);
+      setSubTab('issued');
+      load();
+    } catch(e) {
+      alert(e.message);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   return <div className="panel">
-    <div className="pagehead"><div><h3>Certificates</h3><p>Manage, issue, and verify conference participation certificates.</p></div><div className="actions"><button className="primary" onClick={()=>setShowAdd(true)}>+ Issue Certificate</button></div></div>
-    <table>
-      <thead><tr><th>Participant</th><th>Certificate No</th><th>Issued At</th><th>Verification</th></tr></thead>
-      <tbody>
-        {d.map(x=><tr key={x.id}>
-          <td><b>{x.participant_name}</b><br/><small>{x.registration_no}</small></td>
-          <td><span className="pill" style={{background:'#2E6F95',color:'#fff'}}>{x.certificate_no}</span></td>
-          <td>{new Date(x.issued_at).toLocaleString()}</td>
-          <td><button onClick={()=>window.open(API.replace('/api','/certificates/verify/')+x.certificate_no,'_blank')}>Verify Online</button></td>
-        </tr>)}
-        {!d.length && !busy && <tr><td colSpan="4" style={{textAlign:'center',padding:'30px',color:'#888'}}>No certificates issued yet. Click "+ Issue Certificate" to generate one.</td></tr>}
-      </tbody>
-    </table>
+    <div className="pagehead">
+      <div>
+        <h3>Certificates</h3>
+        <p>Manage, issue, and verify conference participation certificates.</p>
+      </div>
+      <div className="actions" style={{display:'flex', gap:'12px', alignItems:'center'}}>
+        <div style={{background:'var(--bg-app)', padding:'4px', borderRadius:'var(--radius-sm)', display:'flex', gap:'4px', border:'1px solid var(--border)'}}>
+          <button style={{padding:'6px 12px', fontSize:'13px', background:subTab==='issued'?'var(--surface)':'transparent', color:subTab==='issued'?'var(--primary)':'var(--text-muted)', border:0, boxShadow:subTab==='issued'?'var(--shadow-sm)':'none'}} onClick={()=>setSubTab('issued')}>Issued List</button>
+          <button style={{padding:'6px 12px', fontSize:'13px', background:subTab==='generate'?'var(--surface)':'transparent', color:subTab==='generate'?'var(--primary)':'var(--text-muted)', border:0, boxShadow:subTab==='generate'?'var(--shadow-sm)':'none'}} onClick={()=>setSubTab('generate')}>Bulk Generator</button>
+        </div>
+        <button className="primary" onClick={()=>setShowAdd(true)}>+ Issue Single</button>
+      </div>
+    </div>
+
+    {subTab === 'issued' ? (
+      <table>
+        <thead><tr><th>Participant</th><th>Certificate No</th><th>Issued At</th><th>Actions</th></tr></thead>
+        <tbody>
+          {d.map(x=><tr key={x.id}>
+            <td>
+              <b>{x.participant_name}</b>
+              {x.certificate_url && (
+                <span style={{marginLeft:'10px', fontSize:'12px'}}>
+                  [<a href={API.replace('/api','')+x.certificate_url} target="_blank" rel="noopener noreferrer">View PNG</a>]
+                </span>
+              )}
+              <br/><small>{x.registration_no}</small>
+            </td>
+            <td><span className="pill" style={{background:'#2E6F95',color:'#fff'}}>{x.certificate_no}</span></td>
+            <td>{new Date(x.issued_at).toLocaleString()}</td>
+            <td>
+              <div style={{display:'flex', gap:'8px'}}>
+                <button className="secondary" style={{padding:'4px 10px', fontSize:'13px'}} onClick={()=>window.open(API.replace('/api','/certificates/verify/')+x.certificate_no,'_blank')}>Verify</button>
+                <button className="secondary" style={{padding:'4px 10px', fontSize:'13px', color:'var(--danger)', borderColor:'var(--danger-bg)'}} onClick={async()=>{
+                  if(confirm('Are you sure you want to delete this certificate?')){
+                    await req(`/admin/certificates/${x.id}`, {method:'DELETE'});
+                    load();
+                    notify('Certificate deleted successfully');
+                  }
+                }}>Delete</button>
+              </div>
+            </td>
+          </tr>)}
+
+          {!d.length && !busy && <tr><td colSpan="4" style={{textAlign:'center',padding:'30px',color:'#888'}}>No certificates issued yet. Click "Bulk Generator" or "+ Issue Single" to generate one.</td></tr>}
+        </tbody>
+      </table>
+    ) : (
+      <div style={{display:'grid', gridTemplateColumns:'1.2fr 1fr', gap:'24px', minHeight:'500px'}}>
+        {/* Left Side: Upload & Design */}
+        <div style={{display:'flex', flexDirection:'column', gap:'20px'}}>
+          {!template ? (
+            <div 
+              style={{
+                border:'2px dashed var(--border)', 
+                borderRadius:'var(--radius-md)', 
+                padding:'60px 40px', 
+                textAlign:'center', 
+                background:'#f8fafc', 
+                cursor:'pointer',
+                display:'flex',
+                flexDirection:'column',
+                alignItems:'center',
+                justifyContent:'center',
+                transition:'var(--transition)'
+              }} 
+              onClick={() => document.getElementById('template-upload').click()}
+            >
+              <Upload size={48} color="var(--text-light)" style={{marginBottom:'16px'}}/>
+              <h4 style={{margin:'0 0 8px 0', fontSize:'16px', fontWeight:'700'}}>Upload Certificate Template</h4>
+              <p style={{color:'var(--text-muted)', fontSize:'13px', margin:0}}>Click to browse images (PNG, JPG, WEBP) up to 5MB.</p>
+              <input id="template-upload" type="file" accept="image/*" style={{display:'none'}} onChange={e => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  const reader = new FileReader();
+                  reader.onload = () => setTemplate(reader.result);
+                  reader.readAsDataURL(file);
+                }
+              }}/>
+            </div>
+          ) : (
+            <div style={{display:'flex', flexDirection:'column', gap:'20px'}}>
+              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                <h4 style={{margin:0}}>Design Layout Preview</h4>
+                <button className="secondary" style={{padding:'4px 10px', fontSize:'12px'}} onClick={()=>setTemplate(null)}>Remove Template</button>
+              </div>
+
+              {/* Responsive Live Preview Box */}
+              <div style={{position:'relative', width:'100%', border:'1px solid var(--border)', borderRadius:'var(--radius-md)', overflow:'hidden', background:'#f8fafc', boxShadow:'var(--shadow-sm)'}}>
+                <img src={template} style={{width:'100%', height:'auto', display:'block'}} alt="Certificate template"/>
+                
+                {/* Overlaid Texts */}
+                <div style={{position:'absolute', left:'50%', transform:'translateX(-50%)', top:`${layout.nameY}%`, color:layout.nameColor, fontSize:`clamp(12px, 3.5vw, ${layout.nameSize}px)`, fontWeight:'bold', textShadow:'0 1px 2px rgba(0,0,0,0.1)', whiteSpace:'nowrap', textAlign:'center'}}>
+                  John Doe
+                </div>
+                <div style={{position:'absolute', left:'50%', transform:'translateX(-50%)', top:`${layout.regY}%`, color:layout.regColor, fontSize:`clamp(8px, 2vw, ${layout.regSize}px)`, whiteSpace:'nowrap', textAlign:'center'}}>
+                  Registration No: REG-12345
+                </div>
+                <div style={{position:'absolute', left:'50%', transform:'translateX(-50%)', top:`${layout.certY}%`, color:layout.certColor, fontSize:`clamp(8px, 1.8vw, ${layout.certSize}px)`, whiteSpace:'nowrap', textAlign:'center'}}>
+                  Certificate No: CERT-987654
+                </div>
+              </div>
+
+              {/* Styling Controllers */}
+              <div style={{background:'var(--bg-app)', padding:'16px', borderRadius:'var(--radius-md)', border:'1px solid var(--border)', display:'grid', gridTemplateColumns:'1fr 1fr', gap:'16px'}}>
+                <div>
+                  <h5 style={{margin:'0 0 10px 0', color:'var(--primary)'}}>Participant Name</h5>
+                  <label style={{display:'flex', flexDirection:'column', gap:'6px', fontSize:'13px', marginBottom:'10px'}}>
+                    Y-Position ({layout.nameY}%)
+                    <input type="range" min="5" max="95" value={layout.nameY} onChange={e=>setLayout(l=>({...l, nameY: parseInt(e.target.value)}))}/>
+                  </label>
+                  <label style={{display:'flex', flexDirection:'column', gap:'6px', fontSize:'13px', marginBottom:'10px'}}>
+                    Font Size ({layout.nameSize}px)
+                    <input type="range" min="12" max="100" value={layout.nameSize} onChange={e=>setLayout(l=>({...l, nameSize: parseInt(e.target.value)}))}/>
+                  </label>
+                  <label style={{display:'flex', alignItems:'center', gap:'8px', fontSize:'13px'}}>
+                    Text Color
+                    <input type="color" value={layout.nameColor} onChange={e=>setLayout(l=>({...l, nameColor: e.target.value}))} style={{width:'32px', height:'24px', border:0, padding:0, background:'transparent', cursor:'pointer'}}/>
+                  </label>
+                </div>
+                <div>
+                  <h5 style={{margin:'0 0 10px 0', color:'var(--accent)'}}>Registration No.</h5>
+                  <label style={{display:'flex', flexDirection:'column', gap:'6px', fontSize:'13px', marginBottom:'10px'}}>
+                    Y-Position ({layout.regY}%)
+                    <input type="range" min="5" max="95" value={layout.regY} onChange={e=>setLayout(l=>({...l, regY: parseInt(e.target.value)}))}/>
+                  </label>
+                  <label style={{display:'flex', flexDirection:'column', gap:'6px', fontSize:'13px', marginBottom:'10px'}}>
+                    Font Size ({layout.regSize}px)
+                    <input type="range" min="10" max="60" value={layout.regSize} onChange={e=>setLayout(l=>({...l, regSize: parseInt(e.target.value)}))}/>
+                  </label>
+                  <label style={{display:'flex', alignItems:'center', gap:'8px', fontSize:'13px'}}>
+                    Text Color
+                    <input type="color" value={layout.regColor} onChange={e=>setLayout(l=>({...l, regColor: e.target.value}))} style={{width:'32px', height:'24px', border:0, padding:0, background:'transparent', cursor:'pointer'}}/>
+                  </label>
+                </div>
+                <div style={{gridColumn:'1 / -1', borderTop:'1px solid var(--border)', paddingTop:'12px', marginTop:'4px'}}>
+                  <h5 style={{margin:'0 0 10px 0', color:'var(--text-muted)'}}>Certificate No.</h5>
+                  <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'16px'}}>
+                    <label style={{display:'flex', flexDirection:'column', gap:'6px', fontSize:'13px'}}>
+                      Y-Position ({layout.certY}%)
+                      <input type="range" min="5" max="95" value={layout.certY} onChange={e=>setLayout(l=>({...l, certY: parseInt(e.target.value)}))}/>
+                    </label>
+                    <label style={{display:'flex', flexDirection:'column', gap:'6px', fontSize:'13px'}}>
+                      Font Size ({layout.certSize}px)
+                      <input type="range" min="10" max="50" value={layout.certSize} onChange={e=>setLayout(l=>({...l, certSize: parseInt(e.target.value)}))}/>
+                    </label>
+                  </div>
+                  <label style={{display:'flex', alignItems:'center', gap:'8px', fontSize:'13px', marginTop:'10px'}}>
+                    Text Color
+                    <input type="color" value={layout.certColor} onChange={e=>setLayout(l=>({...l, certColor: e.target.value}))} style={{width:'32px', height:'24px', border:0, padding:0, background:'transparent', cursor:'pointer'}}/>
+                  </label>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Right Side: Participant List */}
+        <div style={{display:'flex', flexDirection:'column', gap:'16px', background:'var(--surface)', padding:'20px', borderRadius:'var(--radius-md)', border:'1px solid var(--border)', height:'fit-content', maxHeight:'700px', overflowY:'auto'}}>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+            <h4 style={{margin:0}}>Select Participants</h4>
+            <span style={{fontSize:'12px', background:'var(--primary-subtle)', color:'var(--primary)', padding:'2px 8px', borderRadius:'12px', fontWeight:'bold'}}>{selectedIds.length} Selected</span>
+          </div>
+
+          <div style={{position:'relative'}}>
+            <input 
+              type="text" 
+              placeholder="Search by name, reg number..." 
+              value={searchQuery} 
+              onChange={e=>setSearchQuery(e.target.value)} 
+              style={{width:'100%', padding:'10px 14px 10px 36px', border:'1px solid var(--border)', borderRadius:'var(--radius-sm)', fontSize:'14px'}}
+            />
+            <Search size={16} color="var(--text-light)" style={{position:'absolute', left:'12px', top:'50%', transform:'translateY(-50%)'}}/>
+          </div>
+
+          {/* List Wrapper */}
+          <div style={{border:'1px solid var(--border)', borderRadius:'var(--radius-sm)', overflow:'hidden'}}>
+            <div style={{display:'flex', alignItems:'center', gap:'12px', padding:'10px 14px', background:'#f8fafc', borderBottom:'1px solid var(--border)'}}>
+              <input 
+                type="checkbox" 
+                checked={participants.length > 0 && selectedIds.length === participants.length} 
+                onChange={e => handleSelectAll(e.target.checked)}
+                style={{cursor:'pointer'}}
+              />
+              <span style={{fontSize:'13px', fontWeight:'bold', cursor:'pointer'}} onClick={() => handleSelectAll(selectedIds.length !== participants.length)}>Select All ({participants.length})</span>
+            </div>
+            
+            <div style={{maxHeight:'320px', overflowY:'auto'}}>
+              {filteredParticipants.map(p => {
+                const isSelected = selectedIds.includes(p.id);
+                return (
+                  <div 
+                    key={p.id} 
+                    style={{
+                      display:'flex', 
+                      alignItems:'center', 
+                      gap:'12px', 
+                      padding:'10px 14px', 
+                      borderBottom:'1px solid var(--border)',
+                      background: isSelected ? 'var(--primary-subtle)' : 'transparent',
+                      transition:'background 0.15s ease'
+                    }}
+                  >
+                    <input 
+                      type="checkbox" 
+                      checked={isSelected} 
+                      onChange={e => handleSelectParticipant(p.id, e.target.checked)}
+                      style={{cursor:'pointer'}}
+                    />
+                    <div style={{fontSize:'13px', cursor:'pointer'}} onClick={() => handleSelectParticipant(p.id, !isSelected)}>
+                      <b style={{display:'block'}}>{p.name}</b>
+                      <small style={{color:'var(--text-muted)'}}>{p.registration_no || 'No Reg No.'} • {p.university || 'No Univ.'}</small>
+                    </div>
+                  </div>
+                );
+              })}
+              {!filteredParticipants.length && (
+                <div style={{padding:'20px', textAlign:'center', color:'var(--text-light)', fontSize:'13px'}}>No participants match search.</div>
+              )}
+            </div>
+          </div>
+
+          <button 
+            className="primary" 
+            style={{width:'100%', padding:'12px', fontWeight:'bold', display:'flex', justifyContent:'center', alignItems:'center', gap:'8px'}} 
+            onClick={handleGenerate}
+            disabled={generating || !template || !selectedIds.length}
+          >
+            {generating ? (
+              <>
+                Generating Certificates...
+              </>
+            ) : (
+              `Generate ${selectedIds.length} Certificate${selectedIds.length === 1 ? '' : 's'}`
+            )}
+          </button>
+        </div>
+      </div>
+    )}
+
     {showAdd && <IssueModal participants={participants} onSave={async(v)=>{await req(`/admin/certificates/${v.participant_id}/issue`,{method:'POST',body:JSON.stringify(v)}); setShowAdd(false); load(); notify('Certificate issued successfully');}} onClose={()=>setShowAdd(false)}/>}
   </div>
 }

@@ -646,9 +646,11 @@ class Header extends StatelessWidget {
   @override
   Widget build(BuildContext c) {
     final conference = ConferenceScope.of(c);
+    final topInset = MediaQuery.of(c).padding.top;
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+      padding: EdgeInsets.fromLTRB(20, topInset + 10, 20, 16),
       decoration: BoxDecoration(
+
         gradient: LinearGradient(
           colors: [conference.primaryColor, darkMaroon],
           begin: Alignment.topLeft,
@@ -4682,14 +4684,172 @@ class DigitalIdScreen extends StatelessWidget {
 
 class CertificateScreen extends StatelessWidget {
   const CertificateScreen({super.key});
+
   @override
-  Widget build(BuildContext c) => DetailApiPage(
-        title: 'Certificate of Participation',
-        path: '/me/certificate',
-        icon: Icons.workspace_premium,
-        empty: 'Certificate will be issued post valedictory session',
-        fields: const ['certificate_no', 'issued_at', 'certificate_url'],
-      );
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Certificate of Participation', style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: maroon,
+        foregroundColor: Colors.white,
+      ),
+      body: FutureBuilder(
+        future: ApiService.get('/me/certificate'),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator(color: maroon));
+          }
+
+          if (snapshot.hasError) {
+            return const Center(child: Text('Unable to load certificate details'));
+          }
+
+          final data = snapshot.data is Map ? snapshot.data as Map : <dynamic, dynamic>{};
+          if (data.isEmpty) {
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24.0),
+                child: Text(
+                  'Certificate will be issued post valedictory session',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: muted, fontSize: 16),
+                ),
+              ),
+            );
+          }
+
+          final certificateNo = data['certificate_no']?.toString() ?? '—';
+          final issuedAt = data['issued_at']?.toString() ?? '—';
+          final certUrl = data['certificate_url']?.toString();
+
+          final String imageBaseUrl = apiBaseUrl.replaceAll('/api', '');
+          final String? fullImageUrl = certUrl != null ? '$imageBaseUrl$certUrl' : null;
+
+          return ListView(
+            padding: const EdgeInsets.all(18),
+            children: [
+              if (fullImageUrl != null) ...[
+                Card(
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Image.network(
+                    fullImageUrl,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        height: 250,
+                        color: Colors.grey.shade100,
+                        child: const Center(
+                          child: CircularProgressIndicator(color: maroon),
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        height: 250,
+                        color: Colors.grey.shade100,
+                        child: const Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.error_outline, size: 40, color: Colors.red),
+                            SizedBox(height: 8),
+                            Text('Failed to load certificate image'),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
+              Card(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  side: BorderSide(color: Colors.grey.shade200, width: 1.2),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: maroon.withOpacity(0.08),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.workspace_premium, color: maroon, size: 20),
+                        ),
+                        title: const Text(
+                          'CERTIFICATE NO',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: muted),
+                        ),
+                        subtitle: Text(
+                          certificateNo,
+                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: slate),
+                        ),
+                      ),
+                      ListTile(
+                        leading: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: maroon.withOpacity(0.08),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.calendar_month, color: maroon, size: 20),
+                        ),
+                        title: const Text(
+                          'ISSUED AT',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: muted),
+                        ),
+                        subtitle: Text(
+                          issuedAt.contains('T') || issuedAt.contains('-') ? formatSessionDate(issuedAt) : issuedAt,
+                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: slate),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (fullImageUrl != null) ...[
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: maroon,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    elevation: 2,
+                  ),
+                  icon: const Icon(Icons.download, size: 22),
+                  label: const Text(
+                    'Download Certificate',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  onPressed: () async {
+                    final uri = Uri.parse(fullImageUrl);
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Could not open download link')),
+                      );
+                    }
+                  },
+                ),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
 }
 
 class EmergencyScreen extends StatelessWidget {
