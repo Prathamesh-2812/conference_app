@@ -403,6 +403,16 @@ class _LoginScreenState extends State<LoginScreen> {
       final sp = await SharedPreferences.getInstance();
       await sp.setString('token', r['token']);
       await sp.setString('name', r['user']['name']);
+
+      final bool mustChange = r['user']?['mustChangePassword'] == true;
+      if (mustChange && mounted) {
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => const ForcedPasswordChangeDialog(),
+        );
+      }
+
       widget.onLogin();
     } catch (x) {
       if (mounted) {
@@ -557,6 +567,134 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class ForcedPasswordChangeDialog extends StatefulWidget {
+  const ForcedPasswordChangeDialog({super.key});
+
+  @override
+  State<ForcedPasswordChangeDialog> createState() => _ForcedPasswordChangeDialogState();
+}
+
+class _ForcedPasswordChangeDialogState extends State<ForcedPasswordChangeDialog> {
+  final newPassCtrl = TextEditingController();
+  final confirmPassCtrl = TextEditingController();
+  bool busy = false;
+  String? errorMsg;
+
+  Future<void> submitNewPassword() async {
+    final newPass = newPassCtrl.text.trim();
+    final confirmPass = confirmPassCtrl.text.trim();
+
+    if (newPass.length < 4) {
+      setState(() => errorMsg = 'Password must be at least 4 characters long');
+      return;
+    }
+    if (newPass != confirmPass) {
+      setState(() => errorMsg = 'Passwords do not match');
+      return;
+    }
+
+    setState(() {
+      busy = true;
+      errorMsg = null;
+    });
+
+    try {
+      await ApiService.post('/auth/change-password', {'newPassword': newPass});
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Password updated successfully! Welcome to the app.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (err) {
+      if (mounted) {
+        setState(() {
+          errorMsg = err.toString().replaceAll('Exception: ', '');
+          busy = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return WillPopScope(
+      onWillPop: () async => false,
+      child: AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: const [
+            Icon(Icons.lock_reset, color: maroon, size: 28),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Change Default Password',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: slate),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Your account was created with a default password. Please choose a new password before proceeding.',
+                style: TextStyle(fontSize: 13, color: muted),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: newPassCtrl,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: 'New Password',
+                  prefixIcon: const Icon(Icons.lock_outline, color: maroon),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: confirmPassCtrl,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: 'Confirm New Password',
+                  prefixIcon: const Icon(Icons.lock_outline, color: maroon),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              if (errorMsg != null) ...[
+                const SizedBox(height: 10),
+                Text(errorMsg!, style: const TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.w600)),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: maroon,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: busy ? null : submitNewPassword,
+              child: busy
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Text('Update & Continue', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -826,6 +964,198 @@ class CardButton extends StatelessWidget {
   }
 }
 
+class MainMediaSlider extends StatefulWidget {
+  const MainMediaSlider({super.key});
+
+  @override
+  State<MainMediaSlider> createState() => _MainMediaSliderState();
+}
+
+class _MainMediaSliderState extends State<MainMediaSlider> {
+  List<dynamic> _slides = [];
+  bool _loading = true;
+  int _currentIndex = 0;
+  final PageController _pageController = PageController();
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchSliders();
+  }
+
+  Future<void> _fetchSliders() async {
+    try {
+      final res = await ApiService.get('/sliders');
+      if (res is List) {
+        if (mounted) {
+          setState(() {
+            _slides = res;
+            _loading = false;
+          });
+        }
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading || _slides.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final String imageBaseUrl = apiBaseUrl.replaceAll('/api', '');
+
+    return Column(
+      children: [
+        SizedBox(
+          height: 190,
+          child: PageView.builder(
+            controller: _pageController,
+            onPageChanged: (idx) => setState(() => _currentIndex = idx),
+            itemCount: _slides.length,
+            itemBuilder: (context, index) {
+              final item = _slides[index];
+              final String mediaType = item['media_type']?.toString().toUpperCase() ?? 'IMAGE';
+              final String rawUrl = item['media_url']?.toString() ?? '';
+              final String title = item['title']?.toString() ?? '';
+
+              final String fullUrl = (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))
+                  ? rawUrl
+                  : '$imageBaseUrl${rawUrl.startsWith('/') ? '' : '/'}$rawUrl';
+
+              return Container(
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  color: Colors.black,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.12),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (mediaType == 'VIDEO') ...[
+                      Container(
+                        color: const Color(0xFF0F172A),
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: maroon.withOpacity(0.85),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.play_arrow, color: Colors.white, size: 38),
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Tap to Watch Video',
+                                style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        top: 10,
+                        left: 10,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: maroon,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: const [
+                              Icon(Icons.videocam, color: Colors.white, size: 12),
+                              SizedBox(width: 4),
+                              Text('VIDEO BANNER', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ),
+                      InkWell(
+                        onTap: () async {
+                          final uri = Uri.parse(fullUrl);
+                          if (await canLaunchUrl(uri)) {
+                            await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          }
+                        },
+                      ),
+                    ] else ...[
+                      Image.network(
+                        fullUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          color: Colors.grey.shade200,
+                          child: const Icon(Icons.image_not_supported, color: muted, size: 40),
+                        ),
+                      ),
+                    ],
+
+                    if (title.isNotEmpty)
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Colors.transparent, Colors.black.withOpacity(0.85)],
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                            ),
+                          ),
+                          child: Text(
+                            title,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(_slides.length, (idx) {
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              width: _currentIndex == idx ? 18 : 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: _currentIndex == idx ? maroon : Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            );
+          }),
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+}
+
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -854,6 +1184,7 @@ class HomeScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  const MainMediaSlider(),
                   // Welcome Banner Card
                   Container(
                     width: double.infinity,
@@ -4682,8 +5013,81 @@ class DigitalIdScreen extends StatelessWidget {
   }
 }
 
-class CertificateScreen extends StatelessWidget {
+class CertificateScreen extends StatefulWidget {
   const CertificateScreen({super.key});
+
+  @override
+  State<CertificateScreen> createState() => _CertificateScreenState();
+}
+
+class _CertificateScreenState extends State<CertificateScreen> {
+  int rating = 5;
+  int contentRating = 5;
+  int speakerRating = 5;
+  final commentCtrl = TextEditingController();
+  bool submittingFeedback = false;
+  late Future<dynamic> _certFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _reload();
+  }
+
+  void _reload() {
+    setState(() {
+      _certFuture = ApiService.get('/me/certificate');
+    });
+  }
+
+  Future<void> _submitFeedback() async {
+    setState(() => submittingFeedback = true);
+    try {
+      await ApiService.post('/me/feedback', {
+        'rating': rating,
+        'contentRating': contentRating,
+        'speakerRating': speakerRating,
+        'comment': commentCtrl.text.trim(),
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Feedback submitted! Your certificate is unlocked.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        _reload();
+      }
+    } catch (err) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to submit feedback: ${err.toString().replaceAll("Exception: ", "")}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => submittingFeedback = false);
+    }
+  }
+
+  Widget _buildStarRating(int current, ValueChanged<int> onChanged) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(5, (index) {
+        final starValue = index + 1;
+        return IconButton(
+          icon: Icon(
+            starValue <= current ? Icons.star : Icons.star_border,
+            color: const Color(0xFFC8A45A),
+            size: 32,
+          ),
+          onPressed: () => onChanged(starValue),
+        );
+      }),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -4694,7 +5098,7 @@ class CertificateScreen extends StatelessWidget {
         foregroundColor: Colors.white,
       ),
       body: FutureBuilder(
-        future: ApiService.get('/me/certificate'),
+        future: _certFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator(color: maroon));
@@ -4718,6 +5122,112 @@ class CertificateScreen extends StatelessWidget {
             );
           }
 
+          final bool feedbackSubmitted = data['feedback_submitted'] == true;
+
+          if (!feedbackSubmitted) {
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Card(
+                    elevation: 3,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    color: const Color(0xFFFCFAF5),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20.0),
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: maroon.withOpacity(0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.rate_review, color: maroon, size: 40),
+                          ),
+                          const SizedBox(height: 14),
+                          const Text(
+                            'Conference Feedback Required',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: darkMaroon),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Please complete this quick feedback to unlock and download your official Certificate of Participation.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 14, color: muted),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  Card(
+                    elevation: 1,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(color: Colors.grey.shade200),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(18),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Overall Conference Experience', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: slate)),
+                          const SizedBox(height: 4),
+                          _buildStarRating(rating, (v) => setState(() => rating = v)),
+                          const Divider(height: 28),
+
+                          const Text('Scientific Content & Sessions', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: slate)),
+                          const SizedBox(height: 4),
+                          _buildStarRating(contentRating, (v) => setState(() => contentRating = v)),
+                          const Divider(height: 28),
+
+                          const Text('Speakers & Presentation Quality', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: slate)),
+                          const SizedBox(height: 4),
+                          _buildStarRating(speakerRating, (v) => setState(() => speakerRating = v)),
+                          const Divider(height: 28),
+
+                          const Text('Comments & Suggestions', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: slate)),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: commentCtrl,
+                            maxLines: 3,
+                            decoration: InputDecoration(
+                              hintText: 'Share your feedback, suggestions or key takeaways...',
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: maroon,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      elevation: 3,
+                    ),
+                    icon: submittingFeedback
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : const Icon(Icons.check_circle_outline, size: 22),
+                    label: Text(
+                      submittingFeedback ? 'Submitting Feedback...' : 'Submit Feedback & Unlock Certificate',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    onPressed: submittingFeedback ? null : _submitFeedback,
+                  ),
+                ],
+              ),
+            );
+          }
+
           final certificateNo = data['certificate_no']?.toString() ?? '—';
           final issuedAt = data['issued_at']?.toString() ?? '—';
           final certUrl = data['certificate_url']?.toString();
@@ -4728,12 +5238,32 @@ class CertificateScreen extends StatelessWidget {
           return ListView(
             padding: const EdgeInsets.all(18),
             children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.green.shade300),
+                ),
+                child: Row(
+                  children: const [
+                    Icon(Icons.verified, color: Colors.green, size: 22),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Feedback Submitted! Your official certificate is unlocked.',
+                        style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
               if (fullImageUrl != null) ...[
                 Card(
                   elevation: 4,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                   clipBehavior: Clip.antiAlias,
                   child: Image.network(
                     fullImageUrl,
@@ -4742,9 +5272,7 @@ class CertificateScreen extends StatelessWidget {
                       return Container(
                         height: 250,
                         color: Colors.grey.shade100,
-                        child: const Center(
-                          child: CircularProgressIndicator(color: maroon),
-                        ),
+                        child: const Center(child: CircularProgressIndicator(color: maroon)),
                       );
                     },
                     errorBuilder: (context, error, stackTrace) {
@@ -4778,38 +5306,20 @@ class CertificateScreen extends StatelessWidget {
                       ListTile(
                         leading: Container(
                           padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: maroon.withOpacity(0.08),
-                            shape: BoxShape.circle,
-                          ),
+                          decoration: BoxDecoration(color: maroon.withOpacity(0.08), shape: BoxShape.circle),
                           child: const Icon(Icons.workspace_premium, color: maroon, size: 20),
                         ),
-                        title: const Text(
-                          'CERTIFICATE NO',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: muted),
-                        ),
-                        subtitle: Text(
-                          certificateNo,
-                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: slate),
-                        ),
+                        title: const Text('CERTIFICATE NO', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: muted)),
+                        subtitle: Text(certificateNo, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: slate)),
                       ),
                       ListTile(
                         leading: Container(
                           padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: maroon.withOpacity(0.08),
-                            shape: BoxShape.circle,
-                          ),
+                          decoration: BoxDecoration(color: maroon.withOpacity(0.08), shape: BoxShape.circle),
                           child: const Icon(Icons.calendar_month, color: maroon, size: 20),
                         ),
-                        title: const Text(
-                          'ISSUED AT',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: muted),
-                        ),
-                        subtitle: Text(
-                          issuedAt.contains('T') || issuedAt.contains('-') ? formatSessionDate(issuedAt) : issuedAt,
-                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: slate),
-                        ),
+                        title: const Text('ISSUED AT', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: muted)),
+                        subtitle: Text(issuedAt.contains('T') || issuedAt.contains('-') ? formatSessionDate(issuedAt) : issuedAt, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: slate)),
                       ),
                     ],
                   ),
@@ -4822,16 +5332,11 @@ class CertificateScreen extends StatelessWidget {
                     backgroundColor: maroon,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     elevation: 2,
                   ),
                   icon: const Icon(Icons.download, size: 22),
-                  label: const Text(
-                    'Download Certificate',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
+                  label: const Text('Download Certificate', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   onPressed: () async {
                     final uri = Uri.parse(fullImageUrl);
                     if (await canLaunchUrl(uri)) {

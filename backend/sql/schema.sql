@@ -2,7 +2,7 @@ CREATE DATABASE IF NOT EXISTS conference_management CHARACTER SET utf8mb4 COLLAT
 USE conference_management;
 
 SET FOREIGN_KEY_CHECKS=0;
-DROP TABLE IF EXISTS audit_logs, emergency_contacts, messages, conversations, notifications, documents, certificates, poll_votes, poll_options, polls, feedback, meal_scans, meals, attendance, photos, notices, duty_assignments, duties, transport_assignments, vehicles, drivers, room_allocations, rooms, hotels, participants, liaison_faculty, sessions, halls, venues, speakers, conferences, users;
+DROP TABLE IF EXISTS audit_logs, emergency_contacts, messages, conversations, notifications, documents, certificates, poll_votes, poll_options, polls, feedback, meal_scans, meals, attendance, photos, notices, duty_assignments, duties, transport_assignments, vehicles, drivers, room_allocations, rooms, hotels, participants, liaison_faculty, sessions, halls, venues, speakers, main_sliders, conferences, users;
 SET FOREIGN_KEY_CHECKS=1;
 
 CREATE TABLE users (
@@ -12,6 +12,7 @@ CREATE TABLE users (
  password_hash VARCHAR(255) NOT NULL,
  phone VARCHAR(30), role ENUM('SUPER_ADMIN','ADMIN','PARTICIPANT','SPEAKER','VOLUNTEER','LIAISON','TRANSPORT_ADMIN') DEFAULT 'PARTICIPANT',
  designation VARCHAR(150), university VARCHAR(200), blood_group VARCHAR(10), photo TEXT,
+ must_change_password TINYINT(1) DEFAULT 0,
  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE conferences (
@@ -21,6 +22,18 @@ CREATE TABLE conferences (
  host_institution VARCHAR(255), theme VARCHAR(150), status ENUM('DRAFT','PUBLISHED','ARCHIVED','ACTIVE','INACTIVE') DEFAULT 'ACTIVE',
  venue VARCHAR(255), address TEXT, banner_url TEXT, logo_url TEXT,
  active TINYINT(1) DEFAULT 1, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP
+);
+CREATE TABLE main_sliders (
+ id INT AUTO_INCREMENT PRIMARY KEY,
+ conference_id INT NOT NULL DEFAULT 1,
+ title VARCHAR(255),
+ media_type ENUM('IMAGE','VIDEO') NOT NULL DEFAULT 'IMAGE',
+ media_url TEXT NOT NULL,
+ thumbnail_url TEXT,
+ display_order INT DEFAULT 0,
+ active TINYINT(1) DEFAULT 1,
+ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY(conference_id) REFERENCES conferences(id) ON DELETE CASCADE
 );
 CREATE TABLE conference_settings (
  id INT AUTO_INCREMENT PRIMARY KEY, conference_id INT NOT NULL UNIQUE,
@@ -63,7 +76,7 @@ CREATE TABLE photos (id INT AUTO_INCREMENT PRIMARY KEY, conference_id INT NOT NU
 CREATE TABLE attendance (id BIGINT AUTO_INCREMENT PRIMARY KEY, participant_id INT NOT NULL, session_id INT NOT NULL, scan_type VARCHAR(30), scanned_by INT NULL, scanned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(participant_id) REFERENCES participants(id) ON DELETE CASCADE, FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE, FOREIGN KEY(scanned_by) REFERENCES users(id) ON DELETE SET NULL, INDEX(participant_id,session_id));
 CREATE TABLE meals (id INT AUTO_INCREMENT PRIMARY KEY, conference_id INT NOT NULL, meal_date DATE, meal_type ENUM('BREAKFAST','LUNCH','TEA','DINNER'), start_time TIME, end_time TIME, location VARCHAR(255), FOREIGN KEY(conference_id) REFERENCES conferences(id) ON DELETE CASCADE);
 CREATE TABLE meal_scans (id BIGINT AUTO_INCREMENT PRIMARY KEY, meal_id INT NOT NULL, participant_id INT NOT NULL, scanned_by INT NULL, scanned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(meal_id,participant_id), FOREIGN KEY(meal_id) REFERENCES meals(id) ON DELETE CASCADE, FOREIGN KEY(participant_id) REFERENCES participants(id) ON DELETE CASCADE, FOREIGN KEY(scanned_by) REFERENCES users(id) ON DELETE SET NULL);
-CREATE TABLE feedback (id BIGINT AUTO_INCREMENT PRIMARY KEY, participant_id INT NOT NULL, session_id INT NOT NULL, rating TINYINT NOT NULL, content_rating TINYINT, speaker_rating TINYINT, comment TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(participant_id) REFERENCES participants(id) ON DELETE CASCADE, FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE);
+CREATE TABLE feedback (id BIGINT AUTO_INCREMENT PRIMARY KEY, participant_id INT NOT NULL, session_id INT NULL, rating TINYINT NOT NULL, content_rating TINYINT, speaker_rating TINYINT, comment TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(participant_id) REFERENCES participants(id) ON DELETE CASCADE, FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE);
 CREATE TABLE polls (id INT AUTO_INCREMENT PRIMARY KEY, conference_id INT NOT NULL, question TEXT, active TINYINT(1) DEFAULT 1, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(conference_id) REFERENCES conferences(id) ON DELETE CASCADE);
 CREATE TABLE poll_options (id INT AUTO_INCREMENT PRIMARY KEY, poll_id INT NOT NULL, option_text VARCHAR(255), FOREIGN KEY(poll_id) REFERENCES polls(id) ON DELETE CASCADE);
 CREATE TABLE poll_votes (id BIGINT AUTO_INCREMENT PRIMARY KEY, poll_id INT NOT NULL, option_id INT NOT NULL, participant_id INT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(poll_id,participant_id), FOREIGN KEY(poll_id) REFERENCES polls(id) ON DELETE CASCADE, FOREIGN KEY(option_id) REFERENCES poll_options(id) ON DELETE CASCADE, FOREIGN KEY(participant_id) REFERENCES participants(id) ON DELETE CASCADE);

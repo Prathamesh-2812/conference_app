@@ -2,6 +2,7 @@ import React,{useEffect,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {Bell,Building2,Bus,CalendarDays,CheckCircle,ChevronDown,FileCheck,Hotel,Image,LayoutDashboard,Lock,LogOut,MapPin,Palette,RefreshCw,Search,Settings,Shield,Upload,Users,QrCode,Maximize2,Minimize2,Printer,Tv,UserCheck} from 'lucide-react';
 import {QRCodeSVG} from 'qrcode.react';
+import * as XLSX from 'xlsx';
 import './style.css';
 
 const API=import.meta.env.VITE_API_URL||'http://localhost:5000/api';
@@ -33,7 +34,7 @@ function Login({onLogin}){const[e,setE]=useState('admin@conference.local'),[p,se
 
 const menu=[
   {title:'Dashboard',icon:LayoutDashboard},
-  {title:'Conference',icon:Building2,children:['Conference Details','Venue & Location','Branding','Conference Settings']},
+  {title:'Conference',icon:Building2,children:['Conference Details','Venue & Location','Branding','Conference Settings','Main Screen Slider']},
   {title:'Participants',icon:Users,children:['All Participants','Add Participant','Import Participants','Registration & Passes','QR Codes']},
   {title:'Speakers',icon:Users,children:['All Speakers','Add Speaker']},
   {title:'Schedule',icon:CalendarDays,children:['Sessions Timeline','Tracks & Halls','Add Session']},
@@ -68,7 +69,7 @@ function NavItem({item,active,open,onToggle,onSelect}){const I=item.icon;const p
 
 function renderPage(tab,conference,setConference,notify){
   if(tab==='Dashboard')return <Dashboard/>;
-  if(['Conference','Conference Details','Venue & Location','Branding','Conference Settings'].includes(tab))return <ConferenceModule tab={tab} conference={conference} setConference={setConference} notify={notify}/>;
+  if(['Conference','Conference Details','Venue & Location','Branding','Conference Settings','Main Screen Slider'].includes(tab))return <ConferenceModule tab={tab} conference={conference} setConference={setConference} notify={notify}/>;
   if(['Participants','All Participants','Add Participant','Import Participants','Registration & Passes','QR Codes'].includes(tab))return <Participants tab={tab} notify={notify}/>;
   if(['Speakers','All Speakers','Add Speaker'].includes(tab))return <Speakers tab={tab} notify={notify}/>;
   if(['Schedule','Sessions Timeline','Tracks & Halls','Add Session','Sessions','Tracks','Halls'].includes(tab))return <Schedule tab={tab} notify={notify}/>;
@@ -284,75 +285,266 @@ function Participants({tab, notify}){
     </div>
 
     {edit && <ParticipantModal value={edit} liaisons={liaisons} onSave={save} onClose={()=>setEdit(null)} notify={notify}/>}
-    {importModal && <ImportParticipantsModal onClose={()=>setImportModal(false)} onImportSuccess={()=>{setImportModal(false);load();notify('Participants imported successfully!')}}/>}
+    {importModal && <BulkImportModal onClose={()=>setImportModal(false)} onImportSuccess={()=>{setImportModal(false);load();notify('Participants imported successfully!')}}/>}
     {qrModal && <QrPassModal participant={qrModal} onClose={()=>setQrModal(null)}/>}
-  </div>
+  </div>;
 }
 
-function ImportParticipantsModal({onClose, onImportSuccess}){
-  const[csvText,setCsvText]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
-  
-  const handleFile=e=>{
-    const file=e.target.files?.[0];
-    if(!file)return;
-    const reader=new FileReader();
-    reader.onload=event=>setCsvText(event.target.result);
-    reader.readAsText(file);
+function BulkImportModal({onClose, onImportSuccess}){
+  const [csvText, setCsvText] = useState('');
+  const [parsedData, setParsedData] = useState(null);
+  const [fileName, setFileName] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const downloadTemplate = () => {
+    const templateData = [
+      {
+        'Full Name': 'Dr. Rajesh Sharma',
+        'Mobile Number': '9876543210',
+        'Email Address': 'rajesh.sharma@example.com',
+        'Category': 'VIP Delegate',
+        'Designation': 'Professor & Head',
+        'University': 'AIIMS Delhi',
+        'Registration Number': 'DPU-2026-001',
+        'Hotel Name': 'Hyatt Regency Pune',
+        'Hotel Address': 'Viman Nagar, Pune',
+        'Room Number': '501',
+        'Room Type': 'Executive Suite',
+        'Check In Date': '2026-04-27',
+        'Check Out Date': '2026-04-30',
+        'Travel Mode': 'Flight',
+        'Flight/Train No': 'AI-852',
+        'Arrival Date': '2026-04-27',
+        'Arrival Time': '10:30 AM',
+        'Departure Date': '2026-04-30',
+        'Departure Time': '06:00 PM',
+        'Pickup Point': 'Pune Airport Terminal 1',
+        'Drop Point': 'Hyatt Regency Pune',
+        'Driver Name': 'Rajesh Patil',
+        'Driver Phone': '9876543210',
+        'Vehicle Number': 'MH12AB1234'
+      },
+      {
+        'Full Name': 'Dr. Sunita Deshmukh',
+        'Mobile Number': '9876543211',
+        'Email Address': 'sunita.d@example.com',
+        'Category': 'Speaker',
+        'Designation': 'Dean Academics',
+        'University': 'Mumbai University',
+        'Registration Number': 'DPU-2026-002',
+        'Hotel Name': 'Sayaji Hotel',
+        'Hotel Address': 'Kawala Naka, Kolhapur',
+        'Room Number': '302',
+        'Room Type': 'Deluxe Double',
+        'Check In Date': '2026-04-27',
+        'Check Out Date': '2026-04-30',
+        'Travel Mode': 'Train',
+        'Flight/Train No': 'Koyna Express (11029)',
+        'Arrival Date': '2026-04-27',
+        'Arrival Time': '02:15 PM',
+        'Departure Date': '2026-04-30',
+        'Departure Time': '08:00 AM',
+        'Pickup Point': 'Kolhapur Railway Station',
+        'Drop Point': 'Sayaji Hotel',
+        'Driver Name': 'Amit Jadhav',
+        'Driver Phone': '9876543211',
+        'Vehicle Number': 'MH12CD5678'
+      }
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(templateData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Participants");
+    XLSX.writeFile(wb, "Conference_Participant_Import_Template.xlsx");
   };
 
-  const processImport=async()=>{
-    if(!csvText.trim()){setError('Please upload or paste CSV data');return}
+  const handleFile = (e) => {
+    const file = e.target.files?.[0];
+    if(!file) return;
+    setFileName(file.name);
+    setError('');
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = new Uint8Array(evt.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const json = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+        if(!json || !json.length) {
+          setError('No data found in the selected Excel sheet');
+          return;
+        }
+
+        setParsedData(json);
+      } catch(err) {
+        setError('Failed to parse Excel file: ' + err.message);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const processImport = async () => {
+    let rowsToImport = [];
+
+    if(parsedData && parsedData.length > 0) {
+      rowsToImport = parsedData;
+    } else if(csvText.trim()) {
+      const lines = csvText.trim().split('\n').map(l => l.trim()).filter(Boolean);
+      if(lines.length < 2) {
+        setError('CSV must contain at least a header row and 1 data row');
+        return;
+      }
+      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+      rowsToImport = lines.slice(1).map(line => {
+        const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+        const obj = {};
+        headers.forEach((h, idx) => { obj[h] = values[idx]; });
+        return obj;
+      });
+    }
+
+    if(!rowsToImport.length) {
+      setError('Please upload an Excel file or paste CSV data');
+      return;
+    }
+
     setBusy(true);
     setError('');
-    try{
-      const lines=csvText.trim().split('\n').map(l=>l.trim()).filter(Boolean);
-      if(lines.length<2){setError('CSV must contain at least a header row and 1 data row');setBusy(false);return}
-      const headers=lines[0].split(',').map(h=>h.trim().replace(/^"|"$/g,'').toLowerCase());
-      
-      const participants=lines.slice(1).map(line=>{
-        const values=line.split(',').map(v=>v.trim().replace(/^"|"$/g,''));
-        const obj={};
-        headers.forEach((h,idx)=>{
-          if(h.includes('name'))obj.name=values[idx];
-          else if(h.includes('email'))obj.email=values[idx];
-          else if(h.includes('phone')||h.includes('mobile'))obj.phone=values[idx];
-          else if(h.includes('university')||h.includes('org'))obj.university=values[idx];
-          else if(h.includes('desig'))obj.designation=values[idx];
-          else if(h.includes('cat'))obj.category=values[idx];
-          else if(h.includes('reg'))obj.registration_no=values[idx];
-          else if(h.includes('travel'))obj.mode_of_travel=values[idx];
-        });
-        return obj;
-      }).filter(p=>p.name && p.email);
 
-      if(!participants.length){setError('No valid participants found (Name and Email required per row)');setBusy(false);return}
-      
-      await req('/admin/participants/bulk-import',{method:'POST',body:JSON.stringify({participants})});
+    try {
+      const res = await req('/admin/participants/bulk-import', {
+        method: 'POST',
+        body: JSON.stringify({ participants: rowsToImport })
+      });
+      alert(res.message || 'Import completed successfully');
       onImportSuccess();
-    }catch(err){
-      setError(err.message||'Import failed');
-    }finally{
+    } catch(err) {
+      setError(err.message || 'Import failed');
+    } finally {
       setBusy(false);
     }
   };
 
   return <div className="modal-overlay">
-    <div className="modal" style={{maxWidth:'600px'}}>
-      <div className="modal-header"><h3>Bulk Import Participants</h3><button className="close" onClick={onClose}>&times;</button></div>
+    <div className="modal" style={{maxWidth:'680px'}}>
+      <div className="modal-header">
+        <h3>Bulk Import Participants & Mapping (Excel / CSV)</h3>
+        <button className="close" onClick={onClose}>&times;</button>
+      </div>
       <div className="modal-body">
-        <p style={{marginBottom:'12px'}}>Upload a CSV file with columns: <code>name, email, phone, designation, university, category, registration_no</code></p>
-        <div style={{marginBottom:'16px'}}>
-          <input type="file" accept=".csv" onChange={handleFile}/>
+        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', background:'#f8fafc', padding:'12px 16px', borderRadius:'10px', marginBottom:'16px', border:'1px solid #e2e8f0'}}>
+          <div>
+            <strong style={{color:'#1e293b', fontSize:'14px'}}>Need a ready Excel template?</strong>
+            <p style={{margin:0, fontSize:'12px', color:'#64748b'}}>Includes all Participant, Hotel Stay & Transport columns.</p>
+          </div>
+          <button className="secondary" style={{background:'#fff', border:'1px solid #cbd5e1', cursor:'pointer'}} onClick={downloadTemplate}>
+            📥 Download Sample Template
+          </button>
         </div>
-        <Field textarea label="Or Paste CSV Content Directly" value={csvText} onChange={setCsvText}/>
-        {error && <p style={{color:'red',marginTop:'8px'}}>{error}</p>}
+
+        <p style={{marginBottom:'10px', fontSize:'13px', color:'#475569'}}>
+          Upload an Excel file (<code>.xlsx</code>, <code>.xls</code>) or CSV. Mobile number will become participant's default username & initial password set to <code>changeme</code>.
+        </p>
+
+        <div style={{marginBottom:'16px', padding:'16px', border:'2px dashed #cbd5e1', borderRadius:'12px', textAlign:'center', background:'#fafafa'}}>
+          <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFile} id="excel-file-input" style={{display:'none'}} />
+          <label htmlFor="excel-file-input" className="button primary" style={{cursor:'pointer', display:'inline-flex', alignItems:'center', gap:'8px', padding:'10px 20px', borderRadius:'8px', background:'#8C1119', color:'#fff', fontWeight:'bold'}}>
+            <Upload size={16} /> Select Excel / CSV File
+          </label>
+          {fileName && <div style={{marginTop:'10px', color:'#2563eb', fontWeight:'bold', fontSize:'14px'}}>File Loaded: {fileName} ({parsedData?.length||0} rows detected)</div>}
+        </div>
+
+        <Field textarea label="Or Paste CSV / Tab-separated Content Directly" value={csvText} onChange={setCsvText} placeholder="Name, Mobile, Email, Category, Hotel, Room..." />
+        {error && <p style={{color:'red', marginTop:'8px', fontWeight:'bold'}}>{error}</p>}
       </div>
       <div className="modal-footer">
         <button onClick={onClose}>Cancel</button>
-        <button className="primary" disabled={busy} onClick={processImport}>{busy?'Importing...':'Start Import'}</button>
+        <button className="primary" disabled={busy} onClick={processImport}>{busy ? 'Importing & Mapping...' : `Import ${parsedData?.length ? parsedData.length + ' Rows' : 'Participants'}`}</button>
       </div>
     </div>
-  </div>
+  </div>;
+}
+
+function AddSlideModal({notify, onSave, onClose}){
+  const [title, setTitle] = useState('');
+  const [mediaType, setMediaType] = useState('IMAGE');
+  const [mediaUrl, setMediaUrl] = useState('');
+  const [file, setFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!mediaUrl && !file) {
+      alert('Please select a media file or provide a URL');
+      return;
+    }
+
+    setBusy(true);
+    try {
+      let filePayload = null;
+      if (file) {
+        const reader = new FileReader();
+        filePayload = await new Promise((res, rej) => {
+          reader.onload = () => res({ name: file.name, dataUrl: reader.result });
+          reader.onerror = rej;
+          reader.readAsDataURL(file);
+        });
+      }
+
+      await req('/admin/sliders', {
+        method: 'POST',
+        body: JSON.stringify({
+          title,
+          media_type: mediaType,
+          media_url: mediaUrl,
+          file: filePayload,
+          active: 1
+        })
+      });
+
+      notify('Slider item added successfully');
+      onSave();
+    } catch(err) {
+      alert(err.message || 'Failed to add slide');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return <div className="modal-overlay">
+    <div className="modal" style={{maxWidth:'500px'}}>
+      <div className="modal-header">
+        <h3>Add Home Screen Media Slide</h3>
+        <button className="close" onClick={onClose}>&times;</button>
+      </div>
+      <form onSubmit={handleSubmit}>
+        <div className="modal-body">
+          <Field label="Slide Title / Headline" value={title} onChange={setTitle} placeholder="e.g. Welcome to 100th VC Conference" />
+          <SelectField label="Media Type" value={mediaType} onChange={setMediaType} options={[{value:'IMAGE',label:'Image (JPG, PNG, WEBP)'},{value:'VIDEO',label:'Video (MP4, WEBM)'}]} />
+          
+          <label className="field uploadfield" style={{marginTop:'12px'}}>
+            <span>Upload Media File (Image or Video)</span>
+            <div>
+              <input value={mediaUrl} onChange={e => setMediaUrl(e.target.value)} placeholder="Or paste direct HTTP video/image URL" />
+              <label className="uploadBtn">
+                <Upload size={16}/>Select File
+                <input type="file" accept={mediaType==='VIDEO'?'video/mp4,video/webm,video/quicktime':'image/*'} onChange={e => setFile(e.target.files?.[0])} />
+              </label>
+            </div>
+            {file && <small style={{color:'#2563eb', marginTop:'4px'}}>Selected: {file.name} ({(file.size/1024/1024).toFixed(1)} MB)</small>}
+          </label>
+        </div>
+        <div className="modal-footer">
+          <button type="button" onClick={onClose}>Cancel</button>
+          <button type="submit" className="primary" disabled={busy}>{busy ? 'Uploading...' : 'Save & Publish'}</button>
+        </div>
+      </form>
+    </div>
+  </div>;
 }
 
 function QrPassModal({participant, onClose}){
