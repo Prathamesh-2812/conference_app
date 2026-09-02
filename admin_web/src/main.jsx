@@ -15,7 +15,13 @@ async function req(path,opt={}){
   const token=localStorage.getItem('token');
   const r=await fetch(API+path,{...opt,headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{}),...(opt.headers||{})}});
   const d=await r.json().catch(()=>({}));
-  if(!r.ok)throw Error(d.message||'Request failed');
+  if(!r.ok){
+    if(r.status===401){
+      localStorage.removeItem('token');
+      window.dispatchEvent(new Event('auth:unauthorized'));
+    }
+    throw Error(d.message||'Request failed');
+  }
   return d?.success?d.data:d;
 }
 
@@ -59,7 +65,12 @@ function App(){
   const[conference,setConference]=useState(null);
   const[toast,setToast]=useState('');
   const loadConference=()=>req('/conference').then(x=>setConference(normalizeConference(x))).catch(e=>setToast(e.message));
-  useEffect(()=>{if(logged)loadConference()},[logged]);
+  useEffect(()=>{
+    if(logged)loadConference();
+    const handleUnauth=()=>setLogged(false);
+    window.addEventListener('auth:unauthorized',handleUnauth);
+    return ()=>window.removeEventListener('auth:unauthorized',handleUnauth);
+  },[logged]);
   const notify=msg=>{setToast(msg);setTimeout(()=>setToast(''),2800)};
   if(!logged)return <Login onLogin={()=>setLogged(true)}/>;
   return <div className="app"><aside><div className="sidebrand"><div className="sidebrand-header"><img src="/logo.png" alt="Logo" className="sidebrand-logo" /><div><strong>DY Patil</strong><span>Conference</span></div></div></div><nav>{menu.map(item=><NavItem key={item.title} item={item} active={tab} open={open[item.title]} onToggle={()=>setOpen(o=>({...o,[item.title]:!o[item.title]}))} onSelect={setTab}/>)}</nav><button className="logout" onClick={()=>{localStorage.clear();setLogged(false)}}><LogOut size={18}/>Sign out</button></aside><main><header><div><h2>{tab}</h2><p>{conference?.name||'Conference Management System'}</p></div><button className="icon" onClick={loadConference} title="Refresh conference"><RefreshCw size={18}/></button></header>{renderPage(tab,conference,setConference,notify)}{toast&&<div className="toast">{toast}</div>}</main></div>
@@ -1407,18 +1418,51 @@ function Certificates({tab, notify}){
   
   // Generator states
   const[template,setTemplate]=useState(null);
+  const[imgSize,setImgSize]=useState({width: 1200, height: 800});
   const[layout,setLayout]=useState({
-    nameY: 45, nameSize: 32, nameColor: '#8C1119',
-    regY: 55, regSize: 18, regColor: '#2E6F95',
-    certY: 65, certSize: 16, certColor: '#64748b'
+    nameX: 50, nameY: 45, nameSize: 32, nameColor: '#8C1119', nameAlign: 'center',
+    regX: 50, regY: 55, regSize: 18, regColor: '#2E6F95', regAlign: 'center',
+    certX: 50, certY: 65, certSize: 16, certColor: '#64748b', certAlign: 'center'
   });
   const[selectedIds,setSelectedIds]=useState([]);
   const[searchQuery,setSearchQuery]=useState('');
   const[generating,setGenerating]=useState(false);
 
-  const load=async()=>{setBusy(true); try{const[c,p]=await Promise.all([req('/admin/certificates'),req('/admin/participants?conferenceId=1')]);setD(c); setParticipants(p);}finally{setBusy(false)}};
+  const[savingLayout,setSavingLayout]=useState(false);
+
+  const load=async()=>{
+    setBusy(true); 
+    try{
+      const[c,p,s]=await Promise.all([
+        req('/admin/certificates'),
+        req('/admin/participants?conferenceId=1'),
+        req('/admin/certificates/settings').catch(()=>null)
+      ]);
+      setD(c); 
+      setParticipants(p);
+      if(s?.template) setTemplate(s.template);
+      if(s?.layout) setLayout(prev => ({...prev, ...s.layout}));
+    }finally{
+      setBusy(false)
+    }
+  };
   useEffect(()=>{load()},[]);
   useEffect(()=>{if(tab==='Issue Certificate')setShowAdd(true)},[tab]);
+
+  const handleSaveLayout = async () => {
+    setSavingLayout(true);
+    try {
+      await req('/admin/certificates/settings', {
+        method: 'POST',
+        body: JSON.stringify({ template, layout })
+      });
+      notify('Certificate alignment settings saved successfully!');
+    } catch(e) {
+      alert(e.message);
+    } finally {
+      setSavingLayout(false);
+    }
+  };
 
   const handleSelectAll = (checked) => {
     if(checked) {
@@ -1457,7 +1501,6 @@ function Certificates({tab, notify}){
       });
       notify(`Successfully generated ${selectedIds.length} certificates!`);
       setSelectedIds([]);
-      setTemplate(null);
       setSubTab('issued');
       load();
     } catch(e) {
@@ -1491,7 +1534,7 @@ function Certificates({tab, notify}){
               <b>{x.participant_name}</b>
               {x.certificate_url && (
                 <span style={{marginLeft:'10px', fontSize:'12px'}}>
-                  [<a href={API.replace('/api','')+x.certificate_url} target="_blank" rel="noopener noreferrer">View PNG</a>]
+                  [<a href={resolveMediaUrl(x.certificate_url)} target="_blank" rel="noopener noreferrer">View PNG</a>]
                 </span>
               )}
               <br/><small>{x.registration_no}</small>
@@ -1552,73 +1595,121 @@ function Certificates({tab, notify}){
             <div style={{display:'flex', flexDirection:'column', gap:'20px'}}>
               <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                 <h4 style={{margin:0}}>Design Layout Preview</h4>
-                <button className="secondary" style={{padding:'4px 10px', fontSize:'12px'}} onClick={()=>setTemplate(null)}>Remove Template</button>
+                <div style={{display:'flex', gap:'8px', alignItems:'center'}}>
+                  <button className="primary" style={{padding:'5px 12px', fontSize:'12px'}} onClick={handleSaveLayout} disabled={savingLayout}>
+                    {savingLayout ? 'Saving...' : '💾 Save Alignment'}
+                  </button>
+                  <button className="secondary" style={{padding:'5px 10px', fontSize:'12px'}} onClick={()=>setTemplate(null)}>Remove Template</button>
+                </div>
               </div>
 
-              {/* Responsive Live Preview Box */}
+              {/* 1-to-1 SVG Live Preview Box matching backend Sharp renderer */}
               <div style={{position:'relative', width:'100%', border:'1px solid var(--border)', borderRadius:'var(--radius-md)', overflow:'hidden', background:'#f8fafc', boxShadow:'var(--shadow-sm)'}}>
-                <img src={template} style={{width:'100%', height:'auto', display:'block'}} alt="Certificate template"/>
+                <img 
+                  src={template} 
+                  style={{width:'100%', height:'auto', display:'block'}} 
+                  alt="Certificate template"
+                  onLoad={e => setImgSize({ width: e.target.naturalWidth || 1200, height: e.target.naturalHeight || 800 })}
+                />
                 
-                {/* Overlaid Texts */}
-                <div style={{position:'absolute', left:'50%', transform:'translateX(-50%)', top:`${layout.nameY}%`, color:layout.nameColor, fontSize:`clamp(12px, 3.5vw, ${layout.nameSize}px)`, fontWeight:'bold', textShadow:'0 1px 2px rgba(0,0,0,0.1)', whiteSpace:'nowrap', textAlign:'center'}}>
-                  John Doe
-                </div>
-                <div style={{position:'absolute', left:'50%', transform:'translateX(-50%)', top:`${layout.regY}%`, color:layout.regColor, fontSize:`clamp(8px, 2vw, ${layout.regSize}px)`, whiteSpace:'nowrap', textAlign:'center'}}>
-                  Registration No: REG-12345
-                </div>
-                <div style={{position:'absolute', left:'50%', transform:'translateX(-50%)', top:`${layout.certY}%`, color:layout.certColor, fontSize:`clamp(8px, 1.8vw, ${layout.certSize}px)`, whiteSpace:'nowrap', textAlign:'center'}}>
-                  Certificate No: CERT-987654
-                </div>
+                <svg 
+                  viewBox={`0 0 ${imgSize.width} ${imgSize.height}`} 
+                  style={{position:'absolute', top:0, left:0, width:'100%', height:'100%', pointerEvents:'none'}}
+                >
+                  <style>{`
+                    .nameText { font-family: 'Arial', sans-serif; font-weight: bold; fill: ${layout.nameColor || '#8C1119'}; font-size: ${layout.nameSize || 32}px; text-anchor: ${layout.nameAlign === 'left' ? 'start' : layout.nameAlign === 'right' ? 'end' : 'middle'}; dominant-baseline: middle; }
+                    .regText { font-family: 'Arial', sans-serif; fill: ${layout.regColor || '#2E6F95'}; font-size: ${layout.regSize || 18}px; text-anchor: ${layout.regAlign === 'left' ? 'start' : layout.regAlign === 'right' ? 'end' : 'middle'}; dominant-baseline: middle; }
+                    .certText { font-family: 'Arial', sans-serif; fill: ${layout.certColor || '#64748b'}; font-size: ${layout.certSize || 16}px; text-anchor: ${layout.certAlign === 'left' ? 'start' : layout.certAlign === 'right' ? 'end' : 'middle'}; dominant-baseline: middle; }
+                  `}</style>
+                  <text x={`${layout.nameX ?? 50}%`} y={`${imgSize.height * ((layout.nameY ?? 45) / 100)}`} className="nameText">John Doe</text>
+                  <text x={`${layout.regX ?? 50}%`} y={`${imgSize.height * ((layout.regY ?? 55) / 100)}`} className="regText">Registration No: REG-12345</text>
+                  <text x={`${layout.certX ?? 50}%`} y={`${imgSize.height * ((layout.certY ?? 65) / 100)}`} className="certText">Certificate No: CERT-987654</text>
+                </svg>
               </div>
 
               {/* Styling Controllers */}
               <div style={{background:'var(--bg-app)', padding:'16px', borderRadius:'var(--radius-md)', border:'1px solid var(--border)', display:'grid', gridTemplateColumns:'1fr 1fr', gap:'16px'}}>
                 <div>
                   <h5 style={{margin:'0 0 10px 0', color:'var(--primary)'}}>Participant Name</h5>
-                  <label style={{display:'flex', flexDirection:'column', gap:'6px', fontSize:'13px', marginBottom:'10px'}}>
+                  <label style={{display:'flex', flexDirection:'column', gap:'4px', fontSize:'13px', marginBottom:'8px'}}>
+                    X-Position ({layout.nameX ?? 50}%)
+                    <input type="range" min="0" max="100" value={layout.nameX ?? 50} onChange={e=>setLayout(l=>({...l, nameX: parseInt(e.target.value)}))}/>
+                  </label>
+                  <label style={{display:'flex', flexDirection:'column', gap:'4px', fontSize:'13px', marginBottom:'8px'}}>
                     Y-Position ({layout.nameY}%)
                     <input type="range" min="5" max="95" value={layout.nameY} onChange={e=>setLayout(l=>({...l, nameY: parseInt(e.target.value)}))}/>
                   </label>
-                  <label style={{display:'flex', flexDirection:'column', gap:'6px', fontSize:'13px', marginBottom:'10px'}}>
+                  <label style={{display:'flex', flexDirection:'column', gap:'4px', fontSize:'13px', marginBottom:'8px'}}>
                     Font Size ({layout.nameSize}px)
                     <input type="range" min="12" max="100" value={layout.nameSize} onChange={e=>setLayout(l=>({...l, nameSize: parseInt(e.target.value)}))}/>
                   </label>
-                  <label style={{display:'flex', alignItems:'center', gap:'8px', fontSize:'13px'}}>
-                    Text Color
-                    <input type="color" value={layout.nameColor} onChange={e=>setLayout(l=>({...l, nameColor: e.target.value}))} style={{width:'32px', height:'24px', border:0, padding:0, background:'transparent', cursor:'pointer'}}/>
-                  </label>
+                  <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:'8px', fontSize:'13px', marginTop:'4px'}}>
+                    <div style={{display:'flex', gap:'4px'}}>
+                      {['left','center','right'].map(align => (
+                        <button key={align} type="button" style={{padding:'2px 8px', fontSize:'11px', textTransform:'capitalize', background:(layout.nameAlign||'center')===align?'var(--primary)':'var(--bg-card)', color:(layout.nameAlign||'center')===align?'#fff':'var(--text-main)', border:'1px solid var(--border)', borderRadius:'4px'}} onClick={()=>setLayout(l=>({...l, nameAlign: align}))}>{align}</button>
+                      ))}
+                    </div>
+                    <label style={{display:'flex', alignItems:'center', gap:'6px'}}>
+                      Color
+                      <input type="color" value={layout.nameColor} onChange={e=>setLayout(l=>({...l, nameColor: e.target.value}))} style={{width:'28px', height:'22px', border:0, padding:0, background:'transparent', cursor:'pointer'}}/>
+                    </label>
+                  </div>
                 </div>
                 <div>
                   <h5 style={{margin:'0 0 10px 0', color:'var(--accent)'}}>Registration No.</h5>
-                  <label style={{display:'flex', flexDirection:'column', gap:'6px', fontSize:'13px', marginBottom:'10px'}}>
+                  <label style={{display:'flex', flexDirection:'column', gap:'4px', fontSize:'13px', marginBottom:'8px'}}>
+                    X-Position ({layout.regX ?? 50}%)
+                    <input type="range" min="0" max="100" value={layout.regX ?? 50} onChange={e=>setLayout(l=>({...l, regX: parseInt(e.target.value)}))}/>
+                  </label>
+                  <label style={{display:'flex', flexDirection:'column', gap:'4px', fontSize:'13px', marginBottom:'8px'}}>
                     Y-Position ({layout.regY}%)
                     <input type="range" min="5" max="95" value={layout.regY} onChange={e=>setLayout(l=>({...l, regY: parseInt(e.target.value)}))}/>
                   </label>
-                  <label style={{display:'flex', flexDirection:'column', gap:'6px', fontSize:'13px', marginBottom:'10px'}}>
+                  <label style={{display:'flex', flexDirection:'column', gap:'4px', fontSize:'13px', marginBottom:'8px'}}>
                     Font Size ({layout.regSize}px)
                     <input type="range" min="10" max="60" value={layout.regSize} onChange={e=>setLayout(l=>({...l, regSize: parseInt(e.target.value)}))}/>
                   </label>
-                  <label style={{display:'flex', alignItems:'center', gap:'8px', fontSize:'13px'}}>
-                    Text Color
-                    <input type="color" value={layout.regColor} onChange={e=>setLayout(l=>({...l, regColor: e.target.value}))} style={{width:'32px', height:'24px', border:0, padding:0, background:'transparent', cursor:'pointer'}}/>
-                  </label>
+                  <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:'8px', fontSize:'13px', marginTop:'4px'}}>
+                    <div style={{display:'flex', gap:'4px'}}>
+                      {['left','center','right'].map(align => (
+                        <button key={align} type="button" style={{padding:'2px 8px', fontSize:'11px', textTransform:'capitalize', background:(layout.regAlign||'center')===align?'var(--accent)':'var(--bg-card)', color:(layout.regAlign||'center')===align?'#fff':'var(--text-main)', border:'1px solid var(--border)', borderRadius:'4px'}} onClick={()=>setLayout(l=>({...l, regAlign: align}))}>{align}</button>
+                      ))}
+                    </div>
+                    <label style={{display:'flex', alignItems:'center', gap:'6px'}}>
+                      Color
+                      <input type="color" value={layout.regColor} onChange={e=>setLayout(l=>({...l, regColor: e.target.value}))} style={{width:'28px', height:'22px', border:0, padding:0, background:'transparent', cursor:'pointer'}}/>
+                    </label>
+                  </div>
                 </div>
                 <div style={{gridColumn:'1 / -1', borderTop:'1px solid var(--border)', paddingTop:'12px', marginTop:'4px'}}>
                   <h5 style={{margin:'0 0 10px 0', color:'var(--text-muted)'}}>Certificate No.</h5>
                   <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'16px'}}>
-                    <label style={{display:'flex', flexDirection:'column', gap:'6px', fontSize:'13px'}}>
+                    <label style={{display:'flex', flexDirection:'column', gap:'4px', fontSize:'13px'}}>
+                      X-Position ({layout.certX ?? 50}%)
+                      <input type="range" min="0" max="100" value={layout.certX ?? 50} onChange={e=>setLayout(l=>({...l, certX: parseInt(e.target.value)}))}/>
+                    </label>
+                    <label style={{display:'flex', flexDirection:'column', gap:'4px', fontSize:'13px'}}>
                       Y-Position ({layout.certY}%)
                       <input type="range" min="5" max="95" value={layout.certY} onChange={e=>setLayout(l=>({...l, certY: parseInt(e.target.value)}))}/>
                     </label>
-                    <label style={{display:'flex', flexDirection:'column', gap:'6px', fontSize:'13px'}}>
-                      Font Size ({layout.certSize}px)
-                      <input type="range" min="10" max="50" value={layout.certSize} onChange={e=>setLayout(l=>({...l, certSize: parseInt(e.target.value)}))}/>
-                    </label>
                   </div>
-                  <label style={{display:'flex', alignItems:'center', gap:'8px', fontSize:'13px', marginTop:'10px'}}>
-                    Text Color
-                    <input type="color" value={layout.certColor} onChange={e=>setLayout(l=>({...l, certColor: e.target.value}))} style={{width:'32px', height:'24px', border:0, padding:0, background:'transparent', cursor:'pointer'}}/>
-                  </label>
+                  <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:'8px', fontSize:'13px', marginTop:'8px'}}>
+                    <label style={{display:'flex', alignItems:'center', gap:'8px'}}>
+                      Font Size ({layout.certSize}px)
+                      <input type="range" min="10" max="50" value={layout.certSize} onChange={e=>setLayout(l=>({...l, certSize: parseInt(e.target.value)}))} style={{width:'120px'}}/>
+                    </label>
+                    <div style={{display:'flex', alignItems:'center', gap:'12px'}}>
+                      <div style={{display:'flex', gap:'4px'}}>
+                        {['left','center','right'].map(align => (
+                          <button key={align} type="button" style={{padding:'2px 8px', fontSize:'11px', textTransform:'capitalize', background:(layout.certAlign||'center')===align?'var(--text-muted)':'var(--bg-card)', color:(layout.certAlign||'center')===align?'#fff':'var(--text-main)', border:'1px solid var(--border)', borderRadius:'4px'}} onClick={()=>setLayout(l=>({...l, certAlign: align}))}>{align}</button>
+                        ))}
+                      </div>
+                      <label style={{display:'flex', alignItems:'center', gap:'6px'}}>
+                        Color
+                        <input type="color" value={layout.certColor} onChange={e=>setLayout(l=>({...l, certColor: e.target.value}))} style={{width:'28px', height:'22px', border:0, padding:0, background:'transparent', cursor:'pointer'}}/>
+                      </label>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

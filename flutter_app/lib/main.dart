@@ -5232,8 +5232,18 @@ class _CertificateScreenState extends State<CertificateScreen> {
           final issuedAt = data['issued_at']?.toString() ?? '—';
           final certUrl = data['certificate_url']?.toString();
 
-          final String imageBaseUrl = apiBaseUrl.replaceAll('/api', '');
-          final String? fullImageUrl = certUrl != null ? '$imageBaseUrl$certUrl' : null;
+          String? fullImageUrl;
+          if (certUrl != null && certUrl.trim().isNotEmpty) {
+            final cleanUrl = certUrl.trim();
+            if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
+              fullImageUrl = cleanUrl;
+            } else {
+              final String imageBaseUrl = apiBaseUrl.endsWith('/api')
+                  ? apiBaseUrl.substring(0, apiBaseUrl.length - 4)
+                  : apiBaseUrl.replaceAll(RegExp(r'/api/?$'), '');
+              fullImageUrl = '$imageBaseUrl${cleanUrl.startsWith('/') ? '' : '/'}$cleanUrl';
+            }
+          }
 
           return ListView(
             padding: const EdgeInsets.all(18),
@@ -5338,10 +5348,12 @@ class _CertificateScreenState extends State<CertificateScreen> {
                   icon: const Icon(Icons.download, size: 22),
                   label: const Text('Download Certificate', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   onPressed: () async {
-                    final uri = Uri.parse(fullImageUrl);
+                    if (fullImageUrl == null) return;
+                    final uri = Uri.parse(fullImageUrl!);
                     if (await canLaunchUrl(uri)) {
                       await launchUrl(uri, mode: LaunchMode.externalApplication);
                     } else {
+                      if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Could not open download link')),
                       );

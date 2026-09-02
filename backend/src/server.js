@@ -170,7 +170,8 @@ app.post('/api/auth/login',[body('email').notEmpty(),body('password').notEmpty()
   if(!rows.length) return res.status(401).json({message:'Invalid credentials'});
   const u = rows[0];
   if(!await bcrypt.compare(req.body.password, u.password_hash)) return res.status(401).json({message:'Invalid credentials'});
-  const token = jwt.sign({id:u.id, name:u.name, email:u.email, role:u.role}, process.env.JWT_SECRET, {expiresIn:'7d'});
+  const secret = process.env.JWT_SECRET || 'conference-app-secret-jwt-key-2026';
+  const token = jwt.sign({id:u.id, name:u.name, email:u.email, role:u.role}, secret, {expiresIn:'7d'});
   res.json({token, user:{id:u.id, name:u.name, email:u.email, phone:u.phone, role:u.role, mustChangePassword: !!u.must_change_password}});
 }));
 app.post('/api/auth/change-password', auth, [body('newPassword').isLength({min:4})], validate, asyncRoute(async(req,res)=>{
@@ -1078,6 +1079,29 @@ app.get('/api/certificates/verify/:certificateNumber',asyncRoute(async(req,res)=
   ok(res,c,'Certificate verified');
 }));
 
+app.get('/api/admin/certificates/settings',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
+  try { await pool.query('ALTER TABLE conference_settings ADD COLUMN certificate_template LONGTEXT NULL'); } catch(e) {}
+  try { await pool.query('ALTER TABLE conference_settings ADD COLUMN certificate_layout JSON NULL'); } catch(e) {}
+  const [[s]]=await pool.query('SELECT certificate_template, certificate_layout FROM conference_settings WHERE conference_id=1');
+  let layout = null;
+  if(s?.certificate_layout){
+    try { layout = typeof s.certificate_layout === 'string' ? JSON.parse(s.certificate_layout) : s.certificate_layout; } catch(e){}
+  }
+  ok(res, { template: s?.certificate_template || null, layout }, 'Certificate settings fetched');
+}));
+
+app.post('/api/admin/certificates/settings',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
+  const { template, layout } = req.body;
+  try { await pool.query('ALTER TABLE conference_settings ADD COLUMN certificate_template LONGTEXT NULL'); } catch(e) {}
+  try { await pool.query('ALTER TABLE conference_settings ADD COLUMN certificate_layout JSON NULL'); } catch(e) {}
+  await pool.query(`
+    INSERT INTO conference_settings(conference_id, certificate_template, certificate_layout)
+    VALUES(1, ?, ?)
+    ON DUPLICATE KEY UPDATE certificate_template=VALUES(certificate_template), certificate_layout=VALUES(certificate_layout)
+  `, [template || null, layout ? JSON.stringify(layout) : null]);
+  ok(res, null, 'Certificate layout settings saved');
+}));
+
 app.get('/api/admin/certificates',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
   const [r]=await pool.query(`
     SELECT cert.*, u.name as participant_name, p.registration_no
@@ -1105,6 +1129,19 @@ app.post('/api/admin/certificates/generate',auth,roles('ADMIN','SUPER_ADMIN'),as
     return res.status(400).json({success:false,message:'Template, participantIds, and layout are required'});
   }
 
+  try {
+    await pool.query('ALTER TABLE conference_settings ADD COLUMN certificate_template LONGTEXT NULL');
+    await pool.query('ALTER TABLE conference_settings ADD COLUMN certificate_layout JSON NULL');
+  } catch(e) {}
+
+  try {
+    await pool.query(`
+      INSERT INTO conference_settings(conference_id, certificate_template, certificate_layout)
+      VALUES(1, ?, ?)
+      ON DUPLICATE KEY UPDATE certificate_template=VALUES(certificate_template), certificate_layout=VALUES(certificate_layout)
+    `, [template, JSON.stringify(layout)]);
+  } catch(e) {}
+
   const m=String(template).match(/^data:(image\/(?:png|jpe?g|webp));base64,(.+)$/);
   if(!m)return res.status(422).json({success:false,message:'Only JPG, PNG and WEBP image templates are supported'});
   const ext={ 'image/png':'png','image/jpeg':'jpg','image/jpg':'jpg','image/webp':'webp'}[m[1]];
@@ -1127,17 +1164,35 @@ app.post('/api/admin/certificates/generate',auth,roles('ADMIN','SUPER_ADMIN'),as
     `,[pId]);
     if(!p)continue;
 
+    const nameX = layout.nameX ?? 50;
+    const nameY = layout.nameY ?? 45;
+    const nameAlign = layout.nameAlign || 'center';
+    const nameAnchor = nameAlign === 'left' ? 'start' : nameAlign === 'right' ? 'end' : 'middle';
+
+    const regX = layout.regX ?? 50;
+    const regY = layout.regY ?? 55;
+    const regAlign = layout.regAlign || 'center';
+    const regAnchor = regAlign === 'left' ? 'start' : regAlign === 'right' ? 'end' : 'middle';
+
+    const certX = layout.certX ?? 50;
+    const certY = layout.certY ?? 65;
+    const certAlign = layout.certAlign || 'center';
+    const certAnchor = certAlign === 'left' ? 'start' : certAlign === 'right' ? 'end' : 'middle';
+
     const certNo = `CERT-${Date.now().toString().slice(-6)}-${Math.floor(Math.random()*1000)}`;
+
+    const escapeXml = (str) => String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+
     const svgOverlay = `
       <svg width="${width}" height="${height}">
         <style>
-          .nameText { font-family: 'Arial', sans-serif; font-weight: bold; fill: ${layout.nameColor || '#000000'}; font-size: ${layout.nameSize || 48}px; text-anchor: middle; }
-          .regText { font-family: 'Arial', sans-serif; fill: ${layout.regColor || '#000000'}; font-size: ${layout.regSize || 24}px; text-anchor: middle; }
-          .certText { font-family: 'Arial', sans-serif; fill: ${layout.certColor || '#000000'}; font-size: ${layout.certSize || 20}px; text-anchor: middle; }
+          .nameText { font-family: 'Arial', sans-serif; font-weight: bold; fill: ${layout.nameColor || '#000000'}; font-size: ${layout.nameSize || 48}px; text-anchor: ${nameAnchor}; dominant-baseline: middle; }
+          .regText { font-family: 'Arial', sans-serif; fill: ${layout.regColor || '#000000'}; font-size: ${layout.regSize || 24}px; text-anchor: ${regAnchor}; dominant-baseline: middle; }
+          .certText { font-family: 'Arial', sans-serif; fill: ${layout.certColor || '#000000'}; font-size: ${layout.certSize || 20}px; text-anchor: ${certAnchor}; dominant-baseline: middle; }
         </style>
-        <text x="50%" y="${height * (layout.nameY / 100)}" class="nameText">${p.name}</text>
-        <text x="50%" y="${height * (layout.regY / 100)}" class="regText">Registration No: ${p.registration_no}</text>
-        <text x="50%" y="${height * (layout.certY / 100)}" class="certText">Certificate No: ${certNo}</text>
+        <text x="${nameX}%" y="${height * (nameY / 100)}" class="nameText">${escapeXml(p.name)}</text>
+        <text x="${regX}%" y="${height * (regY / 100)}" class="regText">Registration No: ${escapeXml(p.registration_no)}</text>
+        <text x="${certX}%" y="${height * (certY / 100)}" class="certText">Certificate No: ${escapeXml(certNo)}</text>
       </svg>
     `;
 
