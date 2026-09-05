@@ -5,7 +5,9 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "seed": "node src/seed.js"
+    "seed": "node src/seed.js",
+    "test:verify": "node test_verification.mjs",
+    "test:feedback": "node test_feedback_verification.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",

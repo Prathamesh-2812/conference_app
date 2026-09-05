@@ -52,8 +52,9 @@ const menu=[
   {title:'Meals',icon:CalendarDays,children:['Meal Schedule','Schedule Meal']},
   {title:'Duties',icon:Shield,children:['Duty Roster','Assign Staff']},
   {title:'Certificates',icon:FileCheck,children:['Issued Certificates','Issue Certificate']},
+  {title:'Feedback',icon:MessageCircle,children:['CME Feedback & Ratings','Feedback Analytics']},
   {title:'Chat',icon:Bell,children:['Live Chat','Broadcast Message']},
-  {title:'Reports',icon:FileCheck,children:['Participant Reports','Attendance Reports','Accommodation Reports','Transport Reports','Meal Reports','Certificate Reports']},
+  {title:'Reports',icon:FileCheck,children:['Participant Reports','Attendance Reports','Accommodation Reports','Transport Reports','Meal Reports','Certificate Reports','CME Feedback Reports']},
   {title:'Admin Users',icon:Lock,children:['Admin Users List','Audit Logs']},
   {title:'System Settings',icon:Settings},
 ];
@@ -94,8 +95,9 @@ function renderPage(tab,conference,setConference,notify){
   if(['Meals','Meal Schedule','Schedule Meal'].includes(tab))return <Meals tab={tab} notify={notify}/>;
   if(['Duties','Duty Roster','Assign Staff'].includes(tab))return <Duties tab={tab} notify={notify}/>;
   if(['Certificates','Issued Certificates','Issue Certificate'].includes(tab))return <Certificates tab={tab} notify={notify}/>;
+  if(['Feedback','CME Feedback & Ratings','Feedback Analytics'].includes(tab))return <FeedbackView tab={tab} notify={notify}/>;
   if(['Chat','Live Chat','Broadcast Message'].includes(tab))return <Chat tab={tab} notify={notify}/>;
-  if(['Reports','Participant Reports','Attendance Reports','Accommodation Reports','Transport Reports','Meal Reports','Certificate Reports'].includes(tab))return <Reports tab={tab} notify={notify}/>;
+  if(['Reports','Participant Reports','Attendance Reports','Accommodation Reports','Transport Reports','Meal Reports','Certificate Reports','CME Feedback Reports'].includes(tab))return <Reports tab={tab} notify={notify}/>;
   if(['Admin Users','Admin Users List','Audit Logs'].includes(tab))return <AdminUsers tab={tab} notify={notify}/>;
   if(tab==='System Settings')return <SystemSettings notify={notify}/>;
   return <Placeholder title={tab}/>;
@@ -150,7 +152,7 @@ function FormShell({icon:Icon,title,description,children,onSave,onReset,preview}
 function BrandPreview({branding}){return <div className="brandpreview" style={{background:branding.backgroundColor||'#FCFAF5',borderColor:branding.primaryColor||'#8C1119'}}>{branding.bannerUrl&&<img src={branding.bannerUrl.startsWith('/uploads')?API.replace('/api','')+branding.bannerUrl:branding.bannerUrl} alt="Conference banner"/>}<div><span style={{color:branding.accentColor}}>Live Preview</span><strong style={{color:branding.primaryColor}}>Mobile conference branding</strong><small style={{color:branding.secondaryColor}}>Logo, banner, and colors are API driven.</small></div></div>}
 
 function Participants({tab, notify}){
-  const[d,setD]=useState([]),[q,setQ]=useState(''),[statusFilter,setStatusFilter]=useState('ALL'),[catFilter,setCatFilter]=useState('ALL'),[appFilter,setAppFilter]=useState('ALL'),[busy,setBusy]=useState(false),[edit,setEdit]=useState(null),[importModal,setImportModal]=useState(false),[qrModal,setQrModal]=useState(null),[liaisons,setLiaisons]=useState([]),[whatsappModal,setWhatsappModal]=useState(false);
+  const[d,setD]=useState([]),[q,setQ]=useState(''),[statusFilter,setStatusFilter]=useState('ALL'),[catFilter,setCatFilter]=useState('ALL'),[appFilter,setAppFilter]=useState('ALL'),[hotelFilter,setHotelFilter]=useState('ALL'),[payFilter,setPayFilter]=useState('ALL'),[busy,setBusy]=useState(false),[edit,setEdit]=useState(null),[importModal,setImportModal]=useState(false),[qrModal,setQrModal]=useState(null),[liaisons,setLiaisons]=useState([]),[whatsappModal,setWhatsappModal]=useState(false);
   
   const load=async()=>{
     setBusy(true);
@@ -173,15 +175,19 @@ function Participants({tab, notify}){
   },[tab]);
 
   const filtered=d.filter(x=>{
-    const matchesQ=`${x.name} ${x.email} ${x.registration_no} ${x.university}`.toLowerCase().includes(q.toLowerCase());
+    const matchesQ=`${x.name} ${x.email} ${x.phone} ${x.registration_no} ${x.university} ${x.hotel_name||''} ${x.room_number||''}`.toLowerCase().includes(q.toLowerCase());
     const matchesStatus=statusFilter==='ALL'||x.status===statusFilter;
     const matchesCat=catFilter==='ALL'||x.category===catFilter;
     const matchesApp=appFilter==='ALL'||(appFilter==='NEVER_OPENED' && !x.last_login_at)||(appFilter==='LOGGED_IN' && !!x.last_login_at);
-    return matchesQ && matchesStatus && matchesCat && matchesApp;
+    const matchesHotel=hotelFilter==='ALL'||(hotelFilter==='NO_HOTEL'?!x.hotel_name:x.hotel_name===hotelFilter);
+    const matchesPay=payFilter==='ALL'||x.payment_status===payFilter;
+    return matchesQ && matchesStatus && matchesCat && matchesApp && matchesHotel && matchesPay;
   });
 
   const categories=['ALL',...Array.from(new Set(d.map(x=>x.category).filter(Boolean)))];
   const statuses=['ALL','PENDING','APPROVED','CHECKED_IN','CANCELLED'];
+  const hotels=['ALL',...Array.from(new Set(d.map(x=>x.hotel_name).filter(Boolean))),'NO_HOTEL'];
+  const payStatuses=['ALL','PAID','PENDING'];
 
   const sendWhatsAppToSingle = (x) => {
     let phone = (x.phone || '').replace(/[^0-9]/g, '');
@@ -191,7 +197,7 @@ function Participants({tab, notify}){
       return;
     }
     const appUrl = window.location.origin.replace(':5173', ':3000');
-    const msg = `Namaste Dr./Prof. ${x.name}! 🙏\n\nWelcome to *MAPCON 2026* (Annual State Conference at Hotel Sayaji, Kolhapur).\n\n📌 *Your Delegate Registration Details:*\n• *Registration No:* ${x.registration_no || 'MAPCON-2026-DEL'}\n• *Category:* ${x.category || 'Delegate'}\n• *Login Email:* ${x.email}\n• *Default Password:* Demo@123\n\n📲 *Access Conference App & Live Schedule:*\n${appUrl}\n\nKindly login to the app to access your QR Gate Pass, Scientific Session Schedule, Meal Coupons, and Verified Certificate.\n\nFor any query, contact our Secretarial Desk.\n_MAPCON 2026 Organizing Committee_`;
+    const msg = `Namaste Dr./Prof. ${x.name}! 🙏\n\nWelcome to *MAPCON 2026* (Annual State Conference at Hotel Sayaji, Kolhapur).\n\n📌 *Your Delegate Registration Details:*\n• *Registration No:* ${x.registration_no || 'MAPCON-2026-DEL'}\n• *Category:* ${x.category || 'Delegate'}\n• *Hotel Assigned:* ${x.hotel_name || 'Hotel Sayaji'} (Room: ${x.room_number || 'TBD'})\n• *Login Email:* ${x.email}\n• *Default Password:* Demo@123\n\n📲 *Access Conference App & Live Schedule:*\n${appUrl}\n\nKindly login to the app to access your QR Gate Pass, Scientific Session Schedule, Meal Coupons, and Verified Certificate.\n\nFor any query, contact our Secretarial Desk.\n_MAPCON 2026 Organizing Committee_`;
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
@@ -213,7 +219,7 @@ function Participants({tab, notify}){
 
   const exportCSV=()=>{
     if(!filtered.length){alert('No participants to export');return}
-    const headers=['ID','Registration No','Name','Email','Phone','Designation','University','Category','Status','App Status','Payment Status','Mode of Travel','Flight No','Arrival Date','Arrival Time','Departure Date','Departure Time','Liaison Officer'];
+    const headers=['ID','Registration No','Name','Email','Phone','Designation','University','Category','Status','App Status','Payment Status','Hotel Assigned','Room No','Room Type','Check In','Check Out','Mode of Travel','Flight No','Arrival Date','Arrival Time','Departure Date','Departure Time','Liaison Officer','Liaison Phone'];
     const rows=filtered.map(x=>[
       x.id,
       `"${x.registration_no||''}"`,
@@ -226,13 +232,19 @@ function Participants({tab, notify}){
       `"${x.status||''}"`,
       `"${x.last_login_at?'Active (Logged In)':'Never Opened App'}"`,
       `"${x.payment_status||''}"`,
+      `"${x.hotel_name||'Not Assigned'}"`,
+      `"${x.room_number||''}"`,
+      `"${x.room_type||''}"`,
+      `"${x.check_in?String(x.check_in).slice(0,10):''}"`,
+      `"${x.check_out?String(x.check_out).slice(0,10):''}"`,
       `"${x.mode_of_travel||''}"`,
       `"${x.flight_number||''}"`,
       `"${x.arrival_date?String(x.arrival_date).slice(0,10):''}"`,
       `"${x.arrival_time||''}"`,
       `"${x.departure_date?String(x.departure_date).slice(0,10):''}"`,
       `"${x.departure_time||''}"`,
-      `"${x.liaison_name||''}"`
+      `"${x.liaison_name||''}"`,
+      `"${x.liaison_phone||''}"`
     ]);
     const csvContent='data:text/csv;charset=utf-8,'+[headers.join(','),...rows.map(r=>r.join(','))].join('\n');
     const link=document.createElement('a');
@@ -251,48 +263,66 @@ function Participants({tab, notify}){
       <div>
         <h3>Participants Directory</h3>
         <p>
-          Manage registrations, travel plans, liaison allocations, WhatsApp reminders and QR passes ({filtered.length} shown).
+          Showing {filtered.length} of {d.length} delegates.
           &nbsp;&bull;&nbsp;<span style={{color:'#dc2626',fontWeight:700}}>🔴 Never Opened App: {neverOpenedCount}</span>
           &nbsp;&bull;&nbsp;<span style={{color:'#16a34a',fontWeight:700}}>🟢 App Active: {activeCount}</span>
         </p>
       </div>
       <div className="actions">
         <button className="secondary" style={{borderColor:'#16a34a',color:'#16a34a',fontWeight:600}} onClick={()=>setWhatsappModal(true)}>📲 WhatsApp Inactive Delegates</button>
-        <button className="secondary" onClick={exportCSV}>Export CSV</button>
-        <button className="secondary" onClick={()=>setImportModal(true)}>Import CSV</button>
+        <button className="secondary" onClick={exportCSV}>📥 Export CSV</button>
+        <button className="secondary" onClick={()=>setImportModal(true)}>📂 Import Excel / CSV</button>
         <button onClick={()=>setEdit({})}>+ Add Participant</button>
       </div>
     </div>
     
-    <div className="toolbar" style={{display:'flex',gap:'10px',flexWrap:'wrap',alignItems:'center'}}>
-      <div className="search" style={{flex:1,minWidth:'220px'}}><Search size={18}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search name, email, reg no, university..."/></div>
-      <div style={{display:'flex',gap:'6px',alignItems:'center'}}>
-        <small style={{fontWeight:600}}>App Usage:</small>
-        <select value={appFilter} onChange={e=>setAppFilter(e.target.value)} style={{padding:'6px 10px',borderRadius:'6px',border:'1px solid #ccc',fontWeight:600,color:appFilter==='NEVER_OPENED'?'#dc2626':appFilter==='LOGGED_IN'?'#16a34a':'#333'}}>
-          <option value="ALL">All Delegates ({d.length})</option>
-          <option value="NEVER_OPENED">🔴 Never Opened App ({neverOpenedCount})</option>
-          <option value="LOGGED_IN">🟢 App Logged In ({activeCount})</option>
-        </select>
-      </div>
-      <div style={{display:'flex',gap:'6px',alignItems:'center'}}>
-        <small style={{fontWeight:600}}>Status:</small>
-        <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} style={{padding:'6px 10px',borderRadius:'6px',border:'1px solid #ccc'}}>
-          {statuses.map(s=><option key={s} value={s}>{s}</option>)}
-        </select>
-      </div>
-      <div style={{display:'flex',gap:'6px',alignItems:'center'}}>
-        <small style={{fontWeight:600}}>Category:</small>
-        <select value={catFilter} onChange={e=>setCatFilter(e.target.value)} style={{padding:'6px 10px',borderRadius:'6px',border:'1px solid #ccc'}}>
+    <div className="toolbar" style={{display:'flex',gap:'8px',flexWrap:'wrap',alignItems:'center',background:'#f8fafc',padding:'12px',borderRadius:'10px',border:'1px solid #e2e8f0'}}>
+      <div className="search" style={{flex:1,minWidth:'220px'}}><Search size={18}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search name, email, phone, reg no, hotel, college..."/></div>
+      
+      <div style={{display:'flex',gap:'4px',alignItems:'center'}}>
+        <small style={{fontWeight:600,color:'#64748B'}}>Category:</small>
+        <select value={catFilter} onChange={e=>setCatFilter(e.target.value)} style={{padding:'6px 8px',borderRadius:'6px',border:'1px solid #cbd5e1',fontSize:'12.5px'}}>
           {categories.map(c=><option key={c} value={c}>{c}</option>)}
         </select>
       </div>
-      <button onClick={load} disabled={busy}>{busy?'Refreshing...':'Refresh'}</button>
+
+      <div style={{display:'flex',gap:'4px',alignItems:'center'}}>
+        <small style={{fontWeight:600,color:'#64748B'}}>Status:</small>
+        <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} style={{padding:'6px 8px',borderRadius:'6px',border:'1px solid #cbd5e1',fontSize:'12.5px'}}>
+          {statuses.map(s=><option key={s} value={s}>{s}</option>)}
+        </select>
+      </div>
+
+      <div style={{display:'flex',gap:'4px',alignItems:'center'}}>
+        <small style={{fontWeight:600,color:'#64748B'}}>Hotel:</small>
+        <select value={hotelFilter} onChange={e=>setHotelFilter(e.target.value)} style={{padding:'6px 8px',borderRadius:'6px',border:'1px solid #cbd5e1',fontSize:'12.5px'}}>
+          {hotels.map(h=><option key={h} value={h}>{h==='NO_HOTEL'?'Unassigned Hotel':h}</option>)}
+        </select>
+      </div>
+
+      <div style={{display:'flex',gap:'4px',alignItems:'center'}}>
+        <small style={{fontWeight:600,color:'#64748B'}}>Payment:</small>
+        <select value={payFilter} onChange={e=>setPayFilter(e.target.value)} style={{padding:'6px 8px',borderRadius:'6px',border:'1px solid #cbd5e1',fontSize:'12.5px'}}>
+          {payStatuses.map(p=><option key={p} value={p}>{p}</option>)}
+        </select>
+      </div>
+
+      <div style={{display:'flex',gap:'4px',alignItems:'center'}}>
+        <small style={{fontWeight:600,color:'#64748B'}}>App:</small>
+        <select value={appFilter} onChange={e=>setAppFilter(e.target.value)} style={{padding:'6px 8px',borderRadius:'6px',border:'1px solid #cbd5e1',fontSize:'12.5px',color:appFilter==='NEVER_OPENED'?'#dc2626':appFilter==='LOGGED_IN'?'#16a34a':'#333'}}>
+          <option value="ALL">All App Status</option>
+          <option value="NEVER_OPENED">🔴 Never Opened</option>
+          <option value="LOGGED_IN">🟢 Logged In</option>
+        </select>
+      </div>
+
+      <button onClick={load} disabled={busy} style={{padding:'6px 12px',fontSize:'12.5px'}}>{busy?'Refreshing...':'Refresh'}</button>
     </div>
 
     <div className="tablewrap">
       <table>
         <thead>
-          <tr><th>Reg No & Pass</th><th>Participant Details</th><th>University & Role</th><th>Category</th><th>Status & App Activity</th><th>Travel & Stay</th><th>Liaison</th><th>WhatsApp & Actions</th></tr>
+          <tr><th>Reg No & Pass</th><th>Participant Details</th><th>University & Role</th><th>Category</th><th>Status & App Activity</th><th>Accommodation & Travel</th><th>Liaison</th><th>WhatsApp & Actions</th></tr>
         </thead>
         <tbody>
           {filtered.map(x=><tr key={x.id}>
@@ -320,6 +350,14 @@ function Participants({tab, notify}){
               <small style={{color:x.payment_status==='PAID'?'green':'orange',fontWeight:600}}>{x.payment_status}</small>
             </td>
             <td>
+              {x.hotel_name ? (
+                <div style={{marginBottom:'4px'}}>
+                  <small style={{color:'#8C1119',fontWeight:700}}>🏨 {x.hotel_name}</small><br/>
+                  <small><b>Room:</b> {x.room_number || 'TBD'} ({x.room_type || 'Standard'})</small>
+                </div>
+              ) : (
+                <small style={{color:'#94a3b8',display:'block',marginBottom:'4px'}}>No hotel assigned</small>
+              )}
               <small><b>Travel:</b> {x.mode_of_travel||'Not specified'}</small><br/>
               <small><b>Arrival:</b> {x.arrival_date?String(x.arrival_date).slice(0,10):'-'} {x.arrival_time||''}</small>
             </td>
@@ -616,9 +654,13 @@ function BulkImportModal({onClose, onImportSuccess}){
           </button>
         </div>
 
-        <p style={{marginBottom:'10px', fontSize:'13px', color:'#475569'}}>
-          Upload an Excel file (<code>.xlsx</code>, <code>.xls</code>) or CSV. Mobile number will become participant's default username & initial password set to <code>changeme</code>.
-        </p>
+        <div style={{background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:'10px', padding:'12px 16px', marginBottom:'14px'}}>
+          <strong style={{color:'#1e40af', fontSize:'13px', display:'block', marginBottom:'4px'}}>✨ Smart Merge & Duplicate Protection Active</strong>
+          <p style={{margin:0, fontSize:'12.5px', color:'#1e3a8a', lineHeight:1.4}}>
+            • If a delegate is <b>already registered</b> (matched by Reg No, Phone, or Email), the system <b>will not duplicate them</b>. Instead, it will update and enrich their profile with newly provided details (Hotel, Room Number, Liaison, Travel timings, University, etc.).<br/>
+            • New delegates will be automatically created with default password <code>Demo@123</code> and verified QR tokens.
+          </p>
+        </div>
 
         <div style={{marginBottom:'16px', padding:'16px', border:'2px dashed #cbd5e1', borderRadius:'12px', textAlign:'center', background:'#fafafa'}}>
           <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFile} id="excel-file-input" style={{display:'none'}} />
@@ -1500,20 +1542,279 @@ function Attendance({notify}){
 }
 
 function Meals({tab, notify}){
-  const[d,setD]=useState([]),[busy,setBusy]=useState(false),[showAdd,setShowAdd]=useState(false);
-  const load=async()=>{setBusy(true); try{const r=await req('/admin/meals?conferenceId=1');setD(r)}finally{setBusy(false)}};
+  const[subTab,setSubTab]=useState('schedule'),[d,setD]=useState([]),[busy,setBusy]=useState(false),[showAdd,setShowAdd]=useState(false);
+  const[selectedMeal,setSelectedMeal]=useState(''),[qrInput,setQrInput]=useState(''),[scanResult,setScanResult]=useState(null),[scans,setScans]=useState([]),[scanning,setScanning]=useState(false);
+  const[mealReports,setMealReports]=useState([]),[activeReportMeal,setActiveReportMeal]=useState('ALL');
+
+  const load=async()=>{
+    setBusy(true);
+    try{
+      const[r, liveScans]=await Promise.all([
+        req('/admin/meals?conferenceId=1'),
+        req('/admin/meals/live').catch(()=>[])
+      ]);
+      setD(r);
+      setScans(liveScans);
+      if(r.length && !selectedMeal) setSelectedMeal(String(r[0].id));
+    }finally{
+      setBusy(false);
+    }
+  };
+
   useEffect(()=>{load()},[]);
   useEffect(()=>{if(tab==='Schedule Meal')setShowAdd(true)},[tab]);
-  const save=async(v)=>{await req('/admin/meals',{method:'POST',body:JSON.stringify(v)}); notify('Meal scheduled'); setShowAdd(false); load();};
+
+  const handleScanSubmit = async (e) => {
+    if(e) e.preventDefault();
+    if(!qrInput.trim() || !selectedMeal) return;
+    setScanning(true);
+    setScanResult(null);
+    try {
+      const res = await req('/admin/meals/scan', {
+        method: 'POST',
+        body: JSON.stringify({ mealId: Number(selectedMeal), qrToken: qrInput.trim() })
+      });
+      setScanResult({
+        type: 'SUCCESS',
+        message: res.message || 'Food pass verified successfully!',
+        participant: res.data?.participant,
+        time: res.data?.scannedAt || new Date().toISOString()
+      });
+      notify('Food pass verified & redeemed!');
+      setQrInput('');
+      load();
+    } catch (err) {
+      setScanResult({
+        type: 'ERROR',
+        message: err.message || 'Verification failed. Please check delegate registration.'
+      });
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const exportMealReportCSV = () => {
+    if(!scans.length){alert('No meal redemption records to export'); return;}
+    const headers = ['ID', 'Delegate Name', 'Registration No', 'Category', 'University', 'Meal Type', 'Meal Date', 'Location', 'Redeemed At', 'Scanned By'];
+    const rows = scans.map(x => [
+      x.id,
+      `"${x.participant_name||''}"`,
+      `"${x.registration_no||''}"`,
+      `"${x.category||'Delegate'}"`,
+      `"${x.university||''}"`,
+      `"${x.meal_type||''}"`,
+      `"${x.meal_date||''}"`,
+      `"${x.location||''}"`,
+      `"${new Date(x.scanned_at).toLocaleString()}"`,
+      `"${x.scanned_by_name||'Admin'}"`
+    ]);
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const link = document.createElement('a');
+    link.setAttribute('href', encodeURI(csvContent));
+    link.setAttribute('download', `meal_pass_redemption_report_${new Date().toISOString().slice(0,10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const save=async(v)=>{
+    await req('/admin/meals',{method:'POST',body:JSON.stringify(v)});
+    notify('Meal scheduled');
+    setShowAdd(false);
+    load();
+  };
+
+  const currentMealObj = d.find(m => String(m.id) === String(selectedMeal));
+
   return <div className="panel">
-    <div className="pagehead"><div><h3>Meal Schedule</h3><p>Manage conference catering timeline and menu.</p></div><div className="actions"><button className="primary" onClick={()=>setShowAdd(true)}>+ Schedule Meal</button></div></div>
-    {d.map(x=><div className="rowcard" key={x.id}>
-      <div className="time">{toInputDate(x.meal_date)}<br/>{x.start_time} - {x.end_time}</div>
-      <div><b>{x.meal_type}</b><p>{x.location}</p></div>
-    </div>)}
-    {!d.length && !busy && <div style={{textAlign:'center',padding:'40px',color:'#888'}}>No meals scheduled yet. Click "+ Schedule Meal" to configure catering.</div>}
+    <div className="pagehead">
+      <div>
+        <h3>Meals & Food Pass Management</h3>
+        <p>Manage catering timelines, scan delegate food passes with duplicate prevention, and view redemption analytics.</p>
+      </div>
+      <div className="actions" style={{display:'flex', gap:'12px', alignItems:'center'}}>
+        <div style={{background:'var(--bg-app)', padding:'4px', borderRadius:'var(--radius-sm)', display:'flex', gap:'4px', border:'1px solid var(--border)'}}>
+          <button style={{padding:'6px 14px', fontSize:'13px', background:subTab==='schedule'?'var(--surface)':'transparent', color:subTab==='schedule'?'var(--primary)':'var(--text-muted)', border:0, boxShadow:subTab==='schedule'?'var(--shadow-sm)':'none', fontWeight:600}} onClick={()=>setSubTab('schedule')}>🍽️ Meal Schedule</button>
+          <button style={{padding:'6px 14px', fontSize:'13px', background:subTab==='scanner'?'var(--surface)':'transparent', color:subTab==='scanner'?'var(--primary)':'var(--text-muted)', border:0, boxShadow:subTab==='scanner'?'var(--shadow-sm)':'none', fontWeight:600}} onClick={()=>setSubTab('scanner')}>📷 Food Pass Scanner</button>
+          <button style={{padding:'6px 14px', fontSize:'13px', background:subTab==='reports'?'var(--surface)':'transparent', color:subTab==='reports'?'var(--primary)':'var(--text-muted)', border:0, boxShadow:subTab==='reports'?'var(--shadow-sm)':'none', fontWeight:600}} onClick={()=>setSubTab('reports')}>📊 Redemption Reports</button>
+        </div>
+        {subTab === 'schedule' && <button className="primary" onClick={()=>setShowAdd(true)}>+ Schedule Meal</button>}
+        {subTab === 'reports' && <button className="secondary" onClick={exportMealReportCSV}>📥 Export CSV</button>}
+      </div>
+    </div>
+
+    {subTab === 'schedule' && (
+      <div>
+        <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(300px, 1fr))', gap:'16px'}}>
+          {d.map(x=><div className="rowcard" key={x.id} style={{padding:'18px', display:'flex', flexDirection:'column', gap:'8px', border:'1px solid #e2e8f0', borderRadius:'12px', background:'#fff'}}>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start'}}>
+              <div>
+                <span className="pill" style={{background:'#8C1119', color:'#fff', fontWeight:700, fontSize:'11.5px'}}>{x.meal_type}</span>
+                <h4 style={{margin:'8px 0 2px', fontSize:'16px', color:'#1e293b'}}>{x.location || 'Sayaji Dining Hall'}</h4>
+              </div>
+              <div style={{textAlign:'right'}}>
+                <span style={{fontSize:'13px', fontWeight:800, color:'#047857'}}>{x.redeemed_count || 0} Redeemed</span>
+              </div>
+            </div>
+            <p style={{margin:0, fontSize:'13px', color:'#64748b'}}>
+              📅 {toInputDate(x.meal_date)} &nbsp;|&nbsp; ⏰ {x.start_time} - {x.end_time}
+            </p>
+            <div style={{marginTop:'8px', display:'flex', gap:'8px'}}>
+              <button className="secondary" style={{flex:1, fontSize:'12.5px', padding:'6px'}} onClick={()=>{setSelectedMeal(String(x.id)); setSubTab('scanner');}}>
+                📷 Open Scanner
+              </button>
+            </div>
+          </div>)}
+        </div>
+        {!d.length && !busy && <div style={{textAlign:'center',padding:'40px',color:'#888'}}>No meals scheduled yet. Click "+ Schedule Meal" to configure catering.</div>}
+      </div>
+    )}
+
+    {subTab === 'scanner' && (
+      <div className="split">
+        {/* Left Side: Scanner Control */}
+        <div className="panel scanner-panel" style={{background:'#fff', border:'1px solid #e2e8f0', borderRadius:'14px', padding:'20px'}}>
+          <div style={{marginBottom:'16px'}}>
+            <h4 style={{margin:'0 0 6px', fontSize:'16px', color:'#8C1119'}}>Live Food Pass Redemption Desk</h4>
+            <p style={{margin:0, fontSize:'13px', color:'#64748b'}}>Scan delegate QR codes or enter Registration / Phone numbers to issue meal passes.</p>
+          </div>
+
+          <form onSubmit={handleScanSubmit} className="formgrid">
+            <label className="field wide">
+              <span>Select Meal Session</span>
+              <select value={selectedMeal} onChange={e=>setSelectedMeal(e.target.value)} style={{padding:'10px', borderRadius:'8px', border:'1.5px solid #cbd5e1', fontWeight:700, fontSize:'14px'}}>
+                {d.map(m=><option key={m.id} value={m.id}>{m.meal_type} - {toInputDate(m.meal_date)} ({m.start_time} - {m.end_time}, {m.location})</option>)}
+              </select>
+            </label>
+
+            {currentMealObj && (
+              <div style={{background:'#fdf8f6', border:'1px solid #fed7aa', borderRadius:'10px', padding:'12px', gridColumn:'span 2', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                <div>
+                  <strong style={{color:'#9a3412', fontSize:'13.5px'}}>Active Counter: {currentMealObj.meal_type}</strong>
+                  <p style={{margin:'2px 0 0', fontSize:'12px', color:'#7c2d12'}}>{currentMealObj.location} &bull; {currentMealObj.start_time} - {currentMealObj.end_time}</p>
+                </div>
+                <div style={{background:'#fff', padding:'6px 12px', borderRadius:'8px', border:'1px solid #fdba74', fontWeight:800, color:'#c2410c'}}>
+                  {currentMealObj.redeemed_count || 0} Claimed
+                </div>
+              </div>
+            )}
+
+            <label className="field wide">
+              <span>Scan QR Code / Enter Reg No / Phone</span>
+              <input
+                type="text"
+                autoFocus
+                placeholder="Scan QR token, Reg No (e.g. DPU-0001), or Phone..."
+                value={qrInput}
+                onChange={e=>setQrInput(e.target.value)}
+                style={{padding:'12px', fontSize:'15px', borderRadius:'8px', border:'2px solid #8C1119', fontWeight:600}}
+              />
+            </label>
+
+            <button className="primary wide" type="submit" disabled={scanning || !qrInput.trim()} style={{padding:'12px', fontSize:'14.5px', fontWeight:800}}>
+              {scanning ? 'Verifying Food Pass...' : '✅ Verify & Redeem Pass'}
+            </button>
+          </form>
+
+          {/* Visual Scan Result Banner */}
+          {scanResult && (
+            <div style={{
+              marginTop:'18px',
+              padding:'16px',
+              borderRadius:'12px',
+              border: scanResult.type === 'SUCCESS' ? '2px solid #10b981' : scanResult.message.includes('ALREADY REDEEMED') ? '2px solid #f59e0b' : '2px solid #ef4444',
+              background: scanResult.type === 'SUCCESS' ? '#ecfdf5' : scanResult.message.includes('ALREADY REDEEMED') ? '#fffbeb' : '#fef2f2'
+            }}>
+              <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+                <span style={{fontSize:'24px'}}>{scanResult.type === 'SUCCESS' ? '🎉' : scanResult.message.includes('ALREADY REDEEMED') ? '⚠️' : '❌'}</span>
+                <div>
+                  <h4 style={{margin:0, fontSize:'15px', color: scanResult.type === 'SUCCESS' ? '#065f46' : scanResult.message.includes('ALREADY REDEEMED') ? '#92400e' : '#991b1b'}}>
+                    {scanResult.message}
+                  </h4>
+                  {scanResult.participant && (
+                    <p style={{margin:'4px 0 0', fontSize:'13px', color:'#334155'}}>
+                      <b>{scanResult.participant.name}</b> &bull; Reg: {scanResult.participant.registration_no} &bull; Category: <span className="pill small">{scanResult.participant.category||'Delegate'}</span>
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Right Side: Live Meal Scans Feed */}
+        <div className="panel scans-panel" style={{background:'#fff', border:'1px solid #e2e8f0', borderRadius:'14px', padding:'20px'}}>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'14px'}}>
+            <h4 style={{margin:0, fontSize:'16px', color:'#1e293b'}}>Live Food Pass Redemptions ({scans.length})</h4>
+            <button className="icon" onClick={load} title="Refresh Scans"><RefreshCw size={16}/></button>
+          </div>
+          <div className="scan-list" style={{maxHeight:'460px', overflowY:'auto', display:'flex', flexDirection:'column', gap:'8px'}}>
+            {scans.map(x=><div className="scan-item" key={x.id} style={{padding:'10px 14px', background:'#f8fafc', borderRadius:'10px', border:'1px solid #e2e8f0', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+              <div>
+                <b style={{fontSize:'14px', color:'#1e293b'}}>{x.participant_name}</b>
+                <p style={{margin:'2px 0 0', fontSize:'12.5px', color:'#64748b'}}>
+                  {x.registration_no} &bull; <span className="pill small" style={{background:'#e0e7ff', color:'#3730a3'}}>{x.category||'Delegate'}</span> &bull; {x.meal_type}
+                </p>
+              </div>
+              <div style={{textAlign:'right'}}>
+                <span style={{fontSize:'12px', fontWeight:700, color:'#059669', display:'block'}}>{new Date(x.scanned_at).toLocaleTimeString()}</span>
+                <small style={{fontSize:'11px', color:'#94a3b8'}}>{x.scanned_by_name || 'Admin Desk'}</small>
+              </div>
+            </div>)}
+            {!scans.length && <p style={{color:'#888', padding:'30px', textAlign:'center'}}>No meal scans recorded yet. Select a meal and scan delegate QR code.</p>}
+          </div>
+        </div>
+      </div>
+    )}
+
+    {subTab === 'reports' && (
+      <div>
+        <div style={{background:'#fff', padding:'18px', borderRadius:'12px', border:'1px solid #e2e8f0', marginBottom:'20px'}}>
+          <h4 style={{margin:'0 0 14px', fontSize:'16px', color:'#1e293b'}}>Meal Pass Redemption Summary</h4>
+          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(240px, 1fr))', gap:'16px'}}>
+            {d.map(m=><div key={m.id} style={{padding:'14px', background:'#f8fafc', borderRadius:'10px', border:'1px solid #e2e8f0'}}>
+              <div style={{display:'flex', justifyContent:'space-between', marginBottom:'6px'}}>
+                <strong style={{color:'#8C1119', fontSize:'14px'}}>{m.meal_type}</strong>
+                <span style={{fontSize:'12px', color:'#64748b'}}>{toInputDate(m.meal_date)}</span>
+              </div>
+              <div style={{display:'flex', justifyContent:'space-between', fontSize:'13px', margin:'8px 0'}}>
+                <span style={{color:'#64748b'}}>Total Redeemed:</span>
+                <strong style={{color:'#047857', fontSize:'14px'}}>{m.redeemed_count || 0} passes</strong>
+              </div>
+              <div style={{background:'#e2e8f0', borderRadius:'6px', height:'8px', overflow:'hidden'}}>
+                <div style={{background:'#8C1119', height:'100%', width:`${Math.min(100, Math.round(((m.redeemed_count||0)/Math.max(1, d.length*20))*100))}%`}}/>
+              </div>
+            </div>)}
+          </div>
+        </div>
+
+        <div className="tablewrap">
+          <table>
+            <thead>
+              <tr><th>Delegate Name & Reg No</th><th>Category</th><th>University</th><th>Meal Type</th><th>Meal Date & Time</th><th>Redeemed Timestamp</th><th>Scanned By</th></tr>
+            </thead>
+            <tbody>
+              {scans.map(x=><tr key={x.id}>
+                <td>
+                  <b>{x.participant_name}</b><br/>
+                  <small style={{color:'#64748b'}}>{x.registration_no}</small>
+                </td>
+                <td><span className="pill small">{x.category || 'Delegate'}</span></td>
+                <td>{x.university || '-'}</td>
+                <td><strong style={{color:'#8C1119'}}>{x.meal_type}</strong></td>
+                <td>{toInputDate(x.meal_date)} ({x.location || 'Dining Hall'})</td>
+                <td><span style={{color:'#059669', fontWeight:700}}>{new Date(x.scanned_at).toLocaleString()}</span></td>
+                <td>{x.scanned_by_name || 'Admin'}</td>
+              </tr>)}
+              {!scans.length && <tr><td colSpan="7" style={{textAlign:'center', padding:'30px', color:'#888'}}>No meal redemption logs found.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )}
+
     {showAdd && <MealModal onSave={save} onClose={()=>setShowAdd(false)}/>}
-  </div>
+  </div>;
 }
 
 function MealModal({onSave,onClose}){
@@ -1524,7 +1825,7 @@ function MealModal({onSave,onClose}){
     <Field type="time" label="Start Time" value={v.start_time} onChange={x=>set('start_time',x)}/>
     <Field type="time" label="End Time" value={v.end_time} onChange={x=>set('end_time',x)}/>
     <Field label="Location" value={v.location} onChange={x=>set('location',x)}/>
-  </div></div><div className="modal-footer"><button onClick={onClose}>Cancel</button><button className="primary" onClick={()=>onSave(v)}>Save</button></div></div></div>
+  </div></div><div className="modal-footer"><button onClick={onClose}>Cancel</button><button className="primary" onClick={()=>onSave(v)}>Save</button></div></div></div>;
 }
 
 function Duties({tab, notify}){
@@ -1588,7 +1889,6 @@ function DutyAssignmentModal({duties,users,onSave,onClose}){
   return <div className="modal-overlay"><div className="modal"><div className="modal-header"><h3>Assign Staff / Volunteer</h3><button className="close" onClick={onClose}>&times;</button></div><div className="modal-body"><div className="formgrid">
     <SelectField label="Duty" value={v.duty_id} onChange={x=>set('duty_id',x)} options={dutyOptions.map(o=>o.label)}/>
     <SelectField label="Staff / Volunteer" value={v.user_id} onChange={x=>set('user_id',x)} options={staffOptions.map(o=>o.label)}/>
-    <SelectField label="Status" value={v.status || 'ASSIGNED'} onChange={x=>set('status',x)} options={['ASSIGNED','CONFIRMED','COMPLETED','CANCELLED']}/>
   </div></div><div className="modal-footer"><button onClick={onClose}>Cancel</button><button className="primary" onClick={()=>{
     const selectedDuty = dutyOptions.find(o => o.label === v.duty_id);
     const selectedStaff = staffOptions.find(o => o.label === v.user_id);
@@ -1601,12 +1901,13 @@ function DutyAssignmentModal({duties,users,onSave,onClose}){
       user_id: parseInt(selectedStaff.value, 10),
       status: v.status || 'ASSIGNED'
     });
-  }}>Assign</button></div></div></div>
+  }}>Assign</button></div></div></div>;
 }
 
 function Certificates({tab, notify}){
   const[d,setD]=useState([]),[participants,setParticipants]=useState([]),[busy,setBusy]=useState(false),[showAdd,setShowAdd]=useState(false);
   const[subTab,setSubTab]=useState('issued');
+  const[certQ,setCertQ]=useState(''),[certCat,setCertCat]=useState('ALL');
   
   // Generator states
   const[template,setTemplate]=useState(null);
@@ -1677,13 +1978,42 @@ function Certificates({tab, notify}){
     (p.registration_no && p.registration_no.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
+  const categories = ['ALL', ...Array.from(new Set(d.map(x => x.category).filter(Boolean)))];
+
+  const filteredIssued = d.filter(x => {
+    const matchesQ = `${x.participant_name} ${x.registration_no} ${x.certificate_no} ${x.university||''}`.toLowerCase().includes(certQ.toLowerCase());
+    const matchesCat = certCat === 'ALL' || x.category === certCat;
+    return matchesQ && matchesCat;
+  });
+
+  const exportCertificatesCSV = () => {
+    if(!filteredIssued.length){alert('No certificates to export'); return;}
+    const headers = ['ID', 'Delegate Name', 'Registration No', 'Category', 'Certificate No', 'Issued At', 'Certificate URL'];
+    const rows = filteredIssued.map(x => [
+      x.id,
+      `"${x.participant_name||''}"`,
+      `"${x.registration_no||''}"`,
+      `"${x.category||'Delegate'}"`,
+      `"${x.certificate_no||''}"`,
+      `"${new Date(x.issued_at).toLocaleString()}"`,
+      `"${x.certificate_url ? resolveMediaUrl(x.certificate_url) : ''}"`
+    ]);
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const link = document.createElement('a');
+    link.setAttribute('href', encodeURI(csvContent));
+    link.setAttribute('download', `issued_certificates_roster_${new Date().toISOString().slice(0,10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleGenerate = async () => {
     if(!template) return alert('Please upload a template image first');
     if(!selectedIds.length) return alert('Please select at least one participant');
-    
+
     setGenerating(true);
     try {
-      await req('/admin/certificates/generate', {
+      const res = await req('/admin/certificates/generate', {
         method: 'POST',
         body: JSON.stringify({
           template,
@@ -1691,11 +2021,11 @@ function Certificates({tab, notify}){
           layout
         })
       });
-      notify(`Successfully generated ${selectedIds.length} certificates!`);
+      notify(`Successfully generated ${res.data?.count || selectedIds.length} certificates!`);
       setSelectedIds([]);
       setSubTab('issued');
       load();
-    } catch(e) {
+    } catch (e) {
       alert(e.message);
     } finally {
       setGenerating(false);
@@ -1706,50 +2036,68 @@ function Certificates({tab, notify}){
     <div className="pagehead">
       <div>
         <h3>Certificates</h3>
-        <p>Manage, issue, and verify conference participation certificates.</p>
+        <p>Manage, issue, and verify conference participation certificates ({filteredIssued.length} issued).</p>
       </div>
       <div className="actions" style={{display:'flex', gap:'12px', alignItems:'center'}}>
         <div style={{background:'var(--bg-app)', padding:'4px', borderRadius:'var(--radius-sm)', display:'flex', gap:'4px', border:'1px solid var(--border)'}}>
-          <button style={{padding:'6px 12px', fontSize:'13px', background:subTab==='issued'?'var(--surface)':'transparent', color:subTab==='issued'?'var(--primary)':'var(--text-muted)', border:0, boxShadow:subTab==='issued'?'var(--shadow-sm)':'none'}} onClick={()=>setSubTab('issued')}>Issued List</button>
-          <button style={{padding:'6px 12px', fontSize:'13px', background:subTab==='generate'?'var(--surface)':'transparent', color:subTab==='generate'?'var(--primary)':'var(--text-muted)', border:0, boxShadow:subTab==='generate'?'var(--shadow-sm)':'none'}} onClick={()=>setSubTab('generate')}>Bulk Generator</button>
+          <button style={{padding:'6px 12px', fontSize:'13px', background:subTab==='issued'?'var(--surface)':'transparent', color:subTab==='issued'?'var(--primary)':'var(--text-muted)', border:0, boxShadow:subTab==='issued'?'var(--shadow-sm)':'none', fontWeight:600}} onClick={()=>setSubTab('issued')}>Issued List ({d.length})</button>
+          <button style={{padding:'6px 12px', fontSize:'13px', background:subTab==='generate'?'var(--surface)':'transparent', color:subTab==='generate'?'var(--primary)':'var(--text-muted)', border:0, boxShadow:subTab==='generate'?'var(--shadow-sm)':'none', fontWeight:600}} onClick={()=>setSubTab('generate')}>Bulk Generator</button>
         </div>
+        {subTab === 'issued' && <button className="secondary" onClick={exportCertificatesCSV}>📥 Export CSV</button>}
         <button className="primary" onClick={()=>setShowAdd(true)}>+ Issue Single</button>
       </div>
     </div>
 
     {subTab === 'issued' ? (
-      <table>
-        <thead><tr><th>Participant</th><th>Certificate No</th><th>Issued At</th><th>Actions</th></tr></thead>
-        <tbody>
-          {d.map(x=><tr key={x.id}>
-            <td>
-              <b>{x.participant_name}</b>
-              {x.certificate_url && (
-                <span style={{marginLeft:'10px', fontSize:'12px'}}>
-                  [<a href={resolveMediaUrl(x.certificate_url)} target="_blank" rel="noopener noreferrer">View PNG</a>]
-                </span>
-              )}
-              <br/><small>{x.registration_no}</small>
-            </td>
-            <td><span className="pill" style={{background:'#2E6F95',color:'#fff'}}>{x.certificate_no}</span></td>
-            <td>{new Date(x.issued_at).toLocaleString()}</td>
-            <td>
-              <div style={{display:'flex', gap:'8px'}}>
-                <button className="secondary" style={{padding:'4px 10px', fontSize:'13px'}} onClick={()=>window.open(API.replace('/api','/certificates/verify/')+x.certificate_no,'_blank')}>Verify</button>
-                <button className="secondary" style={{padding:'4px 10px', fontSize:'13px', color:'var(--danger)', borderColor:'var(--danger-bg)'}} onClick={async()=>{
-                  if(confirm('Are you sure you want to delete this certificate?')){
-                    await req(`/admin/certificates/${x.id}`, {method:'DELETE'});
-                    load();
-                    notify('Certificate deleted successfully');
-                  }
-                }}>Delete</button>
-              </div>
-            </td>
-          </tr>)}
+      <div>
+        <div className="toolbar" style={{display:'flex', gap:'10px', alignItems:'center', background:'#f8fafc', padding:'10px 14px', borderRadius:'10px', border:'1px solid #e2e8f0', marginBottom:'16px'}}>
+          <div className="search" style={{flex:1, minWidth:'220px'}}>
+            <Search size={16}/>
+            <input value={certQ} onChange={e=>setCertQ(e.target.value)} placeholder="Filter by delegate name, reg no, certificate no..."/>
+          </div>
+          <div style={{display:'flex', gap:'6px', alignItems:'center'}}>
+            <small style={{fontWeight:600, color:'#64748b'}}>Category:</small>
+            <select value={certCat} onChange={e=>setCertCat(e.target.value)} style={{padding:'6px 10px', borderRadius:'6px', border:'1px solid #cbd5e1', fontSize:'13px'}}>
+              {categories.map(c=><option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <button onClick={load} disabled={busy} style={{padding:'6px 12px', fontSize:'12.5px'}}>{busy?'...':'Refresh'}</button>
+        </div>
 
-          {!d.length && !busy && <tr><td colSpan="4" style={{textAlign:'center',padding:'30px',color:'#888'}}>No certificates issued yet. Click "Bulk Generator" or "+ Issue Single" to generate one.</td></tr>}
-        </tbody>
-      </table>
+        <table>
+          <thead><tr><th>Participant & Reg No</th><th>Category</th><th>Certificate No</th><th>Issued At</th><th>Actions</th></tr></thead>
+          <tbody>
+            {filteredIssued.map(x=><tr key={x.id}>
+              <td>
+                <b>{x.participant_name}</b>
+                {x.certificate_url && (
+                  <span style={{marginLeft:'10px', fontSize:'12px'}}>
+                    [<a href={resolveMediaUrl(x.certificate_url)} target="_blank" rel="noopener noreferrer" style={{color:'#8C1119', fontWeight:700}}>View PNG</a>]
+                  </span>
+                )}
+                <br/><small style={{color:'#64748b'}}>{x.registration_no}</small>
+              </td>
+              <td><span className="pill small">{x.category || 'Delegate'}</span></td>
+              <td><span className="pill" style={{background:'#2E6F95',color:'#fff', fontWeight:700}}>{x.certificate_no}</span></td>
+              <td>{new Date(x.issued_at).toLocaleString()}</td>
+              <td>
+                <div style={{display:'flex', gap:'8px'}}>
+                  <button className="secondary" style={{padding:'4px 10px', fontSize:'13px'}} onClick={()=>window.open(API.replace('/api','/certificates/verify/')+x.certificate_no,'_blank')}>Verify</button>
+                  <button className="secondary" style={{padding:'4px 10px', fontSize:'13px', color:'var(--danger)', borderColor:'var(--danger-bg)'}} onClick={async()=>{
+                    if(confirm('Are you sure you want to delete this certificate?')){
+                      await req(`/admin/certificates/${x.id}`, {method:'DELETE'});
+                      load();
+                      notify('Certificate deleted successfully');
+                    }
+                  }}>Delete</button>
+                </div>
+              </td>
+            </tr>)}
+
+            {!filteredIssued.length && !busy && <tr><td colSpan="5" style={{textAlign:'center',padding:'30px',color:'#888'}}>No certificates found matching criteria. Click "Bulk Generator" or "+ Issue Single" to generate one.</td></tr>}
+          </tbody>
+        </table>
+      </div>
     ) : (
       <div style={{display:'grid', gridTemplateColumns:'1.2fr 1fr', gap:'24px', minHeight:'500px'}}>
         {/* Left Side: Upload & Design */}
@@ -2147,8 +2495,275 @@ function BulkPhotoModal({onSave,onClose,notify}){
   </div></div><div className="modal-footer"><button onClick={onClose}>Cancel</button><button className="primary" disabled={busy} onClick={handleBulkSubmit}>{busy?'Uploading & Indexing...':'Start AI Batch Indexing'}</button></div></div></div>
 }
 
+function FeedbackView({tab, notify}){
+  const[data,setData]=useState([]),[busy,setBusy]=useState(false),[search,setSearch]=useState(''),[selected,setSelected]=useState(null);
+  const load=async()=>{setBusy(true);try{const r=await req('/admin/feedback');setData(r||[])}catch(e){notify(e.message)}finally{setBusy(false)}};
+  useEffect(()=>{load()},[]);
+
+  const total = data.length;
+  const calcAvg = (key) => {
+    if(!total) return '0.0';
+    const sum = data.reduce((acc, x) => acc + Number(x[key] || 0), 0);
+    return (sum / total).toFixed(1);
+  };
+  const countMatch = (key, val) => {
+    if(!total) return 0;
+    return Math.round((data.filter(x => String(x[key]||'').toLowerCase() === String(val).toLowerCase()).length / total) * 100);
+  };
+
+  const filtered = data.filter(x => {
+    const q = search.toLowerCase();
+    return !search ||
+      (x.participant_name && x.participant_name.toLowerCase().includes(q)) ||
+      (x.registration_no && x.registration_no.toLowerCase().includes(q)) ||
+      (x.suggestions && x.suggestions.toLowerCase().includes(q)) ||
+      (x.comment && x.comment.toLowerCase().includes(q));
+  });
+
+  const exportCSV=()=>{
+    if(!data.length){alert('No feedback data to export');return}
+    const headers = [
+      'ID','Delegate Name','Registration No','Category','Email','Phone',
+      'Q1 Choice of Speakers',
+      'Q2 Thorough Exploration of Topic',
+      'Q3 Quality of Presentation',
+      'Q4 Usefulness of Topic',
+      'Q5 Evaluation of Programme',
+      'Q6 Adequate Discussion Time',
+      'Q7 Topics Covered Specialty',
+      'Q8 Understanding Improvement (1-5)',
+      'Q9 Arrangements Rating (1-5)',
+      'Q10 Registration Rating (1-5)',
+      'Q11 Overall Conduct Rating (1-5)',
+      'Q12 Audiovisuals Rating (1-5)',
+      'Q13 Food Arrangements Rating (1-5)',
+      'Q14 Suggestions',
+      'Submitted At'
+    ];
+    const rows = [headers.join(',')];
+    data.forEach(r => {
+      const vals = [
+        r.id,
+        `"${String(r.participant_name||'').replace(/"/g,'""')}"`,
+        `"${String(r.registration_no||'').replace(/"/g,'""')}"`,
+        `"${String(r.participant_category||'Delegate').replace(/"/g,'""')}"`,
+        `"${String(r.participant_email||'').replace(/"/g,'""')}"`,
+        `"${String(r.participant_phone||'').replace(/"/g,'""')}"`,
+        `"${String(r.choice_of_speakers||'Good').replace(/"/g,'""')}"`,
+        `"${String(r.thorough_exploration||'Good').replace(/"/g,'""')}"`,
+        `"${String(r.presentation_quality||'Good').replace(/"/g,'""')}"`,
+        `"${String(r.topic_usefulness||'Good').replace(/"/g,'""')}"`,
+        `"${String(r.programme_evaluation||'Good').replace(/"/g,'""')}"`,
+        `"${String(r.adequate_discussion_time||'Yes').replace(/"/g,'""')}"`,
+        `"${String(r.topics_covered_specialty||'Yes').replace(/"/g,'""')}"`,
+        r.understanding_improvement || r.rating || 5,
+        r.arrangements_rating || 5,
+        r.registration_rating || 5,
+        r.overall_conduct_rating || r.rating || 5,
+        r.audiovisuals_rating || 5,
+        r.food_arrangements_rating || 5,
+        `"${String(r.suggestions || r.comment || '').replace(/"/g,'""')}"`,
+        `"${String(r.created_at || '').replace(/"/g,'""')}"`
+      ];
+      rows.push(vals.join(','));
+    });
+    const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `CME_Feedback_Report_${Date.now()}.csv`;
+    a.click();
+    notify('Exported CME Feedback Report to CSV');
+  };
+
+  return <div className="panel">
+    <div className="pagehead">
+      <div>
+        <h3>CME & Conference Delegate Feedback</h3>
+        <p>Real-time analytics and responses for all 14 evaluation questions.</p>
+      </div>
+      <div className="actions">
+        <button className="primary" onClick={exportCSV}>📥 Export Feedback CSV</button>
+      </div>
+    </div>
+
+    {/* Metric Overview Cards */}
+    <div className="grid" style={{gridTemplateColumns:'repeat(auto-fill, minmax(220px, 1fr))',gap:'14px',marginBottom:'20px'}}>
+      <div className="stat"><MessageCircle color="#8C1119"/><span>Total Submissions</span><strong style={{color:'#8C1119'}}>{total}</strong></div>
+      <div className="stat"><CheckCircle color="#10b981"/><span>Overall Conduct</span><strong style={{color:'#10b981'}}>{calcAvg('overall_conduct_rating')} / 5.0</strong></div>
+      <div className="stat"><FileCheck color="#C8A45A"/><span>Understanding Impr.</span><strong style={{color:'#C8A45A'}}>{calcAvg('understanding_improvement')} / 5.0</strong></div>
+      <div className="stat"><Hotel color="#2E6F95"/><span>Arrangements</span><strong style={{color:'#2E6F95'}}>{calcAvg('arrangements_rating')} / 5.0</strong></div>
+      <div className="stat"><CalendarDays color="#6366f1"/><span>Food Rating</span><strong style={{color:'#6366f1'}}>{calcAvg('food_arrangements_rating')} / 5.0</strong></div>
+      <div className="stat"><Users color="#059669"/><span>AV of Sessions</span><strong style={{color:'#059669'}}>{calcAvg('audiovisuals_rating')} / 5.0</strong></div>
+    </div>
+
+    {/* Academic Evaluation Summary Breakdown */}
+    <div className="split" style={{marginBottom:'20px'}}>
+      <div className="panel" style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:'12px',padding:'16px'}}>
+        <h4 style={{margin:'0 0 12px',color:'#1e293b'}}>📊 Academic Evaluation Summary</h4>
+        <div style={{display:'flex',flexDirection:'column',gap:'10px',fontSize:'13px'}}>
+          <div style={{display:'flex',justifyContent:'space-between'}}>
+            <span>Choice of Speakers:</span>
+            <b>{countMatch('choice_of_speakers','Excellent')}% Excellent | {countMatch('choice_of_speakers','Good')}% Good</b>
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between'}}>
+            <span>Thorough Exploration of Topic:</span>
+            <b>{countMatch('thorough_exploration','Excellent')}% Excellent | {countMatch('thorough_exploration','Good')}% Good</b>
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between'}}>
+            <span>Quality of Presentation:</span>
+            <b>{countMatch('presentation_quality','Excellent')}% Excellent | {countMatch('presentation_quality','Good')}% Good</b>
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between'}}>
+            <span>Usefulness of Topic:</span>
+            <b>{countMatch('topic_usefulness','Excellent')}% Excellent | {countMatch('topic_usefulness','Good')}% Good</b>
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between'}}>
+            <span>Programme Evaluation (Overall):</span>
+            <b>{countMatch('programme_evaluation','Excellent')}% Excellent | {countMatch('programme_evaluation','Good')}% Good</b>
+          </div>
+        </div>
+      </div>
+
+      <div className="panel" style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:'12px',padding:'16px'}}>
+        <h4 style={{margin:'0 0 12px',color:'#1e293b'}}>⏱️ Session Engagement & Scale Ratings</h4>
+        <div style={{display:'flex',flexDirection:'column',gap:'10px',fontSize:'13px'}}>
+          <div style={{display:'flex',justifyContent:'space-between'}}>
+            <span>Adequate Time for Discussion:</span>
+            <b><span className="pill" style={{background:'#10b981',color:'#fff',padding:'2px 8px'}}>{countMatch('adequate_discussion_time','Yes')}% Yes</span></b>
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between'}}>
+            <span>Topics Covered Specialty Aspects:</span>
+            <b><span className="pill" style={{background:'#10b981',color:'#fff',padding:'2px 8px'}}>{countMatch('topics_covered_specialty','Yes')}% Yes</span></b>
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between'}}>
+            <span>Registration Desk Rating:</span>
+            <b>{calcAvg('registration_rating')} / 5.0 ⭐</b>
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between'}}>
+            <span>Audiovisuals of Sessions:</span>
+            <b>{calcAvg('audiovisuals_rating')} / 5.0 ⭐</b>
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between'}}>
+            <span>Food & Dining Arrangements:</span>
+            <b>{calcAvg('food_arrangements_rating')} / 5.0 ⭐</b>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* Search & Submissions Table */}
+    <div className="toolbar" style={{display:'flex',gap:'12px',alignItems:'center'}}>
+      <div style={{position:'relative',flex:1}}>
+        <input style={{width:'100%',padding:'9px 12px 9px 36px',border:'1px solid #cbd5e1',borderRadius:'8px'}} placeholder="Search delegate name, reg no, or suggestion keyword..." value={search} onChange={e=>setSearch(e.target.value)}/>
+        <Search size={16} style={{position:'absolute',left:'12px',top:'50%',transform:'translateY(-50%)',color:'#94a3b8'}}/>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Delegate</th>
+          <th>Speakers (Q1)</th>
+          <th>Exploration (Q2)</th>
+          <th>Quality (Q3)</th>
+          <th>Usefulness (Q4)</th>
+          <th>Discussion (Q6)</th>
+          <th>Avg Rating (Q8-13)</th>
+          <th>Suggestions (Q14)</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {filtered.map(r => {
+          const avg = ((
+            Number(r.understanding_improvement||5) +
+            Number(r.arrangements_rating||5) +
+            Number(r.registration_rating||5) +
+            Number(r.overall_conduct_rating||r.rating||5) +
+            Number(r.audiovisuals_rating||5) +
+            Number(r.food_arrangements_rating||5)
+          ) / 6).toFixed(1);
+          return <tr key={r.id}>
+            <td>
+              <b>{r.participant_name}</b><br/>
+              <small style={{color:'#64748b'}}>{r.registration_no} • {r.participant_category||'Delegate'}</small>
+            </td>
+            <td><span className="pill" style={{background:'#ecfdf5',color:'#065f46',border:'1px solid #a7f3d0'}}>{r.choice_of_speakers||'Good'}</span></td>
+            <td><span className="pill" style={{background:'#ecfdf5',color:'#065f46',border:'1px solid #a7f3d0'}}>{r.thorough_exploration||'Good'}</span></td>
+            <td><span className="pill" style={{background:'#ecfdf5',color:'#065f46',border:'1px solid #a7f3d0'}}>{r.presentation_quality||'Good'}</span></td>
+            <td><span className="pill" style={{background:'#ecfdf5',color:'#065f46',border:'1px solid #a7f3d0'}}>{r.topic_usefulness||'Good'}</span></td>
+            <td><span className="pill" style={{background:r.adequate_discussion_time==='No'?'#fef2f2':'#f0fdf4',color:r.adequate_discussion_time==='No'?'#991b1b':'#166534'}}>{r.adequate_discussion_time||'Yes'}</span></td>
+            <td><strong style={{color:'#8C1119'}}>{avg} / 5 ⭐</strong></td>
+            <td style={{maxWidth:'200px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+              {r.suggestions || r.comment || <em style={{color:'#94a3b8'}}>None</em>}
+            </td>
+            <td>
+              <button className="primary" style={{padding:'4px 10px',fontSize:'12px'}} onClick={()=>setSelected(r)}>View All 14</button>
+            </td>
+          </tr>
+        })}
+        {!filtered.length && !busy && <tr><td colSpan="9" style={{textAlign:'center',padding:'30px',color:'#888'}}>No feedback submissions match your filter.</td></tr>}
+      </tbody>
+    </table>
+
+    {/* Detail Modal for all 14 questions */}
+    {selected && <FeedbackDetailModal item={selected} onClose={()=>setSelected(null)}/>}
+  </div>
+}
+
+function FeedbackDetailModal({item, onClose}){
+  return <div className="modal-overlay">
+    <div className="modal" style={{maxWidth:'700px',maxHeight:'90vh',overflowY:'auto'}}>
+      <div className="modal-header">
+        <div>
+          <h3 style={{margin:0}}>Delegate Feedback Evaluation (All 14 Questions)</h3>
+          <p style={{margin:'4px 0 0',color:'#64748b',fontSize:'13px'}}>{item.participant_name} ({item.registration_no}) • {item.participant_category||'Delegate'}</p>
+        </div>
+        <button className="close" onClick={onClose}>&times;</button>
+      </div>
+      <div className="modal-body" style={{display:'flex',flexDirection:'column',gap:'14px',fontSize:'13.5px'}}>
+        <div style={{background:'#f8fafc',padding:'12px 16px',borderRadius:'10px',border:'1px solid #e2e8f0'}}>
+          <h4 style={{margin:'0 0 10px',color:'#8C1119'}}>1. Academic & Presentation Questions</h4>
+          <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+            <div><b>Q1. Choice of Speakers:</b> <span className="pill" style={{background:'#8C1119',color:'#fff',padding:'2px 8px'}}>{item.choice_of_speakers||'Good'}</span></div>
+            <div><b>Q2. Thorough exploration of topic:</b> <span className="pill" style={{background:'#8C1119',color:'#fff',padding:'2px 8px'}}>{item.thorough_exploration||'Good'}</span></div>
+            <div><b>Q3. Quality of Presentation:</b> <span className="pill" style={{background:'#8C1119',color:'#fff',padding:'2px 8px'}}>{item.presentation_quality||'Good'}</span></div>
+            <div><b>Q4. Usefulness of Topic:</b> <span className="pill" style={{background:'#8C1119',color:'#fff',padding:'2px 8px'}}>{item.topic_usefulness||'Good'}</span></div>
+            <div><b>Q5. Evaluation of programme as a whole:</b> <span className="pill" style={{background:'#8C1119',color:'#fff',padding:'2px 8px'}}>{item.programme_evaluation||'Good'}</span></div>
+            <div><b>Q6. Adequate time for discussion:</b> <span className="pill" style={{background:'#10b981',color:'#fff',padding:'2px 8px'}}>{item.adequate_discussion_time||'Yes'}</span></div>
+            <div><b>Q7. Topics covered important specialty aspects:</b> <span className="pill" style={{background:'#10b981',color:'#fff',padding:'2px 8px'}}>{item.topics_covered_specialty||'Yes'}</span></div>
+          </div>
+        </div>
+
+        <div style={{background:'#f8fafc',padding:'12px 16px',borderRadius:'10px',border:'1px solid #e2e8f0'}}>
+          <h4 style={{margin:'0 0 10px',color:'#8C1119'}}>2. Ratings & Arrangements (Scale 1 to 5)</h4>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
+            <div><b>Q8. Understanding Improvement:</b> <strong>{item.understanding_improvement||5} / 5 ⭐</strong></div>
+            <div><b>Q9. Arrangements by Organizers:</b> <strong>{item.arrangements_rating||5} / 5 ⭐</strong></div>
+            <div><b>Q10. Registration Process:</b> <strong>{item.registration_rating||5} / 5 ⭐</strong></div>
+            <div><b>Q11. Overall Conduct of CME:</b> <strong>{item.overall_conduct_rating||item.rating||5} / 5 ⭐</strong></div>
+            <div><b>Q12. Audiovisuals of Sessions:</b> <strong>{item.audiovisuals_rating||5} / 5 ⭐</strong></div>
+            <div><b>Q13. Food & Dining:</b> <strong>{item.food_arrangements_rating||5} / 5 ⭐</strong></div>
+          </div>
+        </div>
+
+        <div style={{background:'#f8fafc',padding:'12px 16px',borderRadius:'10px',border:'1px solid #e2e8f0'}}>
+          <h4 style={{margin:'0 0 8px',color:'#8C1119'}}>3. Q14. Suggestions (if any)</h4>
+          <p style={{margin:0,color:'#334155',background:'#fff',padding:'10px 14px',borderRadius:'8px',border:'1px solid #cbd5e1'}}>
+            {item.suggestions || item.comment || <em>No specific suggestions provided.</em>}
+          </p>
+        </div>
+      </div>
+      <div className="modal-footer">
+        <button className="primary" onClick={onClose}>Close</button>
+      </div>
+    </div>
+  </div>
+}
+
 function Reports({tab, notify}){
-  const reportMap={'Participant Reports':'participants','Attendance Reports':'attendance','Accommodation Reports':'accommodation','Transport Reports':'transport','Meal Reports':'meals','Certificate Reports':'certificates'};
+  const reportMap={'Participant Reports':'participants','Attendance Reports':'attendance','Accommodation Reports':'accommodation','Transport Reports':'transport','Meal Reports':'meals','Certificate Reports':'certificates','CME Feedback Reports':'feedback'};
   const initialType=reportMap[tab]||'participants';
   const[type,setType]=useState(initialType),[data,setData]=useState([]),[busy,setBusy]=useState(false);
   
@@ -2177,7 +2792,7 @@ function Reports({tab, notify}){
   return <div className="panel">
     <div className="pagehead"><div><h3>Conference Reports & Analytics</h3><p>Export operational data and attendee rosters to CSV / Excel.</p></div><div className="actions"><button className="primary" onClick={exportCSV}>📥 Export CSV</button></div></div>
     <div className="toolbar" style={{display:'flex',gap:'12px',alignItems:'center'}}>
-      <SelectField label="Select Report Category" value={type} onChange={setType} options={['participants','attendance','accommodation','transport','meals','certificates']}/>
+      <SelectField label="Select Report Category" value={type} onChange={setType} options={['participants','attendance','accommodation','transport','meals','certificates','feedback']}/>
     </div>
     <table>
       <thead><tr>{data[0] && Object.keys(data[0]).map(k=><th key={k}>{k.replace('_',' ').toUpperCase()}</th>)}</tr></thead>

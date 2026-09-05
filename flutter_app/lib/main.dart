@@ -381,10 +381,22 @@ class _AuthGateState extends State<AuthGate> {
 
   Future<void> _check() async {
     final p = await SharedPreferences.getInstance();
-    setState(() {
-      logged = p.getString('token') != null;
-      loading = false;
-    });
+    final token = p.getString('token');
+    if (token == null || token.isEmpty) {
+      if (mounted) setState(() { logged = false; loading = false; });
+      return;
+    }
+    try {
+      final res = await ApiService.get('/auth/me');
+      if (res != null && res is Map && res['id'] != null) {
+        if (mounted) setState(() { logged = true; loading = false; });
+        return;
+      }
+    } catch (_) {
+      await p.remove('token');
+      await p.remove('name');
+    }
+    if (mounted) setState(() { logged = false; loading = false; });
   }
 
   @override
@@ -4564,7 +4576,48 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     return const Center(child: CircularProgressIndicator(color: maroon));
                   }
                   if (s.hasError) {
-                    return const Center(child: Text('Unable to load profile'));
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.account_circle_outlined, size: 56, color: maroon),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'Delegate Profile',
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: slate),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              s.error.toString().contains('401')
+                                  ? 'Your session has expired. Please sign in again.'
+                                  : 'Unable to load profile. Please check your connection.',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(fontSize: 13, color: muted),
+                            ),
+                            const SizedBox(height: 18),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                OutlinedButton.icon(
+                                  icon: const Icon(Icons.refresh, size: 18),
+                                  label: const Text('Retry'),
+                                  onPressed: () => setState(() => _refreshKey++),
+                                ),
+                                const SizedBox(width: 12),
+                                ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(backgroundColor: maroon, foregroundColor: Colors.white),
+                                  icon: const Icon(Icons.login, size: 18),
+                                  label: const Text('Sign In'),
+                                  onPressed: logout,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
                   }
                   final x = s.data ?? {};
                   final photoUrl = _formatPhotoUrl(x['photo']);
@@ -5941,11 +5994,35 @@ class CertificateScreen extends StatefulWidget {
 }
 
 class _CertificateScreenState extends State<CertificateScreen> {
-  int _overallRating = 5;
-  int _contentRating = 5;
-  int _speakerRating = 5;
-  int _hospitalityRating = 5;
-  final TextEditingController _commentController = TextEditingController();
+  // 1. Choice of Speakers
+  String _choiceOfSpeakers = 'Excellent';
+  // 2. Did the CME and Conference provide a thorough exploration of the topic?
+  String _thoroughExploration = 'Excellent';
+  // 3. Quality of Presentation
+  String _qualityOfPresentation = 'Excellent';
+  // 4. Usefulness of Topic
+  String _usefulnessOfTopic = 'Excellent';
+  // 5. Evaluation of the programme as a whole
+  String _programmeEvaluation = 'Excellent';
+  // 6. Was there adequate time for discussion?
+  String _adequateDiscussionTime = 'Yes';
+  // 7. Were the topics selected cover important aspects of the specialty?
+  String _topicsCoveredSpecialty = 'Yes';
+  // 8. How would you rate the improvement of your understanding based on this session? (1-5)
+  int _understandingImprovement = 5;
+  // 9. Rate the arrangements made by the organizers : (1-5)
+  int _arrangementsRating = 5;
+  // 10. Registration : (1-5)
+  int _registrationRating = 5;
+  // 11. Overall conduct of the CME & Conference: (1-5)
+  int _overallConductRating = 5;
+  // 12. Audiovisuals of the sessions : (1-5)
+  int _audiovisualsRating = 5;
+  // 13. Food Arrangements : (1-5)
+  int _foodArrangementsRating = 5;
+  // 14. Suggestions (if any)
+  final TextEditingController _suggestionsController = TextEditingController();
+
   bool _isSubmitting = false;
   int _refreshKey = 0;
 
@@ -5961,22 +6038,30 @@ class _CertificateScreenState extends State<CertificateScreen> {
 
   Future<void> _submitFeedbackAndGenerate() async {
     setState(() => _isSubmitting = true);
+    final payload = {
+      'choiceOfSpeakers': _choiceOfSpeakers,
+      'thoroughExploration': _thoroughExploration,
+      'presentationQuality': _qualityOfPresentation,
+      'topicUsefulness': _usefulnessOfTopic,
+      'suggestions': _suggestionsController.text.trim(),
+      'programmeEvaluation': _programmeEvaluation,
+      'adequateDiscussionTime': _adequateDiscussionTime,
+      'topicsCoveredSpecialty': _topicsCoveredSpecialty,
+      'understandingImprovement': _understandingImprovement,
+      'arrangementsRating': _arrangementsRating,
+      'registrationRating': _registrationRating,
+      'overallConductRating': _overallConductRating,
+      'audiovisualsRating': _audiovisualsRating,
+      'foodArrangementsRating': _foodArrangementsRating,
+      'rating': _overallConductRating,
+      'comment': _suggestionsController.text.trim(),
+    };
+
     try {
       try {
-        await ApiService.post('/me/feedback-and-certificate', {
-          'rating': _overallRating,
-          'contentRating': _contentRating,
-          'speakerRating': _speakerRating,
-          'hospitalityRating': _hospitalityRating,
-          'comment': _commentController.text.trim(),
-        });
+        await ApiService.post('/me/feedback-and-certificate', payload);
       } catch (_) {
-        await ApiService.post('/me/feedback', {
-          'rating': _overallRating,
-          'contentRating': _contentRating,
-          'speakerRating': _speakerRating,
-          'comment': _commentController.text.trim(),
-        });
+        await ApiService.post('/me/feedback', payload);
       }
 
       if (mounted) {
@@ -5987,7 +6072,7 @@ class _CertificateScreenState extends State<CertificateScreen> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('🎉 Feedback recorded! Your official Certificate of Participation is ready.'),
+            content: Text('🎉 Feedback recorded! Your verified Certificate of Participation is now ready for download.'),
             backgroundColor: maroon,
             duration: Duration(seconds: 4),
           ),
@@ -6011,7 +6096,7 @@ class _CertificateScreenState extends State<CertificateScreen> {
     return Scaffold(
       backgroundColor: cream,
       appBar: AppBar(
-        title: const Text('Certificate of Participation', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+        title: const Text('CME & Conference Evaluation', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 17)),
         backgroundColor: maroon,
         elevation: 0,
         leading: IconButton(
@@ -6052,10 +6137,11 @@ class _CertificateScreenState extends State<CertificateScreen> {
     final regNo = participant?['registration_no'] ?? 'MAPCON-2026-DEL';
 
     return ListView(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       children: [
+        // Header Card
         Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               colors: [Color(0xFF8C1119), Color(0xFF5B0A0F)],
@@ -6082,17 +6168,17 @@ class _CertificateScreenState extends State<CertificateScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('VALEDICTORY EVALUATION', style: TextStyle(color: gold, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1)),
-                        Text('Unlock Your Certificate', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
+                        Text('VALEDICTORY CME FEEDBACK', style: TextStyle(color: gold, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                        Text('Delegate Feedback Form', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
                       ],
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
               const Text(
-                'Please fill this quick feedback form to automatically generate your verified Certificate of Participation.',
-                style: TextStyle(color: Color(0xFFF8FAFC), fontSize: 13, height: 1.4),
+                'Please submit your valuable evaluation to immediately generate & unlock your official Certificate of Participation.',
+                style: TextStyle(color: Color(0xFFF8FAFC), fontSize: 12.5, height: 1.4),
               ),
               const SizedBox(height: 12),
               Container(
@@ -6106,94 +6192,367 @@ class _CertificateScreenState extends State<CertificateScreen> {
                   children: [
                     const Icon(Icons.badge_outlined, color: gold, size: 18),
                     const SizedBox(width: 8),
-                    Text('$pName ($regNo)', style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold)),
+                    Expanded(
+                      child: Text('$pName ($regNo)', style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+                    ),
                   ],
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 20),
-        Card(
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: BorderSide(color: Colors.grey.shade200, width: 1.2),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
+        const SizedBox(height: 18),
+
+        // Section 1: Academic & Speaker Evaluation
+        _buildCardSection(
+          icon: Icons.school_rounded,
+          title: '1. Academic & Presentation Quality',
+          subtitle: 'Evaluate topics, speakers, and discussions',
+          children: [
+            _buildChoiceQuestion(
+              questionNumber: '1',
+              title: 'Choice of Speakers',
+              options: const ['Excellent', 'Good', 'Average'],
+              selectedValue: _choiceOfSpeakers,
+              onChanged: (val) => setState(() => _choiceOfSpeakers = val),
+            ),
+            const Divider(height: 28),
+            _buildChoiceQuestion(
+              questionNumber: '2',
+              title: 'Did the CME and Conference provide a thorough exploration of the topic?',
+              options: const ['Excellent', 'Good', 'Average'],
+              selectedValue: _thoroughExploration,
+              onChanged: (val) => setState(() => _thoroughExploration = val),
+            ),
+            const Divider(height: 28),
+            _buildChoiceQuestion(
+              questionNumber: '3',
+              title: 'Quality of Presentation',
+              options: const ['Excellent', 'Good', 'Average'],
+              selectedValue: _qualityOfPresentation,
+              onChanged: (val) => setState(() => _qualityOfPresentation = val),
+            ),
+            const Divider(height: 28),
+            _buildChoiceQuestion(
+              questionNumber: '4',
+              title: 'Usefulness of Topic',
+              options: const ['Excellent', 'Good', 'Average'],
+              selectedValue: _usefulnessOfTopic,
+              onChanged: (val) => setState(() => _usefulnessOfTopic = val),
+            ),
+            const Divider(height: 28),
+            _buildChoiceQuestion(
+              questionNumber: '5',
+              title: 'Evaluation of the programme as a whole',
+              options: const ['Excellent', 'Good', 'Average'],
+              selectedValue: _programmeEvaluation,
+              onChanged: (val) => setState(() => _programmeEvaluation = val),
+            ),
+            const Divider(height: 28),
+            _buildChoiceQuestion(
+              questionNumber: '6',
+              title: 'Was there adequate time for discussion?',
+              options: const ['Yes', 'No'],
+              selectedValue: _adequateDiscussionTime,
+              onChanged: (val) => setState(() => _adequateDiscussionTime = val),
+            ),
+            const Divider(height: 28),
+            _buildChoiceQuestion(
+              questionNumber: '7',
+              title: 'Were the topics selected cover important aspects of the specialty?',
+              options: const ['Yes', 'No'],
+              selectedValue: _topicsCoveredSpecialty,
+              onChanged: (val) => setState(() => _topicsCoveredSpecialty = val),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 18),
+
+        // Section 2: Ratings & Organisation (1 to 5)
+        _buildCardSection(
+          icon: Icons.star_half_rounded,
+          title: '2. Ratings & Arrangements (Scale 1 to 5)',
+          subtitle: '1 = Poor, 5 = Outstanding',
+          children: [
+            _buildScaleRatingQuestion(
+              questionNumber: '8',
+              title: 'How would you rate the improvement of your understanding based on this session?',
+              currentValue: _understandingImprovement,
+              onChanged: (val) => setState(() => _understandingImprovement = val),
+            ),
+            const Divider(height: 28),
+            _buildScaleRatingQuestion(
+              questionNumber: '9',
+              title: 'Rate the arrangements made by the organizers :',
+              currentValue: _arrangementsRating,
+              onChanged: (val) => setState(() => _arrangementsRating = val),
+            ),
+            const Divider(height: 28),
+            _buildScaleRatingQuestion(
+              questionNumber: '10',
+              title: 'Registration :',
+              currentValue: _registrationRating,
+              onChanged: (val) => setState(() => _registrationRating = val),
+            ),
+            const Divider(height: 28),
+            _buildScaleRatingQuestion(
+              questionNumber: '11',
+              title: 'Overall conduct of the CME & Conference :',
+              currentValue: _overallConductRating,
+              onChanged: (val) => setState(() => _overallConductRating = val),
+            ),
+            const Divider(height: 28),
+            _buildScaleRatingQuestion(
+              questionNumber: '12',
+              title: 'Audiovisuals of the sessions :',
+              currentValue: _audiovisualsRating,
+              onChanged: (val) => setState(() => _audiovisualsRating = val),
+            ),
+            const Divider(height: 28),
+            _buildScaleRatingQuestion(
+              questionNumber: '13',
+              title: 'Food Arrangements :',
+              currentValue: _foodArrangementsRating,
+              onChanged: (val) => setState(() => _foodArrangementsRating = val),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 18),
+
+        // Section 3: Suggestions
+        _buildCardSection(
+          icon: Icons.edit_note_rounded,
+          title: '3. Suggestions & Remarks',
+          subtitle: 'Suggestions (if any)',
+          children: [
+            Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Conference Evaluation & Ratings', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: slate)),
-                const SizedBox(height: 4),
-                const Text('Rate each aspect on a scale of 1 to 5 stars:', style: TextStyle(fontSize: 12.5, color: muted)),
-                const SizedBox(height: 18),
-                _buildStarRatingRow(title: '1. Overall Conference Experience', subtitle: 'Coordination, schedule & impression', currentValue: _overallRating, onChanged: (val) => setState(() => _overallRating = val)),
-                const Divider(height: 24),
-                _buildStarRatingRow(title: '2. Scientific Sessions & Keynotes', subtitle: 'Relevance of pathology tracks', currentValue: _contentRating, onChanged: (val) => setState(() => _contentRating = val)),
-                const Divider(height: 24),
-                _buildStarRatingRow(title: '3. Speakers & Academic Content', subtitle: 'Faculty expertise & interaction', currentValue: _speakerRating, onChanged: (val) => setState(() => _speakerRating = val)),
-                const Divider(height: 24),
-                _buildStarRatingRow(title: '4. Venue & Hospitality', subtitle: 'Comfort, meals, & reception', currentValue: _hospitalityRating, onChanged: (val) => setState(() => _hospitalityRating = val)),
-                const Divider(height: 24),
-                const Text('Suggestions & Key Takeaways (Optional)', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: slate)),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _commentController,
-                  maxLines: 3,
-                  decoration: InputDecoration(
-                    hintText: 'Share your feedback...',
-                    hintStyle: const TextStyle(fontSize: 12.5, color: muted),
-                    filled: true,
-                    fillColor: const Color(0xFFF8FAFC),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
-                    contentPadding: const EdgeInsets.all(14),
-                  ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(color: maroon.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+                  child: const Text('Q14', style: TextStyle(color: maroon, fontWeight: FontWeight.bold, fontSize: 11)),
                 ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: maroon,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      elevation: 3,
-                    ),
-                    icon: _isSubmitting
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : const Icon(Icons.auto_awesome, color: gold, size: 22),
-                    label: Text(_isSubmitting ? 'Generating Certificate...' : 'Submit Feedback & Generate Certificate', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900)),
-                    onPressed: _isSubmitting ? null : _submitFeedbackAndGenerate,
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text('Suggestions (if any) *', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: slate)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _suggestionsController,
+              maxLines: 3,
+              decoration: InputDecoration(
+                hintText: 'Enter your suggestions or comments for future CME & Conferences...',
+                hintStyle: const TextStyle(fontSize: 12.5, color: muted),
+                filled: true,
+                fillColor: const Color(0xFFF8FAFC),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: maroon, width: 1.5)),
+                contentPadding: const EdgeInsets.all(14),
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 24),
+
+        // Submit Button
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: maroon,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              elevation: 4,
+            ),
+            icon: _isSubmitting
+                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : const Icon(Icons.workspace_premium_rounded, color: gold, size: 22),
+            label: Text(
+              _isSubmitting ? 'Generating Certificate...' : 'Submit Feedback & Unlock Certificate',
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+            ),
+            onPressed: _isSubmitting ? null : _submitFeedbackAndGenerate,
+          ),
+        ),
+        const SizedBox(height: 30),
+      ],
+    );
+  }
+
+  Widget _buildCardSection({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required List<Widget> children,
+  }) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: Colors.grey.shade200, width: 1.2),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(color: maroon.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
+                  child: Icon(icon, color: maroon, size: 20),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: slate)),
+                      Text(subtitle, style: const TextStyle(fontSize: 11.5, color: muted)),
+                    ],
                   ),
                 ),
               ],
             ),
-          ),
+            const SizedBox(height: 16),
+            ...children,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChoiceQuestion({
+    required String questionNumber,
+    required String title,
+    required List<String> options,
+    required String selectedValue,
+    required ValueChanged<String> onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(color: maroon.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+              child: Text('Q$questionNumber', style: const TextStyle(color: maroon, fontWeight: FontWeight.bold, fontSize: 11)),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '$title *',
+                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: slate, height: 1.3),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: options.map((opt) {
+            final isSelected = selectedValue.toLowerCase() == opt.toLowerCase();
+            return ChoiceChip(
+              label: Text(opt),
+              selected: isSelected,
+              selectedColor: maroon,
+              backgroundColor: const Color(0xFFF1F5F9),
+              labelStyle: TextStyle(
+                color: isSelected ? Colors.white : const Color(0xFF334155),
+                fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
+                fontSize: 12.5,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+                side: BorderSide(color: isSelected ? maroon : Colors.grey.shade300),
+              ),
+              onSelected: (selected) {
+                if (selected) onChanged(opt);
+              },
+            );
+          }).toList(),
         ),
       ],
     );
   }
 
-  Widget _buildStarRatingRow({required String title, required String subtitle, required int currentValue, required ValueChanged<int> onChanged}) {
+  Widget _buildScaleRatingQuestion({
+    required String questionNumber,
+    required String title,
+    required int currentValue,
+    required ValueChanged<int> onChanged,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5, color: slate)),
-        const SizedBox(height: 2),
-        Text(subtitle, style: const TextStyle(fontSize: 11.5, color: muted)),
-        const SizedBox(height: 8),
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(color: maroon.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+              child: Text('Q$questionNumber', style: const TextStyle(color: maroon, fontWeight: FontWeight.bold, fontSize: 11)),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '$title *',
+                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: slate, height: 1.3),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: List.generate(5, (index) {
-            final starNum = index + 1;
-            final isFilled = starNum <= currentValue;
-            return GestureDetector(
-              onTap: () => onChanged(starNum),
-              child: Padding(
-                padding: const EdgeInsets.only(right: 6),
-                child: Icon(isFilled ? Icons.star_rounded : Icons.star_outline_rounded, color: isFilled ? const Color(0xFFF59E0B) : Colors.grey.shade400, size: 32),
+            final val = index + 1;
+            final isSelected = currentValue == val;
+            return Expanded(
+              child: GestureDetector(
+                onTap: () => onChanged(val),
+                child: Container(
+                  margin: EdgeInsets.only(right: index == 4 ? 0 : 6),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isSelected ? maroon : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isSelected ? maroon : Colors.grey.shade300,
+                      width: isSelected ? 1.5 : 1,
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.star_rounded,
+                        color: isSelected ? gold : (val <= currentValue ? const Color(0xFFF59E0B) : Colors.grey.shade400),
+                        size: 18,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '$val',
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : const Color(0xFF334155),
+                          fontWeight: FontWeight.w900,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             );
           }),
