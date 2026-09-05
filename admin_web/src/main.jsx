@@ -5,7 +5,7 @@ import {QRCodeSVG} from 'qrcode.react';
 import * as XLSX from 'xlsx';
 import './style.css';
 
-const API=import.meta.env.VITE_API_URL||'http://localhost:5000/api';
+const API=import.meta.env.VITE_API_URL||(typeof window!=='undefined'&&window.location.hostname.includes('dypesconf.io')?'https://api.dypesconf.io/api':'http://localhost:5000/api');
 const emptyConference={name:'',shortName:'',description:'',welcomeMessage:'',aboutConference:'',startDate:'',endDate:'',registrationStartDate:'',registrationEndDate:'',contactPerson:'',contactPhone:'',contactEmail:'',website:'',organizer:'',hostInstitution:'',theme:'',status:'ACTIVE'};
 const emptyVenue={name:'',address:'',city:'',state:'',country:'',pincode:'',latitude:'',longitude:'',googleMapsUrl:'',parkingInformation:'',directions:'',contactNumber:''};
 const emptyBranding={logoUrl:'',organizerLogoUrl:'',bannerUrl:'',splashScreenUrl:'',faviconUrl:'',primaryColor:'#8C1119',secondaryColor:'#C8A45A',accentColor:'#2E6F95',backgroundColor:'#FCFAF5'};

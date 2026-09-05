@@ -4,6 +4,7 @@ const String _envBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 
 
 String get apiBaseUrl {
   if (_envBaseUrl.isNotEmpty) return _envBaseUrl;
+  if (kReleaseMode) return 'https://api.dypesconf.io/api';
   if (kIsWeb) return 'http://localhost:5000/api';
   if (defaultTargetPlatform == TargetPlatform.android) return 'http://10.0.2.2:5000/api';
   return 'http://localhost:5000/api';
