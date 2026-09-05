@@ -53,6 +53,19 @@ async function runMigrations(){
         FOREIGN KEY(conference_id) REFERENCES conferences(id) ON DELETE CASCADE
       )
     `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS feedback (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        participant_id INT NOT NULL,
+        session_id INT NULL,
+        rating TINYINT NOT NULL DEFAULT 5,
+        content_rating TINYINT DEFAULT 5,
+        speaker_rating TINYINT DEFAULT 5,
+        comment TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(participant_id) REFERENCES participants(id) ON DELETE CASCADE
+      )
+    `);
     const [fbCols]=await pool.query("SHOW COLUMNS FROM feedback LIKE 'session_id'");
     if(fbCols.length && fbCols[0].Null === 'NO'){
       await pool.query("ALTER TABLE feedback MODIFY COLUMN session_id INT NULL");
