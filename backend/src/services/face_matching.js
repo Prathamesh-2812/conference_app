@@ -1,4 +1,11 @@
 import sharp from 'sharp';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const uploadRoot = path.resolve(__dirname, '..', '..', 'uploads');
 
 /**
  * Industrial AI Visual & Face Recognition Engine (Powered by Sharp C++ Decoders)
@@ -28,7 +35,7 @@ export function cosineSimilarity(vecA, vecB) {
   return isNaN(sim) ? 0 : Math.max(-1, Math.min(1, sim));
 }
 
-// Generate normalized 256-dimensional visual embedding vector from any image buffer/base64/dataUrl
+// Generate normalized 256-dimensional visual embedding vector from any image buffer/base64/dataUrl/local filepath
 export async function extractFaceEmbedding(imageData) {
   if (!imageData) return new Array(256).fill(0);
 
@@ -36,20 +43,44 @@ export async function extractFaceEmbedding(imageData) {
   if (Buffer.isBuffer(imageData)) {
     rawBuffer = imageData;
   } else if (typeof imageData === 'string') {
-    if (imageData.startsWith('http://') || imageData.startsWith('https://')) {
+    const str = imageData.trim();
+    if (str.startsWith('http://') || str.startsWith('https://')) {
       try {
-        const resp = await fetch(imageData);
+        const resp = await fetch(str);
         const ab = await resp.arrayBuffer();
         rawBuffer = Buffer.from(ab);
       } catch (_) {
-        rawBuffer = Buffer.from(imageData);
+        rawBuffer = Buffer.from(str);
       }
-    } else {
-      const clean = imageData.replace(/^data:image\/[a-zA-Z0-9+]+;base64,/, '');
+    } else if (str.startsWith('/uploads/') || str.startsWith('uploads/')) {
+      const rel = str.replace(/^\/?uploads\//, '');
+      const localFile = path.join(uploadRoot, rel);
+      if (fs.existsSync(localFile)) {
+        try {
+          rawBuffer = fs.readFileSync(localFile);
+        } catch (_) {}
+      }
+      if (!rawBuffer) rawBuffer = Buffer.from(str);
+    } else if (str.startsWith('data:image/')) {
+      const clean = str.replace(/^data:image\/[a-zA-Z0-9+]+;base64,/, '');
       try {
         rawBuffer = Buffer.from(clean, 'base64');
       } catch (_) {
-        rawBuffer = Buffer.from(imageData);
+        rawBuffer = Buffer.from(str);
+      }
+    } else {
+      // Check if it is a raw base64 string or file path
+      if (fs.existsSync(str)) {
+        try {
+          rawBuffer = fs.readFileSync(str);
+        } catch (_) {}
+      }
+      if (!rawBuffer) {
+        try {
+          rawBuffer = Buffer.from(str, 'base64');
+        } catch (_) {
+          rawBuffer = Buffer.from(str);
+        }
       }
     }
   } else {

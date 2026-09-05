@@ -1,6 +1,6 @@
 import React,{useEffect,useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import {Bell,Building2,Bus,CalendarDays,CheckCircle,ChevronDown,FileCheck,Hotel,Image,LayoutDashboard,Lock,LogOut,MapPin,Palette,RefreshCw,Search,Settings,Shield,Upload,Users,QrCode,Maximize2,Minimize2,Printer,Tv,UserCheck} from 'lucide-react';
+import {Bell,Building2,Bus,CalendarDays,CheckCircle,ChevronDown,FileCheck,Hotel,Image,LayoutDashboard,Lock,LogOut,MapPin,Palette,RefreshCw,Search,Settings,Shield,Upload,Users,QrCode,Maximize2,Minimize2,Printer,Tv,UserCheck,MessageCircle,Send,Share2} from 'lucide-react';
 import {QRCodeSVG} from 'qrcode.react';
 import './style.css';
 
@@ -138,7 +138,7 @@ function FormShell({icon:Icon,title,description,children,onSave,onReset,preview}
 function BrandPreview({branding}){return <div className="brandpreview" style={{background:branding.backgroundColor||'#FCFAF5',borderColor:branding.primaryColor||'#8C1119'}}>{branding.bannerUrl&&<img src={branding.bannerUrl.startsWith('/uploads')?API.replace('/api','')+branding.bannerUrl:branding.bannerUrl} alt="Conference banner"/>}<div><span style={{color:branding.accentColor}}>Live Preview</span><strong style={{color:branding.primaryColor}}>Mobile conference branding</strong><small style={{color:branding.secondaryColor}}>Logo, banner, and colors are API driven.</small></div></div>}
 
 function Participants({tab, notify}){
-  const[d,setD]=useState([]),[q,setQ]=useState(''),[statusFilter,setStatusFilter]=useState('ALL'),[catFilter,setCatFilter]=useState('ALL'),[busy,setBusy]=useState(false),[edit,setEdit]=useState(null),[importModal,setImportModal]=useState(false),[qrModal,setQrModal]=useState(null),[liaisons,setLiaisons]=useState([]);
+  const[d,setD]=useState([]),[q,setQ]=useState(''),[statusFilter,setStatusFilter]=useState('ALL'),[catFilter,setCatFilter]=useState('ALL'),[appFilter,setAppFilter]=useState('ALL'),[busy,setBusy]=useState(false),[edit,setEdit]=useState(null),[importModal,setImportModal]=useState(false),[qrModal,setQrModal]=useState(null),[liaisons,setLiaisons]=useState([]),[whatsappModal,setWhatsappModal]=useState(false);
   
   const load=async()=>{
     setBusy(true);
@@ -155,17 +155,33 @@ function Participants({tab, notify}){
   };
   
   useEffect(()=>{load()},[]);
-  useEffect(()=>{if(tab==='Add Participant')setEdit({})},[tab]);
+  useEffect(()=>{
+    if(tab==='Add Participant') setEdit({});
+    if(tab==='Import Participants') setImportModal(true);
+  },[tab]);
 
   const filtered=d.filter(x=>{
     const matchesQ=`${x.name} ${x.email} ${x.registration_no} ${x.university}`.toLowerCase().includes(q.toLowerCase());
     const matchesStatus=statusFilter==='ALL'||x.status===statusFilter;
     const matchesCat=catFilter==='ALL'||x.category===catFilter;
-    return matchesQ && matchesStatus && matchesCat;
+    const matchesApp=appFilter==='ALL'||(appFilter==='NEVER_OPENED' && !x.last_login_at)||(appFilter==='LOGGED_IN' && !!x.last_login_at);
+    return matchesQ && matchesStatus && matchesCat && matchesApp;
   });
 
   const categories=['ALL',...Array.from(new Set(d.map(x=>x.category).filter(Boolean)))];
   const statuses=['ALL','PENDING','APPROVED','CHECKED_IN','CANCELLED'];
+
+  const sendWhatsAppToSingle = (x) => {
+    let phone = (x.phone || '').replace(/[^0-9]/g, '');
+    if (phone.length === 10) phone = '91' + phone;
+    if (!phone) {
+      alert(`No phone number available for ${x.name}`);
+      return;
+    }
+    const appUrl = window.location.origin.replace(':5173', ':3000');
+    const msg = `Namaste Dr./Prof. ${x.name}! 🙏\n\nWelcome to *MAPCON 2026* (Annual State Conference at Hotel Sayaji, Kolhapur).\n\n📌 *Your Delegate Registration Details:*\n• *Registration No:* ${x.registration_no || 'MAPCON-2026-DEL'}\n• *Category:* ${x.category || 'Delegate'}\n• *Login Email:* ${x.email}\n• *Default Password:* Demo@123\n\n📲 *Access Conference App & Live Schedule:*\n${appUrl}\n\nKindly login to the app to access your QR Gate Pass, Scientific Session Schedule, Meal Coupons, and Verified Certificate.\n\nFor any query, contact our Secretarial Desk.\n_MAPCON 2026 Organizing Committee_`;
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+  };
 
   const save=async(v)=>{
     const method=v.id?'PUT':'POST';
@@ -185,7 +201,7 @@ function Participants({tab, notify}){
 
   const exportCSV=()=>{
     if(!filtered.length){alert('No participants to export');return}
-    const headers=['ID','Registration No','Name','Email','Phone','Designation','University','Category','Status','Payment Status','Mode of Travel','Flight No','Arrival Date','Arrival Time','Departure Date','Departure Time','Liaison Officer'];
+    const headers=['ID','Registration No','Name','Email','Phone','Designation','University','Category','Status','App Status','Payment Status','Mode of Travel','Flight No','Arrival Date','Arrival Time','Departure Date','Departure Time','Liaison Officer'];
     const rows=filtered.map(x=>[
       x.id,
       `"${x.registration_no||''}"`,
@@ -196,6 +212,7 @@ function Participants({tab, notify}){
       `"${x.university||''}"`,
       `"${x.category||''}"`,
       `"${x.status||''}"`,
+      `"${x.last_login_at?'Active (Logged In)':'Never Opened App'}"`,
       `"${x.payment_status||''}"`,
       `"${x.mode_of_travel||''}"`,
       `"${x.flight_number||''}"`,
@@ -214,10 +231,21 @@ function Participants({tab, notify}){
     document.body.removeChild(link);
   };
 
+  const neverOpenedCount = d.filter(x => !x.last_login_at).length;
+  const activeCount = d.filter(x => !!x.last_login_at).length;
+
   return <div className="panel">
     <div className="pagehead">
-      <div><h3>Participants Directory</h3><p>Manage registrations, travel plans, liaison allocations, and QR passes ({filtered.length} shown).</p></div>
+      <div>
+        <h3>Participants Directory</h3>
+        <p>
+          Manage registrations, travel plans, liaison allocations, WhatsApp reminders and QR passes ({filtered.length} shown).
+          &nbsp;&bull;&nbsp;<span style={{color:'#dc2626',fontWeight:700}}>🔴 Never Opened App: {neverOpenedCount}</span>
+          &nbsp;&bull;&nbsp;<span style={{color:'#16a34a',fontWeight:700}}>🟢 App Active: {activeCount}</span>
+        </p>
+      </div>
       <div className="actions">
+        <button className="secondary" style={{borderColor:'#16a34a',color:'#16a34a',fontWeight:600}} onClick={()=>setWhatsappModal(true)}>📲 WhatsApp Inactive Delegates</button>
         <button className="secondary" onClick={exportCSV}>Export CSV</button>
         <button className="secondary" onClick={()=>setImportModal(true)}>Import CSV</button>
         <button onClick={()=>setEdit({})}>+ Add Participant</button>
@@ -226,6 +254,14 @@ function Participants({tab, notify}){
     
     <div className="toolbar" style={{display:'flex',gap:'10px',flexWrap:'wrap',alignItems:'center'}}>
       <div className="search" style={{flex:1,minWidth:'220px'}}><Search size={18}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search name, email, reg no, university..."/></div>
+      <div style={{display:'flex',gap:'6px',alignItems:'center'}}>
+        <small style={{fontWeight:600}}>App Usage:</small>
+        <select value={appFilter} onChange={e=>setAppFilter(e.target.value)} style={{padding:'6px 10px',borderRadius:'6px',border:'1px solid #ccc',fontWeight:600,color:appFilter==='NEVER_OPENED'?'#dc2626':appFilter==='LOGGED_IN'?'#16a34a':'#333'}}>
+          <option value="ALL">All Delegates ({d.length})</option>
+          <option value="NEVER_OPENED">🔴 Never Opened App ({neverOpenedCount})</option>
+          <option value="LOGGED_IN">🟢 App Logged In ({activeCount})</option>
+        </select>
+      </div>
       <div style={{display:'flex',gap:'6px',alignItems:'center'}}>
         <small style={{fontWeight:600}}>Status:</small>
         <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} style={{padding:'6px 10px',borderRadius:'6px',border:'1px solid #ccc'}}>
@@ -244,7 +280,7 @@ function Participants({tab, notify}){
     <div className="tablewrap">
       <table>
         <thead>
-          <tr><th>Reg No & Pass</th><th>Participant Details</th><th>University & Role</th><th>Category</th><th>Status</th><th>Travel & Stay</th><th>Liaison</th><th>Actions</th></tr>
+          <tr><th>Reg No & Pass</th><th>Participant Details</th><th>University & Role</th><th>Category</th><th>Status & App Activity</th><th>Travel & Stay</th><th>Liaison</th><th>WhatsApp & Actions</th></tr>
         </thead>
         <tbody>
           {filtered.map(x=><tr key={x.id}>
@@ -264,6 +300,11 @@ function Participants({tab, notify}){
             <td><span className="pill">{x.category||'Delegate'}</span></td>
             <td>
               <span className={`pill ${x.status}`}>{x.status}</span><br/>
+              {x.last_login_at ? (
+                <small style={{color:'#16a34a',fontWeight:700,display:'block',marginTop:'3px'}}>🟢 App Active</small>
+              ) : (
+                <small style={{color:'#dc2626',fontWeight:700,display:'block',marginTop:'3px'}}>🔴 Never Opened</small>
+              )}
               <small style={{color:x.payment_status==='PAID'?'green':'orange',fontWeight:600}}>{x.payment_status}</small>
             </td>
             <td>
@@ -272,9 +313,14 @@ function Participants({tab, notify}){
             </td>
             <td>{x.liaison_name?<><small><b>{x.liaison_name}</b></small><br/><small>{x.liaison_phone}</small></>:'-'}</td>
             <td>
-              <div className="rowactions">
-                <button className="icon" onClick={()=>setEdit(x)} title="Edit"><Settings size={16}/></button>
-                <button className="icon" onClick={()=>remove(x.id)} title="Delete"><LogOut size={16}/></button>
+              <div style={{display:'flex',flexDirection:'column',gap:'4px'}}>
+                <button className="pill small" style={{cursor:'pointer',background:'#16a34a',color:'#fff',display:'inline-flex',alignItems:'center',justifyContent:'center',gap:'4px'}} onClick={()=>sendWhatsAppToSingle(x)} title="Send WhatsApp Login Reminder">
+                  📲 WhatsApp
+                </button>
+                <div className="rowactions" style={{justifyContent:'center'}}>
+                  <button className="icon" onClick={()=>setEdit(x)} title="Edit"><Settings size={16}/></button>
+                  <button className="icon" onClick={()=>remove(x.id)} title="Delete"><LogOut size={16}/></button>
+                </div>
               </div>
             </td>
           </tr>)}
@@ -286,7 +332,121 @@ function Participants({tab, notify}){
     {edit && <ParticipantModal value={edit} liaisons={liaisons} onSave={save} onClose={()=>setEdit(null)} notify={notify}/>}
     {importModal && <ImportParticipantsModal onClose={()=>setImportModal(false)} onImportSuccess={()=>{setImportModal(false);load();notify('Participants imported successfully!')}}/>}
     {qrModal && <QrPassModal participant={qrModal} onClose={()=>setQrModal(null)}/>}
+    {whatsappModal && <WhatsAppBroadcasterModal participants={d} onClose={()=>setWhatsappModal(false)} notify={notify}/>}
   </div>
+}
+
+function WhatsAppBroadcasterModal({participants, onClose, notify}){
+  const [filterMode, setFilterMode] = useState('NEVER_OPENED');
+  const [customMsg, setCustomMsg] = useState(
+    `Namaste Dr./Prof. {name}! 🙏\n\nWelcome to *MAPCON 2026* (Annual State Conference at Hotel Sayaji, Kolhapur).\n\n📌 *Your Delegate Registration Details:*\n• *Registration No:* {reg_no}\n• *Login Email:* {email}\n• *Default Password:* Demo@123\n\n📲 *Access Conference App & Live Schedule:*\nhttp://localhost:3000/\n\nKindly login to the app to access your QR Gate Pass, Scientific Session Schedule, Meal Coupons, and Verified Certificate.\n\nFor any query, contact our Secretarial Desk.\n_MAPCON 2026 Organizing Committee_`
+  );
+
+  const targets = participants.filter(p => {
+    if (filterMode === 'NEVER_OPENED') return !p.last_login_at;
+    if (filterMode === 'UNCHECKED') return p.status !== 'CHECKED_IN';
+    if (filterMode === 'PENDING') return p.status === 'PENDING';
+    return true; // ALL
+  });
+
+  const sendTo = (p) => {
+    let phone = (p.phone || '').replace(/[^0-9]/g, '');
+    if (phone.length === 10) phone = '91' + phone;
+    if (!phone) {
+      alert(`No phone number for ${p.name}`);
+      return;
+    }
+    const rendered = customMsg
+      .replace(/{name}/g, p.name || 'Delegate')
+      .replace(/{reg_no}/g, p.registration_no || 'MAPCON-2026-DEL')
+      .replace(/{email}/g, p.email || '')
+      .replace(/{category}/g, p.category || 'Delegate');
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(rendered)}`, '_blank');
+  };
+
+  const copyPhoneNumbers = () => {
+    const phones = targets.map(p => (p.phone || '').replace(/[^0-9]/g, '')).filter(p => p.length >= 10);
+    navigator.clipboard.writeText(phones.join(', '));
+    notify(`Copied ${phones.length} WhatsApp numbers to clipboard!`);
+  };
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal" style={{maxWidth:'680px'}}>
+        <div className="modal-header" style={{background:'#16a34a',color:'#fff'}}>
+          <h3 style={{display:'flex',alignItems:'center',gap:'8px'}}>📲 WhatsApp Inactive Delegates Broadcaster</h3>
+          <button className="close" onClick={onClose} style={{color:'#fff'}}>&times;</button>
+        </div>
+        <div className="modal-body">
+          <div style={{background:'#f0fdf4',border:'1px solid #bbf7d0',padding:'12px',borderRadius:'10px',marginBottom:'16px',fontSize:'13.5px',color:'#166534'}}>
+            💡 <b>Inactive / Never Logged-In Delegates:</b> You can identify which delegates have not opened or logged into the app yet and directly message their login credentials and app download link via WhatsApp.
+          </div>
+
+          <div style={{marginBottom:'14px'}}>
+            <label style={{fontWeight:700,fontSize:'13px',marginBottom:'6px',display:'block'}}>Target Audience:</label>
+            <div style={{display:'flex',gap:'10px',flexWrap:'wrap'}}>
+              <button className={filterMode === 'NEVER_OPENED' ? 'primary' : 'secondary'} style={{fontSize:'12px',padding:'6px 12px',background:filterMode==='NEVER_OPENED'?'#dc2626':''}} onClick={()=>setFilterMode('NEVER_OPENED')}>
+                🔴 Never Opened App ({participants.filter(p=>!p.last_login_at).length})
+              </button>
+              <button className={filterMode === 'UNCHECKED' ? 'primary' : 'secondary'} style={{fontSize:'12px',padding:'6px 12px'}} onClick={()=>setFilterMode('UNCHECKED')}>
+                Not Checked-In ({participants.filter(p=>p.status!=='CHECKED_IN').length})
+              </button>
+              <button className={filterMode === 'PENDING' ? 'primary' : 'secondary'} style={{fontSize:'12px',padding:'6px 12px'}} onClick={()=>setFilterMode('PENDING')}>
+                Pending Registrations ({participants.filter(p=>p.status==='PENDING').length})
+              </button>
+              <button className={filterMode === 'ALL' ? 'primary' : 'secondary'} style={{fontSize:'12px',padding:'6px 12px'}} onClick={()=>setFilterMode('ALL')}>
+                All Registered ({participants.length})
+              </button>
+            </div>
+          </div>
+
+          <div style={{marginBottom:'16px'}}>
+            <label style={{fontWeight:700,fontSize:'13px',marginBottom:'6px',display:'block'}}>
+              WhatsApp Message Template <small style={{fontWeight:400,color:'#666'}}>(Tags: <code>{'{name}'}</code>, <code>{'{reg_no}'}</code>, <code>{'{email}'}</code>, <code>{'{category}'}</code>)</small>:
+            </label>
+            <textarea
+              rows={6}
+              value={customMsg}
+              onChange={e=>setCustomMsg(e.target.value)}
+              style={{width:'100%',padding:'10px',borderRadius:'8px',border:'1px solid #ccc',fontFamily:'inherit',fontSize:'13px'}}
+            />
+          </div>
+
+          <div>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
+              <label style={{fontWeight:700,fontSize:'13px'}}>Ready to Message ({targets.length} Delegates):</label>
+              <button className="secondary" style={{fontSize:'12px',padding:'4px 10px'}} onClick={copyPhoneNumbers}>
+                📋 Copy All Phone Numbers
+              </button>
+            </div>
+            <div style={{maxHeight:'200px',overflowY:'auto',border:'1px solid #eee',borderRadius:'8px'}}>
+              {targets.map(p => (
+                <div key={p.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 12px',borderBottom:'1px solid #f0f0f0',fontSize:'13px'}}>
+                  <div>
+                    <b>{p.name}</b> <small style={{color:'#666'}}>({p.registration_no || 'No Reg'})</small>
+                    <div style={{color:'#888',fontSize:'11.5px'}}>
+                      📞 {p.phone || 'No phone'} | Status: {p.status} | 
+                      {p.last_login_at ? <span style={{color:'green'}}> 🟢 Active</span> : <span style={{color:'red'}}> 🔴 Never Logged In</span>}
+                    </div>
+                  </div>
+                  <button
+                    style={{background:'#16a34a',color:'#fff',border:'none',borderRadius:'6px',padding:'4px 10px',fontSize:'12px',cursor:'pointer'}}
+                    onClick={()=>sendTo(p)}
+                  >
+                    Send 📲
+                  </button>
+                </div>
+              ))}
+              {!targets.length && <div style={{padding:'20px',textAlign:'center',color:'#888'}}>No delegates found in this filter.</div>}
+            </div>
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function ImportParticipantsModal({onClose, onImportSuccess}){
@@ -1170,7 +1330,11 @@ function Duties({tab, notify}){
   const load=async()=>{
     setBusy(true);
     try{
-      const[du,as,u]=await Promise.all([req('/admin/duties?conferenceId=1'),req('/admin/duty-assignments'),req('/admin/participants?conferenceId=1')]);
+      const[du,as,u]=await Promise.all([
+        req('/admin/duties?conferenceId=1'),
+        req('/admin/duty-assignments'),
+        req('/admin/staff')
+      ]);
       setD(du); setAssignments(as); setUsers(u);
     }finally{setBusy(false)}
   };
@@ -1178,10 +1342,10 @@ function Duties({tab, notify}){
   useEffect(()=>{if(tab==='Assign Staff')setShowAssign(true)},[tab]);
 
   return <div className="panel">
-    <div className="pagehead"><div><h3>Duty Roster</h3><p>Manage volunteer and staff assignments.</p></div><div className="actions"><button className="secondary" onClick={()=>setShowAdd(true)}>+ Create Duty</button><button className="primary" onClick={()=>setShowAssign(true)}>+ Assign Staff</button></div></div>
+    <div className="pagehead"><div><h3>Duty Roster & Staff Assignments</h3><p>Manage organizing committee, faculty and student volunteer duties.</p></div><div className="actions"><button className="secondary" onClick={()=>setShowAdd(true)}>+ Create Duty</button><button className="primary" onClick={()=>setShowAssign(true)}>+ Assign Staff</button></div></div>
     <div className="split">
       <div className="panel"><h4>Scheduled Duties</h4>{d.map(x=><div className="rowcard" key={x.id}><div><b>{x.title}</b><p>{x.location}<br/>{toInputDate(x.duty_date)} {x.start_time}-{x.end_time}</p></div></div>)}{!d.length && !busy && <p style={{color:'#888',padding:'20px'}}>No duties created yet.</p>}</div>
-      <div className="panel"><h4>Staff Assignments</h4>{assignments.map(x=><div className="rowcard" key={x.id}><div><b>{x.user_name}</b><p>{x.duty_title} - {x.status}</p></div></div>)}{!assignments.length && !busy && <p style={{color:'#888',padding:'20px'}}>No staff assigned yet.</p>}</div>
+      <div className="panel"><h4>Staff & Volunteer Assignments</h4>{assignments.map(x=><div className="rowcard" key={x.id}><div><b>{x.user_name}</b><p>{x.duty_title} - <span className="pill green">{x.status}</span></p></div></div>)}{!assignments.length && !busy && <p style={{color:'#888',padding:'20px'}}>No staff assigned yet.</p>}</div>
     </div>
     {showAdd && <DutyModal onSave={async(v)=>{await req('/admin/duties',{method:'POST',body:JSON.stringify(v)}); setShowAdd(false); load(); notify('Duty created');}} onClose={()=>setShowAdd(false)}/>}
     {showAssign && <DutyAssignmentModal duties={d} users={users} onSave={async(v)=>{await req('/admin/duty-assignments',{method:'POST',body:JSON.stringify(v)}); setShowAssign(false); load(); notify('Staff assigned');}} onClose={()=>setShowAssign(false)}/>}
@@ -1201,12 +1365,41 @@ function DutyModal({onSave,onClose}){
 }
 
 function DutyAssignmentModal({duties,users,onSave,onClose}){
-  const[v,set]=formState({});
-  return <div className="modal-overlay"><div className="modal"><div className="modal-header"><h3>Assign Staff</h3><button className="close" onClick={onClose}>&times;</button></div><div className="modal-body"><div className="formgrid">
-    <SelectField label="Duty" value={v.duty_id} onChange={x=>set('duty_id',x)} options={['',...duties.map(du=>({value:du.id,label:du.title+' - '+toInputDate(du.duty_date)}))].map(o=>typeof o==='string'?o:o.label)}/>
-    <SelectField label="Staff/Volunteer" value={v.user_id} onChange={x=>set('user_id',x)} options={['',...users.map(u=>({value:u.user_id,label:u.name}))].map(o=>typeof o==='string'?o:o.label)}/>
-    <SelectField label="Status" value={v.status} onChange={x=>set('status',x)} options={['ASSIGNED','CONFIRMED','COMPLETED','CANCELLED']}/>
-  </div></div><div className="modal-footer"><button onClick={onClose}>Cancel</button><button className="primary" onClick={()=>onSave({...v, duty_id: duties.find(du=>(du.title+' - '+toInputDate(du.duty_date))===v.duty_id)?.id, user_id: users.find(u=>u.name===v.user_id)?.user_id})}>Assign</button></div></div></div>
+  const[v,set]=formState({status: 'ASSIGNED'});
+
+  const staffOptions = [
+    { value: '', label: '-- Select Staff/Volunteer --' },
+    ...users.map(u => ({
+      value: String(u.id),
+      label: `${u.name} (${u.role}${u.designation ? ' - ' + u.designation : ''})`
+    }))
+  ];
+
+  const dutyOptions = [
+    { value: '', label: '-- Select Duty --' },
+    ...duties.map(du => ({
+      value: String(du.id),
+      label: `${du.title} (${toInputDate(du.duty_date)} ${du.start_time || ''})`
+    }))
+  ];
+
+  return <div className="modal-overlay"><div className="modal"><div className="modal-header"><h3>Assign Staff / Volunteer</h3><button className="close" onClick={onClose}>&times;</button></div><div className="modal-body"><div className="formgrid">
+    <SelectField label="Duty" value={v.duty_id} onChange={x=>set('duty_id',x)} options={dutyOptions.map(o=>o.label)}/>
+    <SelectField label="Staff / Volunteer" value={v.user_id} onChange={x=>set('user_id',x)} options={staffOptions.map(o=>o.label)}/>
+    <SelectField label="Status" value={v.status || 'ASSIGNED'} onChange={x=>set('status',x)} options={['ASSIGNED','CONFIRMED','COMPLETED','CANCELLED']}/>
+  </div></div><div className="modal-footer"><button onClick={onClose}>Cancel</button><button className="primary" onClick={()=>{
+    const selectedDuty = dutyOptions.find(o => o.label === v.duty_id);
+    const selectedStaff = staffOptions.find(o => o.label === v.user_id);
+    if (!selectedDuty?.value || !selectedStaff?.value) {
+      alert('Please select both a Duty and a Staff member.');
+      return;
+    }
+    onSave({
+      duty_id: parseInt(selectedDuty.value, 10),
+      user_id: parseInt(selectedStaff.value, 10),
+      status: v.status || 'ASSIGNED'
+    });
+  }}>Assign</button></div></div></div>
 }
 
 function Certificates({tab, notify}){

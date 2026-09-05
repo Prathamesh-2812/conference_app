@@ -63,6 +63,84 @@ async function saveDataUrlUpload(folder,file){
   await fs.writeFile(path.join(dir,filename),buffer);
   return `/uploads/${safeFolder}/${filename}`;
 }
+
+async function generateDelegateCertificate(pName, regNo, certNo, confName = 'MAPCON 2026') {
+  const width = 1200;
+  const height = 850;
+  const certDir = path.join(uploadRoot, 'certificates');
+  await fs.mkdir(certDir, { recursive: true });
+
+  const cleanName = String(pName || 'Distinguished Delegate').replace(/[<&>]/g, '');
+  const cleanReg = String(regNo || 'MAPCON-2026-DEL').replace(/[<&>]/g, '');
+  const cleanCert = String(certNo || 'CERT-2026-001').replace(/[<&>]/g, '');
+
+  const svg = `
+    <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#FCFAF5" />
+          <stop offset="100%" stop-color="#FFFDF9" />
+        </linearGradient>
+      </defs>
+      
+      <!-- Outer Border -->
+      <rect width="${width}" height="${height}" fill="url(#bgGrad)" />
+      <rect x="25" y="25" width="${width - 50}" height="${height - 50}" fill="none" stroke="#8C1119" stroke-width="5" rx="18" />
+      <rect x="36" y="36" width="${width - 72}" height="${height - 72}" fill="none" stroke="#C8A45A" stroke-width="2" rx="14" />
+      
+      <!-- Header -->
+      <text x="600" y="115" font-family="'Georgia', serif" font-size="22" font-weight="bold" fill="#8C1119" letter-spacing="4" text-anchor="middle">MAHARASHTRA CHAPTER OF IAPM</text>
+      <text x="600" y="158" font-family="'Georgia', serif" font-size="34" font-weight="bold" fill="#1E293B" letter-spacing="2" text-anchor="middle">${confName}</text>
+      <text x="600" y="190" font-family="Arial, sans-serif" font-size="14" fill="#64748B" letter-spacing="1" text-anchor="middle">Annual State Conference | Hotel Sayaji, Kolhapur</text>
+      
+      <line x1="200" y1="218" x2="1000" y2="218" stroke="#C8A45A" stroke-width="2" />
+      
+      <text x="600" y="278" font-family="'Georgia', serif" font-size="38" font-weight="bold" fill="#8C1119" font-style="italic" text-anchor="middle">Certificate of Participation</text>
+      <text x="600" y="322" font-family="Arial, sans-serif" font-size="16" fill="#64748B" text-anchor="middle">This is proudly presented to</text>
+      
+      <!-- Delegate Name -->
+      <text x="600" y="390" font-family="'Georgia', serif" font-size="44" font-weight="bold" fill="#8C1119" text-anchor="middle">${cleanName}</text>
+      <line x1="300" y1="416" x2="900" y2="416" stroke="#C8A45A" stroke-width="1.5" />
+      
+      <text x="600" y="468" font-family="Arial, sans-serif" font-size="16" fill="#334155" text-anchor="middle">for active participation and valuable contribution as a registered delegate in</text>
+      <text x="600" y="505" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="#1E293B" text-anchor="middle">The 46th Annual State Conference of MAPCON 2026</text>
+      <text x="600" y="540" font-family="Arial, sans-serif" font-size="15" fill="#475569" text-anchor="middle">held from September 25th to 27th, 2026 at Kolhapur, Maharashtra, India.</text>
+      
+      <!-- Meta Credentials Box -->
+      <rect x="250" y="590" width="700" height="52" fill="#F1F5F9" stroke="#E2E8F0" rx="10" />
+      <text x="310" y="623" font-family="Arial, monospace" font-size="13" font-weight="bold" fill="#475569">REG NO: <tspan fill="#8C1119">${cleanReg}</tspan></text>
+      <text x="610" y="623" font-family="Arial, monospace" font-size="13" font-weight="bold" fill="#475569">CERT NO: <tspan fill="#8C1119">${cleanCert}</tspan></text>
+      
+      <!-- Signatures -->
+      <line x1="160" y1="740" x2="360" y2="740" stroke="#94A3B8" stroke-width="1" />
+      <text x="260" y="760" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="#1E293B" text-anchor="middle">Dr. Pallavi K. Shinde</text>
+      <text x="260" y="778" font-family="Arial, sans-serif" font-size="11" fill="#64748B" text-anchor="middle">Organizing Chairperson</text>
+      
+      <!-- Gold Seal -->
+      <circle cx="600" cy="735" r="45" fill="#FFFBEB" stroke="#C8A45A" stroke-width="3" />
+      <circle cx="600" cy="735" r="38" fill="none" stroke="#8C1119" stroke-width="1" stroke-dasharray="4,2" />
+      <text x="600" y="730" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#8C1119" text-anchor="middle">OFFICIAL</text>
+      <text x="600" y="745" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#C8A45A" text-anchor="middle">SEAL</text>
+      <text x="600" y="758" font-family="Arial, sans-serif" font-size="8" fill="#64748B" text-anchor="middle">MAPCON 2026</text>
+      
+      <!-- Right Signature -->
+      <line x1="840" y1="740" x2="1040" y2="740" stroke="#94A3B8" stroke-width="1" />
+      <text x="940" y="760" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="#1E293B" text-anchor="middle">Dr. Rakesh Sharma</text>
+      <text x="940" y="778" font-family="Arial, sans-serif" font-size="11" fill="#64748B" text-anchor="middle">Organizing Secretary</text>
+      
+      <text x="600" y="820" font-family="Arial, sans-serif" font-size="11" fill="#94A3B8" text-anchor="middle">This is an authorized digital certificate with cryptographically registered verification token.</text>
+    </svg>
+  `;
+
+  const filename = `cert-${Date.now()}-${Math.floor(100 + Math.random()*900)}.png`;
+  const destPath = path.join(certDir, filename);
+
+  await sharp(Buffer.from(svg))
+    .png()
+    .toFile(destPath);
+
+  return `/uploads/certificates/${filename}`;
+}
 app.get('/api/health',(req,res)=>res.json({ok:true,service:'conference-management-api',time:new Date().toISOString()}));
 app.get('/api/conference',asyncRoute(async(req,res)=>{const data=await getConference(req.query.conferenceId||1);if(!data)return res.status(404).json({success:false,message:'Conference not found'});ok(res,data)}));
 app.put('/api/admin/conference',auth,roles('ADMIN','SUPER_ADMIN'),[
@@ -129,8 +207,16 @@ app.put('/api/admin/conference/settings',auth,roles('ADMIN','SUPER_ADMIN'),async
  ok(res,after,'Settings updated');
 }));
 app.post('/api/admin/uploads',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{const url=await saveDataUrlUpload(req.body.folder,req.body.file);await audit(req,'file.upload','uploads',null,null,{url});created(res,{url},'File uploaded');}));
-app.post('/api/auth/login',[body('email').isEmail(),body('password').isLength({min:6})],validate,asyncRoute(async(req,res)=>{const [rows]=await pool.query('SELECT id,name,email,password_hash,role FROM users WHERE email=? LIMIT 1',[req.body.email]);if(!rows.length)return res.status(401).json({message:'Invalid credentials'});const u=rows[0];if(!await bcrypt.compare(req.body.password,u.password_hash))return res.status(401).json({message:'Invalid credentials'});const token=jwt.sign({id:u.id,name:u.name,email:u.email,role:u.role},process.env.JWT_SECRET,{expiresIn:'7d'});res.json({token,user:{id:u.id,name:u.name,email:u.email,role:u.role}})}));
-app.get('/api/auth/me',auth,asyncRoute(async(req,res)=>{const [[u]]=await pool.query('SELECT id,name,email,phone,role,designation,university,blood_group,photo FROM users WHERE id=?',[req.user.id]);res.json(u)}));
+app.post('/api/auth/login',[body('email').isEmail(),body('password').isLength({min:6})],validate,asyncRoute(async(req,res)=>{
+  const [rows]=await pool.query('SELECT id,name,email,password_hash,role FROM users WHERE email=? LIMIT 1',[req.body.email]);
+  if(!rows.length)return res.status(401).json({message:'Invalid credentials'});
+  const u=rows[0];
+  if(!await bcrypt.compare(req.body.password,u.password_hash))return res.status(401).json({message:'Invalid credentials'});
+  await pool.query('UPDATE users SET last_login_at=NOW() WHERE id=?',[u.id]);
+  const token=jwt.sign({id:u.id,name:u.name,email:u.email,role:u.role},process.env.JWT_SECRET,{expiresIn:'7d'});
+  res.json({token,user:{id:u.id,name:u.name,email:u.email,role:u.role}})
+}));
+app.get('/api/auth/me',auth,asyncRoute(async(req,res)=>{const [[u]]=await pool.query('SELECT id,name,email,phone,role,designation,university,blood_group,photo,last_login_at FROM users WHERE id=?',[req.user.id]);res.json(u)}));
 app.get('/api/conferences',asyncRoute(async(req,res)=>{const [r]=await pool.query('SELECT * FROM conferences ORDER BY start_date DESC');res.json(r)}));
 app.get('/api/conferences/:id',asyncRoute(async(req,res)=>{const [[c]]=await pool.query('SELECT * FROM conferences WHERE id=?',[req.params.id]);if(!c)return res.status(404).json({message:'Conference not found'});res.json(c)}));
 app.get('/api/admin/liaisons',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
@@ -141,7 +227,7 @@ app.get('/api/admin/liaisons',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async
 app.get('/api/admin/participants',auth,roles('ADMIN','SUPER_ADMIN','VOLUNTEER'),asyncRoute(async(req,res)=>{
   const conferenceId=req.query.conferenceId||1;
   const [r]=await pool.query(`
-    SELECT p.*, u.name, u.email, u.phone, u.designation, u.university, u.blood_group, u.photo,
+    SELECT p.*, u.name, u.email, u.phone, u.designation, u.university, u.blood_group, u.photo, u.last_login_at,
            l.name as liaison_name, l.phone as liaison_phone
     FROM participants p
     JOIN users u ON u.id = p.user_id
@@ -351,6 +437,7 @@ app.delete('/api/admin/sessions/:id',auth,roles('ADMIN','SUPER_ADMIN'),asyncRout
   ok(res,null,'Session deleted');
 }));
 app.get('/api/sessions',asyncRoute(async(req,res)=>{const [r]=await pool.query(`SELECT s.*, DATE_FORMAT(s.session_date, '%Y-%m-%d') as session_date, sp.name speaker_name,sp.photo speaker_photo,v.name venue_name,h.name hall_name FROM sessions s LEFT JOIN speakers sp ON sp.id=s.speaker_id LEFT JOIN halls h ON h.id=s.hall_id LEFT JOIN venues v ON v.id=h.venue_id WHERE s.conference_id=? ORDER BY s.session_date,s.start_time`,[req.query.conferenceId||1]);res.json(r)}));
+app.get('/api/sponsors',asyncRoute(async(req,res)=>{const [r]=await pool.query('SELECT * FROM sponsors WHERE conference_id=? ORDER BY FIELD(tier,"PLATINUM","GOLD","SILVER","PARTNER"), sort_order ASC, name ASC',[req.query.conferenceId||1]);res.json(r)}));
 app.get('/api/notices',auth,asyncRoute(async(req,res)=>{const [r]=await pool.query('SELECT * FROM notices WHERE conference_id=? AND (target_role IS NULL OR target_role=? OR target_user_id=?) ORDER BY created_at DESC',[req.query.conferenceId||1,req.user.role,req.user.id]);res.json(r)}));
 app.get('/api/gallery',auth,asyncRoute(async(req,res)=>{const [r]=await pool.query('SELECT * FROM photos WHERE conference_id=? ORDER BY created_at DESC',[req.query.conferenceId||1]);res.json(r)}));
 app.get('/api/me/profile',auth,asyncRoute(async(req,res)=>{const [[u]]=await pool.query(`SELECT u.id,u.name,u.email,u.phone,u.role,u.designation,u.university,u.blood_group,u.photo,p.registration_no,p.category,p.mode_of_travel,p.arrival_date,p.arrival_time,p.departure_date,p.departure_time,p.emergency_contact,h.name hotel_name,r.room_number,r.room_type,l.name liaison_name,l.phone liaison_phone FROM users u LEFT JOIN participants p ON p.user_id=u.id LEFT JOIN room_allocations ra ON ra.participant_id=p.id LEFT JOIN rooms r ON r.id=ra.room_id LEFT JOIN hotels h ON h.id=r.hotel_id LEFT JOIN liaison_faculty l ON l.id=p.liaison_id WHERE u.id=?`,[req.user.id]);if(!u)return res.status(404).json({message:'Profile not found'});res.json(u)}));
@@ -369,7 +456,61 @@ app.get('/api/me/accommodation',auth,asyncRoute(async(req,res)=>{const [r]=await
 app.get('/api/me/transport',auth,asyncRoute(async(req,res)=>{const [r]=await pool.query(`SELECT t.*,v.vehicle_number,v.vehicle_type,d.name driver_name,d.phone driver_phone FROM transport_assignments t LEFT JOIN vehicles v ON v.id=t.vehicle_id LEFT JOIN drivers d ON d.id=v.driver_id JOIN participants p ON p.id=t.participant_id WHERE p.user_id=? ORDER BY t.pickup_time`,[req.user.id]);res.json(r)}));
 app.get('/api/me/duties',auth,asyncRoute(async(req,res)=>{const [r]=await pool.query(`SELECT d.*,da.status FROM duties d JOIN duty_assignments da ON da.duty_id=d.id JOIN users u ON u.id=da.user_id WHERE u.id=? ORDER BY d.duty_date,d.start_time`,[req.user.id]);res.json(r)}));
 app.get('/api/me/registration',auth,asyncRoute(async(req,res)=>{const [[r]]=await pool.query(`SELECT p.registration_no,p.category,p.status,p.payment_status,p.amount,p.qr_token,c.name conference_name,c.start_date,c.end_date FROM participants p JOIN conferences c ON c.id=p.conference_id WHERE p.user_id=? ORDER BY p.id DESC LIMIT 1`,[req.user.id]);res.json(r||null)}));
-app.get('/api/me/certificate',auth,asyncRoute(async(req,res)=>{const [[r]]=await pool.query(`SELECT cert.* FROM certificates cert JOIN participants p ON p.id=cert.participant_id WHERE p.user_id=? AND cert.certificate_url IS NOT NULL ORDER BY cert.id DESC LIMIT 1`,[req.user.id]);res.json(r||null)}));
+app.get('/api/me/certificate',auth,asyncRoute(async(req,res)=>{
+  const [[p]]=await pool.query(`SELECT p.id, p.registration_no, u.name, u.email FROM participants p JOIN users u ON u.id=p.user_id WHERE u.id=? LIMIT 1`,[req.user.id]);
+  if(!p) return res.json({ hasFeedback: false, certificate: null, participant: null });
+
+  const [[feedback]]=await pool.query(`SELECT id, rating, content_rating, speaker_rating, comment, created_at FROM feedback WHERE participant_id=? ORDER BY id DESC LIMIT 1`,[p.id]);
+  const hasFeedback = !!feedback;
+
+  const [[cert]]=await pool.query(`SELECT cert.*, p.registration_no, u.name as participant_name FROM certificates cert JOIN participants p ON p.id=cert.participant_id JOIN users u ON u.id=p.user_id WHERE p.user_id=? AND cert.certificate_url IS NOT NULL ORDER BY cert.id DESC LIMIT 1`,[req.user.id]);
+
+  res.json({
+    hasFeedback,
+    feedback: feedback || null,
+    certificate: cert || null,
+    participant: { id: p.id, name: p.name, registration_no: p.registration_no }
+  });
+}));
+
+app.post('/api/me/feedback-and-certificate',auth,asyncRoute(async(req,res)=>{
+  const [[p]]=await pool.query('SELECT p.id, p.registration_no, u.name, u.email FROM participants p JOIN users u ON u.id=p.user_id WHERE u.id=? LIMIT 1',[req.user.id]);
+  if(!p) return res.status(400).json({success:false,message:'Participant profile not found'});
+
+  const rating = parseInt(req.body.rating || 5, 10);
+  const contentRating = parseInt(req.body.contentRating || rating, 10);
+  const speakerRating = parseInt(req.body.speakerRating || rating, 10);
+  const comment = req.body.comment || null;
+
+  // Insert feedback
+  await pool.query('INSERT INTO feedback(participant_id, session_id, rating, content_rating, speaker_rating, comment) VALUES(?, NULL, ?, ?, ?, ?)',
+    [p.id, rating, contentRating, speakerRating, comment]);
+
+  // Check or generate certificate
+  let [[cert]]=await pool.query('SELECT * FROM certificates WHERE participant_id=? ORDER BY id DESC LIMIT 1',[p.id]);
+  let certNo = cert?.certificate_no;
+  let certUrl = cert?.certificate_url;
+
+  if(!certNo){
+    certNo = `MAPCON2026-CERT-${p.registration_no ? p.registration_no.replace(/[^a-zA-Z0-9]/g,'') : Math.floor(1000 + Math.random()*9000)}`;
+  }
+
+  if(!certUrl){
+    certUrl = await generateDelegateCertificate(p.name, p.registration_no, certNo, 'MAPCON 2026');
+    await pool.query(`
+      INSERT INTO certificates(participant_id, certificate_no, certificate_url, issued_at)
+      VALUES(?, ?, ?, NOW())
+      ON DUPLICATE KEY UPDATE certificate_no=VALUES(certificate_no), certificate_url=VALUES(certificate_url), issued_at=NOW()
+    `, [p.id, certNo, certUrl]);
+  }
+
+  const [[freshCert]]=await pool.query('SELECT cert.*, p.registration_no, u.name as participant_name FROM certificates cert JOIN participants p ON p.id=cert.participant_id JOIN users u ON u.id=p.user_id WHERE cert.participant_id=? LIMIT 1',[p.id]);
+
+  ok(res, {
+    certificate: freshCert,
+    hasFeedback: true
+  }, 'Feedback recorded and certificate generated successfully!');
+}));
 app.get('/api/me/attendance',auth,asyncRoute(async(req,res)=>{const [r]=await pool.query(`SELECT a.*,s.title,s.session_date,s.start_time FROM attendance a JOIN participants p ON p.id=a.participant_id JOIN sessions s ON s.id=a.session_id WHERE p.user_id=? ORDER BY s.session_date,s.start_time`,[req.user.id]);res.json(r)}));
 app.post('/api/attendance/scan',auth,roles('ADMIN','SUPER_ADMIN','VOLUNTEER'),[body('qrToken').notEmpty()],validate,asyncRoute(async(req,res)=>{
   const [[p]]=await pool.query('SELECT id, user_id FROM participants WHERE qr_token=?',[req.body.qrToken]);
@@ -418,7 +559,7 @@ app.get('/api/admin/sessions/:id/attendance',auth,roles('ADMIN','SUPER_ADMIN'),a
   if (!session) return res.status(404).json({ message: 'Session not found' });
 
   const [attendees] = await pool.query(`
-    SELECT a.id, a.scanned_at, a.scan_type, u.name as participant_name, u.email, p.registration_no, p.category, p.organization
+    SELECT a.id, a.scanned_at, a.scan_type, u.name as participant_name, u.email, p.registration_no, p.category, COALESCE(u.university, p.category) as organization
     FROM attendance a
     JOIN participants p ON p.id=a.participant_id
     JOIN users u ON u.id=p.user_id
@@ -443,6 +584,11 @@ app.post('/api/admin/meals',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(r
   const [r]=await pool.query('INSERT INTO meals(conference_id,meal_date,meal_type,start_time,end_time,location) VALUES(?,?,?,?,?,?)',
     [req.body.conferenceId||1, req.body.meal_date, req.body.meal_type, req.body.start_time, req.body.end_time, req.body.location]);
   created(res,{id:r.insertId},'Meal scheduled');
+}));
+
+app.get('/api/admin/staff',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
+  const [r]=await pool.query("SELECT id, name, email, phone, role, designation, university FROM users WHERE role != 'PARTICIPANT' ORDER BY role ASC, name ASC");
+  res.json(r);
 }));
 
 app.get('/api/admin/duties',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{

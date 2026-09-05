@@ -103,6 +103,17 @@ String resolveSpeakerPhoto(dynamic rawPhoto) {
   return '$base${str.startsWith('/') ? '' : '/'}$str';
 }
 
+String resolveMediaUrl(dynamic rawUrl, [String defaultFallback = '']) {
+  if (rawUrl == null) return defaultFallback;
+  final str = rawUrl.toString().trim();
+  if (str.isEmpty) return defaultFallback;
+  if (str.startsWith('http://') || str.startsWith('https://') || str.startsWith('data:')) {
+    return str;
+  }
+  final base = apiBaseUrl.replaceAll(RegExp(r'/api/?$'), '');
+  return '$base${str.startsWith('/') ? '' : '/'}$str';
+}
+
 // App Shell for Desktop/Web Responsive Layout
 class AppShell extends StatelessWidget {
   final Widget child;
@@ -1033,6 +1044,28 @@ class HomeScreen extends StatelessWidget {
                     subtitle: 'Help desk, medical unit & security',
                     onTap: () => go(context, const EmergencyScreen()),
                   ),
+                  CardButton(
+                    icon: Icons.handshake_rounded,
+                    title: 'Our Sponsors & Partners',
+                    subtitle: 'Industry leaders, diagnostic partners & stall directory',
+                    trailingBadge: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: gold.withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: gold.withOpacity(0.6)),
+                      ),
+                      child: const Text(
+                        'EXHIBITION',
+                        style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w900, color: darkMaroon),
+                      ),
+                    ),
+                    onTap: () => go(context, const SponsorsScreen()),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Our Sponsors & Partners Section
+                  _HomeSponsorsSection(onViewAll: () => go(context, const SponsorsScreen())),
                 ],
               ),
             ),
@@ -1042,6 +1075,893 @@ class HomeScreen extends StatelessWidget {
     );
   }
 }
+
+// ----------------------------------------------------
+// OUR SPONSORS & PARTNERS HOME SECTION & SCREEN
+// ----------------------------------------------------
+
+const List<Map<String, dynamic>> defaultSponsors = [
+  {
+    'name': 'Roche Diagnostics',
+    'tier': 'PLATINUM',
+    'category': 'Title & Molecular Diagnostic Partner',
+    'logo_url': 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=400',
+    'website_url': 'https://diagnostics.roche.com',
+    'description': 'Global leader in in-vitro diagnostics and tissue-based cancer diagnostics.',
+    'booth_number': 'Stall P-01 (Grand Dome)',
+    'contact_email': 'support.india@roche.com',
+    'contact_phone': '+91 22 6697 4900',
+  },
+  {
+    'name': 'Siemens Healthineers',
+    'tier': 'PLATINUM',
+    'category': 'Diamond Diagnostic Imaging Partner',
+    'logo_url': 'https://images.unsplash.com/photo-1516549655169-df83a0774514?w=400',
+    'website_url': 'https://www.siemens-healthineers.com',
+    'description': 'Pioneering breakthroughs in digital pathology, point-of-care and laboratory automation.',
+    'booth_number': 'Stall P-02 (Grand Dome)',
+    'contact_email': 'contact@siemens-healthineers.in',
+    'contact_phone': '+91 22 3967 7000',
+  },
+  {
+    'name': 'Sysmex India',
+    'tier': 'GOLD',
+    'category': 'Automated Hematology Partner',
+    'logo_url': 'https://images.unsplash.com/photo-1579165466791-788226ab77b6?w=400',
+    'website_url': 'https://www.sysmex.co.in',
+    'description': 'Delivering high-precision hematology and flow cytometry diagnostic equipment across the globe.',
+    'booth_number': 'Stall G-05 (Exhibition Hall A)',
+    'contact_email': 'info@sysmex.co.in',
+    'contact_phone': '+91 22 6112 0700',
+  },
+  {
+    'name': 'Beckman Coulter',
+    'tier': 'GOLD',
+    'category': 'Clinical Diagnostics Partner',
+    'logo_url': 'https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400',
+    'website_url': 'https://www.beckmancoulter.com',
+    'description': 'Advancing healthcare for every person with integrated immunoassay and biomedical analysis solutions.',
+    'booth_number': 'Stall G-08 (Exhibition Hall A)',
+    'contact_email': 'india.sales@beckman.com',
+    'contact_phone': '+91 80 6701 5000',
+  },
+  {
+    'name': 'Leica Biosystems',
+    'tier': 'SILVER',
+    'category': 'Histopathology & Slide Scanning Partner',
+    'logo_url': 'https://images.unsplash.com/photo-1582719508461-905c673771fd?w=400',
+    'website_url': 'https://www.leicabiosystems.com',
+    'description': 'End-to-end workflow solutions from biopsy to diagnosis in anatomical pathology.',
+    'booth_number': 'Stall S-12 (Hall B)',
+    'contact_email': 'apac.support@leicabiosystems.com',
+    'contact_phone': '+91 22 4192 3000',
+  },
+  {
+    'name': 'Mindray Medical',
+    'tier': 'SILVER',
+    'category': 'Bio-Medical & Lab Solutions',
+    'logo_url': 'https://images.unsplash.com/photo-1530497610245-94d3c16cda28?w=400',
+    'website_url': 'https://www.mindray.com',
+    'description': 'Innovative laboratory solutions and automated biochemistry analyzers.',
+    'booth_number': 'Stall S-14 (Hall B)',
+    'contact_email': 'service.in@mindray.com',
+    'contact_phone': '+91 124 480 3000',
+  },
+  {
+    'name': 'D.Y. Patil Education Society',
+    'tier': 'PARTNER',
+    'category': 'Academic & Knowledge Partner',
+    'logo_url': 'https://images.unsplash.com/photo-1562774053-701939374585?w=400',
+    'website_url': 'https://dypatilunikop.org',
+    'description': 'Deemed to be University, Kolhapur. Promoting research excellence and medical education.',
+    'booth_number': 'Stall AC-01 (Foyer)',
+    'contact_email': 'info@dypatilunikop.org',
+    'contact_phone': '+91 231 260 1235',
+  },
+  {
+    'name': 'Sayaji Hotels Kolhapur',
+    'tier': 'PARTNER',
+    'category': 'Official Hospitality Partner',
+    'logo_url': 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400',
+    'website_url': 'https://sayajihotels.com',
+    'description': 'Luxury accommodation and 5-star venue host for MAPCON 2026.',
+    'booth_number': 'Front Helpdesk',
+    'contact_email': 'reservations.kolhapur@sayajihotels.com',
+    'contact_phone': '+91 231 255 5555',
+  },
+];
+
+Map<String, dynamic> _getTierBadgeStyle(String? tier) {
+  final t = (tier ?? 'PARTNER').toUpperCase();
+  switch (t) {
+    case 'PLATINUM':
+      return {
+        'label': 'PLATINUM',
+        'color': const Color(0xFF8C1119),
+        'bgColor': const Color(0xFFFFFBEB),
+        'borderColor': const Color(0xFFF59E0B),
+        'badgeText': '🥇 PLATINUM SPONSOR',
+        'gradient': const [Color(0xFFFFFBEB), Color(0xFFFEF3C7)],
+      };
+    case 'GOLD':
+      return {
+        'label': 'GOLD',
+        'color': const Color(0xFFB45309),
+        'bgColor': const Color(0xFFFEF3C7),
+        'borderColor': const Color(0xFFF59E0B),
+        'badgeText': '🥈 GOLD SPONSOR',
+        'gradient': const [Color(0xFFFEF3C7), Color(0xFFFDE68A)],
+      };
+    case 'SILVER':
+      return {
+        'label': 'SILVER',
+        'color': const Color(0xFF334155),
+        'bgColor': const Color(0xFFF1F5F9),
+        'borderColor': const Color(0xFF94A3B8),
+        'badgeText': '🥉 SILVER SPONSOR',
+        'gradient': const [Color(0xFFF8FAFC), Color(0xFFE2E8F0)],
+      };
+    default:
+      return {
+        'label': 'PARTNER',
+        'color': const Color(0xFF047857),
+        'bgColor': const Color(0xFFECFDF5),
+        'borderColor': const Color(0xFF10B981),
+        'badgeText': '🤝 OFFICIAL PARTNER',
+        'gradient': const [Color(0xFFECFDF5), Color(0xFFD1FAE5)],
+      };
+  }
+}
+
+class _HomeSponsorsSection extends StatelessWidget {
+  final VoidCallback onViewAll;
+  const _HomeSponsorsSection({required this.onViewAll});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder(
+      future: ApiService.get('/sponsors?conferenceId=1'),
+      builder: (context, snapshot) {
+        List<dynamic> list = defaultSponsors;
+        if (snapshot.hasData && snapshot.data is List && (snapshot.data as List).isNotEmpty) {
+          list = snapshot.data as List;
+        }
+
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: gold.withOpacity(0.35), width: 1.2),
+            boxShadow: [
+              BoxShadow(
+                color: maroon.withOpacity(0.04),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: gold.withOpacity(0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.stars_rounded, color: maroon, size: 20),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'OUR SPONSORS & PARTNERS',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                          color: darkMaroon,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                    ],
+                  ),
+                  TextButton.icon(
+                    onPressed: onViewAll,
+                    icon: const Icon(Icons.arrow_forward_rounded, size: 16, color: maroon),
+                    label: const Text(
+                      'View All',
+                      style: TextStyle(color: maroon, fontWeight: FontWeight.w800, fontSize: 12),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Proudly supported by leading innovators in pathology and medical diagnostics.',
+                style: TextStyle(fontSize: 12, color: muted, height: 1.3),
+              ),
+              const SizedBox(height: 14),
+
+              // Horizontal list of top sponsors
+              SizedBox(
+                height: 148,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: list.length,
+                  itemBuilder: (context, index) {
+                    final item = list[index];
+                    final name = item['name'] ?? 'Sponsor';
+                    final tier = item['tier'] ?? 'PLATINUM';
+                    final category = item['category'] ?? '';
+                    final logoUrl = resolveMediaUrl(item['logo_url']);
+                    final booth = item['booth_number'] ?? '';
+                    final badgeStyle = _getTierBadgeStyle(tier);
+
+                    return GestureDetector(
+                      onTap: () {
+                        _showSponsorDialog(context, item);
+                      },
+                      child: Container(
+                        width: 175,
+                        margin: const EdgeInsets.only(right: 12),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFCFAF5),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: (badgeStyle['borderColor'] as Color).withOpacity(0.5), width: 1.2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.03),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: badgeStyle['bgColor'] as Color,
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: badgeStyle['borderColor'] as Color, width: 0.8),
+                                  ),
+                                  child: Text(
+                                    tier.toString().toUpperCase(),
+                                    style: TextStyle(
+                                      color: badgeStyle['color'] as Color,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ),
+                                const Icon(Icons.info_outline_rounded, color: muted, size: 15),
+                              ],
+                            ),
+                            Center(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  logoUrl,
+                                  height: 38,
+                                  width: 80,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    height: 38,
+                                    width: 80,
+                                    color: Colors.grey.shade200,
+                                    child: const Icon(Icons.business, color: maroon, size: 24),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 12,
+                                    color: slate,
+                                  ),
+                                ),
+                                if (booth.isNotEmpty)
+                                  Text(
+                                    booth,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      color: maroon,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  )
+                                else if (category.isNotEmpty)
+                                  Text(
+                                    category,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 10, color: muted),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+void _showSponsorDialog(BuildContext context, dynamic sponsor) {
+  final name = sponsor['name'] ?? 'Sponsor Profile';
+  final tier = sponsor['tier'] ?? 'PLATINUM';
+  final category = sponsor['category'] ?? '';
+  final logoUrl = resolveMediaUrl(sponsor['logo_url']);
+  final description = sponsor['description'] ?? 'Proud partner supporting MAPCON 2026.';
+  final booth = sponsor['booth_number'] ?? '';
+  final website = sponsor['website_url'] ?? '';
+  final email = sponsor['contact_email'] ?? '';
+  final phone = sponsor['contact_phone'] ?? '';
+  final badgeStyle = _getTierBadgeStyle(tier);
+
+  showDialog(
+    context: context,
+    builder: (ctx) => Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(22),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: badgeStyle['bgColor'] as Color,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: badgeStyle['borderColor'] as Color, width: 1.2),
+                    ),
+                    child: Text(
+                      badgeStyle['badgeText'] as String,
+                      style: TextStyle(
+                        color: badgeStyle['color'] as Color,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: muted, size: 22),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.grey.shade200),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.network(
+                      logoUrl,
+                      height: 70,
+                      width: 140,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        height: 70,
+                        width: 140,
+                        color: maroon.withOpacity(0.08),
+                        child: const Icon(Icons.business_rounded, color: maroon, size: 36),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Center(
+                child: Text(
+                  name,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: slate),
+                ),
+              ),
+              if (category.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Center(
+                  child: Text(
+                    category,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: maroon),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 14),
+              const Divider(height: 1),
+              const SizedBox(height: 14),
+              if (booth.isNotEmpty) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF3C7),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFF59E0B)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.storefront_rounded, color: Color(0xFFB45309), size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Exhibition Booth: $booth',
+                          style: const TextStyle(color: Color(0xFF78350F), fontWeight: FontWeight.w800, fontSize: 12.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              Text(
+                description,
+                style: const TextStyle(fontSize: 13.5, color: slate, height: 1.45),
+              ),
+              const SizedBox(height: 18),
+              if (email.isNotEmpty || phone.isNotEmpty) ...[
+                const Text('Contact Information', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: muted)),
+                const SizedBox(height: 6),
+                if (email.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.email_outlined, size: 16, color: maroon),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(email, style: const TextStyle(fontSize: 12.5, color: slate, fontWeight: FontWeight.w600))),
+                      ],
+                    ),
+                  ),
+                if (phone.isNotEmpty)
+                  Row(
+                    children: [
+                      const Icon(Icons.phone_outlined, size: 16, color: maroon),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(phone, style: const TextStyle(fontSize: 12.5, color: slate, fontWeight: FontWeight.w600))),
+                    ],
+                  ),
+                const SizedBox(height: 16),
+              ],
+              if (website.isNotEmpty)
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: maroon,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                    label: const Text('Visit Official Website', style: TextStyle(fontWeight: FontWeight.bold)),
+                    onPressed: () {
+                      launchUrl(Uri.parse(website), mode: LaunchMode.externalApplication);
+                    },
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+// Full Dedicated Sponsors & Partners Screen
+class SponsorsScreen extends StatefulWidget {
+  const SponsorsScreen({super.key});
+
+  @override
+  State<SponsorsScreen> createState() => _SponsorsScreenState();
+}
+
+class _SponsorsScreenState extends State<SponsorsScreen> {
+  String selectedTier = 'ALL';
+  String searchQuery = '';
+  final TextEditingController searchController = TextEditingController();
+
+  Future<List<dynamic>> _loadSponsors() async {
+    try {
+      final res = await ApiService.get('/sponsors?conferenceId=1');
+      if (res is List && res.isNotEmpty) {
+        return res;
+      }
+    } catch (_) {}
+    return defaultSponsors;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Scaffold(
+        backgroundColor: cream,
+        appBar: AppBar(
+          title: const Text(
+            'Our Sponsors & Partners',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 18),
+          ),
+          backgroundColor: maroon,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
+        body: FutureBuilder<List<dynamic>>(
+          future: _loadSponsors(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator(color: maroon));
+            }
+
+            final sponsors = snapshot.data ?? defaultSponsors;
+
+            final filtered = sponsors.where((s) {
+              final tier = (s['tier'] ?? '').toString().toUpperCase();
+              final matchesTier = selectedTier == 'ALL' || tier == selectedTier;
+              final q = searchQuery.toLowerCase().trim();
+              final name = (s['name'] ?? '').toString().toLowerCase();
+              final category = (s['category'] ?? '').toString().toLowerCase();
+              final booth = (s['booth_number'] ?? '').toString().toLowerCase();
+              final matchesQuery = q.isEmpty || name.contains(q) || category.contains(q) || booth.contains(q);
+              return matchesTier && matchesQuery;
+            }).toList();
+
+            return Column(
+              children: [
+                // Top Search and Tier Filter Bar
+                Container(
+                  color: Colors.white,
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  child: Column(
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: TextField(
+                          controller: searchController,
+                          decoration: InputDecoration(
+                            hintText: 'Search sponsors, categories, stalls...',
+                            hintStyle: const TextStyle(fontSize: 13, color: muted),
+                            prefixIcon: const Icon(Icons.search, color: muted, size: 20),
+                            suffixIcon: searchQuery.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear, size: 18, color: muted),
+                                    onPressed: () {
+                                      searchController.clear();
+                                      setState(() => searchQuery = '');
+                                    },
+                                  )
+                                : null,
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          ),
+                          onChanged: (val) => setState(() => searchQuery = val),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _buildFilterChip('ALL', 'All Partners (${sponsors.length})'),
+                            _buildFilterChip('PLATINUM', '🥇 Platinum'),
+                            _buildFilterChip('GOLD', '🥈 Gold'),
+                            _buildFilterChip('SILVER', '🥉 Silver'),
+                            _buildFilterChip('PARTNER', '🤝 Academic & Hospitality'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Sponsor Cards Grid / List
+                Expanded(
+                  child: filtered.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.handshake_outlined, size: 54, color: muted),
+                              const SizedBox(height: 12),
+                              const Text(
+                                'No sponsors match your filter',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: slate),
+                              ),
+                              const SizedBox(height: 6),
+                              TextButton(
+                                onPressed: () {
+                                  searchController.clear();
+                                  setState(() {
+                                    selectedTier = 'ALL';
+                                    searchQuery = '';
+                                  });
+                                },
+                                child: const Text('Reset Filters', style: TextStyle(color: maroon, fontWeight: FontWeight.bold)),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: filtered.length,
+                          itemBuilder: (context, index) {
+                            final item = filtered[index];
+                            final name = item['name'] ?? 'Sponsor';
+                            final tier = (item['tier'] ?? 'PLATINUM').toString().toUpperCase();
+                            final category = item['category'] ?? '';
+                            final logoUrl = resolveMediaUrl(item['logo_url']);
+                            final description = item['description'] ?? '';
+                            final booth = item['booth_number'] ?? '';
+                            final website = item['website_url'] ?? '';
+                            final badgeStyle = _getTierBadgeStyle(tier);
+
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 14),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(
+                                  color: (badgeStyle['borderColor'] as Color).withOpacity(0.4),
+                                  width: 1.2,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.04),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
+                              ),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(18),
+                                onTap: () => _showSponsorDialog(context, item),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          ClipRRect(
+                                            borderRadius: BorderRadius.circular(12),
+                                            child: Container(
+                                              height: 55,
+                                              width: 75,
+                                              color: const Color(0xFFF8FAFC),
+                                              child: Image.network(
+                                                logoUrl,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (_, __, ___) => Container(
+                                                  color: maroon.withOpacity(0.08),
+                                                  child: const Icon(Icons.business, color: maroon, size: 28),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 14),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                  children: [
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                      decoration: BoxDecoration(
+                                                        color: badgeStyle['bgColor'] as Color,
+                                                        borderRadius: BorderRadius.circular(12),
+                                                        border: Border.all(color: badgeStyle['borderColor'] as Color, width: 0.9),
+                                                      ),
+                                                      child: Text(
+                                                        tier,
+                                                        style: TextStyle(
+                                                          color: badgeStyle['color'] as Color,
+                                                          fontSize: 9.5,
+                                                          fontWeight: FontWeight.w900,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 6),
+                                                Text(
+                                                  name,
+                                                  style: const TextStyle(
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.w900,
+                                                    color: slate,
+                                                  ),
+                                                ),
+                                                if (category.isNotEmpty) ...[
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    category,
+                                                    style: const TextStyle(
+                                                      fontSize: 12,
+                                                      fontWeight: FontWeight.w700,
+                                                      color: maroon,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      if (description.isNotEmpty) ...[
+                                        const SizedBox(height: 10),
+                                        Text(
+                                          description,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(fontSize: 12.5, color: slate, height: 1.35),
+                                        ),
+                                      ],
+                                      const SizedBox(height: 12),
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          if (booth.isNotEmpty)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFFEF3C7),
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Icon(Icons.storefront, size: 14, color: Color(0xFFB45309)),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    booth,
+                                                    style: const TextStyle(
+                                                      fontSize: 11,
+                                                      fontWeight: FontWeight.w800,
+                                                      color: Color(0xFF78350F),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            )
+                                          else
+                                            const SizedBox(),
+                                          Row(
+                                            children: [
+                                              if (website.isNotEmpty)
+                                                InkWell(
+                                                  onTap: () {
+                                                    launchUrl(Uri.parse(website), mode: LaunchMode.externalApplication);
+                                                  },
+                                                  borderRadius: BorderRadius.circular(8),
+                                                  child: Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                                    decoration: BoxDecoration(
+                                                      color: maroon.withOpacity(0.08),
+                                                      borderRadius: BorderRadius.circular(8),
+                                                    ),
+                                                    child: const Row(
+                                                      children: [
+                                                        Icon(Icons.language, color: maroon, size: 14),
+                                                        SizedBox(width: 4),
+                                                        Text(
+                                                          'Website',
+                                                          style: TextStyle(
+                                                            color: maroon,
+                                                            fontSize: 11.5,
+                                                            fontWeight: FontWeight.w800,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                              const SizedBox(width: 8),
+                                              const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: muted),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String tierKey, String label) {
+    final isSelected = selectedTier == tierKey;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: FilterChip(
+        label: Text(label),
+        selected: isSelected,
+        selectedColor: maroon,
+        backgroundColor: const Color(0xFFF1F5F9),
+        labelStyle: TextStyle(
+          color: isSelected ? Colors.white : slate,
+          fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
+          fontSize: 11.5,
+        ),
+        checkmarkColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        onSelected: (_) {
+          setState(() => selectedTier = tierKey);
+        },
+      ),
+    );
+  }
+}
+
 
 // ----------------------------------------------------
 // REDESIGNED EVENT SCHEDULE SCREEN
@@ -2204,7 +3124,7 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
   }
 
   void _openPhotoViewer(BuildContext context, dynamic photo, {bool isMatched = false}) {
-    final photoUrl = photo['url'] ?? '';
+    final photoUrl = resolveMediaUrl(photo['url']);
     final caption = photo['caption'] ?? 'Conference Moment';
     final album = photo['album'] ?? 'General';
     final confidence = isMatched ? (photo['confidencePercent'] ?? '95% Match') : null;
@@ -2524,7 +3444,7 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
             itemCount: _matchedPhotos.length,
             itemBuilder: (context, index) {
               final item = _matchedPhotos[index];
-              final url = item['url'] ?? '';
+              final url = resolveMediaUrl(item['url']);
               final caption = item['caption'] ?? 'Conference moment';
               final confidence = item['confidencePercent'] ?? '94% Match';
 
@@ -2681,7 +3601,7 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
                 itemCount: filtered.length,
                 itemBuilder: (context, index) {
                   final item = filtered[index];
-                  final url = item['url'] ?? '';
+                  final url = resolveMediaUrl(item['url']);
                   final caption = item['caption'] ?? 'Conference moment';
                   final album = item['album'] ?? 'General';
 
@@ -4682,172 +5602,511 @@ class DigitalIdScreen extends StatelessWidget {
   }
 }
 
-class CertificateScreen extends StatelessWidget {
+class CertificateScreen extends StatefulWidget {
   const CertificateScreen({super.key});
+
+  @override
+  State<CertificateScreen> createState() => _CertificateScreenState();
+}
+
+class _CertificateScreenState extends State<CertificateScreen> {
+  int _overallRating = 5;
+  int _contentRating = 5;
+  int _speakerRating = 5;
+  int _hospitalityRating = 5;
+  final TextEditingController _commentController = TextEditingController();
+  bool _isSubmitting = false;
+  int _refreshKey = 0;
+
+  Future<Map<String, dynamic>> _loadCertificateData() async {
+    try {
+      final res = await ApiService.get('/me/certificate');
+      if (res is Map) {
+        return Map<String, dynamic>.from(res);
+      }
+    } catch (_) {}
+    return {};
+  }
+
+  Future<void> _submitFeedbackAndGenerate() async {
+    setState(() => _isSubmitting = true);
+    try {
+      final res = await ApiService.post('/me/feedback-and-certificate', {
+        'rating': _overallRating,
+        'contentRating': _contentRating,
+        'speakerRating': _speakerRating,
+        'hospitalityRating': _hospitalityRating,
+        'comment': _commentController.text.trim(),
+      });
+
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+          _refreshKey++;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🎉 Feedback recorded! Your official Certificate of Participation is generated.'),
+            backgroundColor: maroon,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Submission failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: cream,
       appBar: AppBar(
-        title: const Text('Certificate of Participation', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Certificate of Participation', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
         backgroundColor: maroon,
-        foregroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
-      body: FutureBuilder(
-        future: ApiService.get('/me/certificate'),
+      body: FutureBuilder<Map<String, dynamic>>(
+        key: ValueKey(_refreshKey),
+        future: _loadCertificateData(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting && !_isSubmitting) {
             return const Center(child: CircularProgressIndicator(color: maroon));
           }
 
-          if (snapshot.hasError) {
-            return const Center(child: Text('Unable to load certificate details'));
+          final data = snapshot.data ?? {};
+          final bool hasFeedback = data['hasFeedback'] == true;
+          final cert = data['certificate'] is Map ? data['certificate'] as Map : null;
+          final certUrl = cert?['certificate_url']?.toString();
+          final fullImageUrl = certUrl != null ? resolveMediaUrl(certUrl) : null;
+
+          // If feedback is NOT filled yet or certificate is missing, show the feedback form first
+          if (!hasFeedback || cert == null || fullImageUrl == null) {
+            return _buildFeedbackUnlockView(data['participant']);
           }
 
-          final data = snapshot.data is Map ? snapshot.data as Map : <dynamic, dynamic>{};
-          if (data.isEmpty) {
-            return const Center(
+          // Otherwise show the unlocked certificate
+          return _buildUnlockedCertificateView(cert, fullImageUrl);
+        },
+      ),
+    );
+  }
+
+  Widget _buildFeedbackUnlockView(dynamic participant) {
+    final pName = participant?['name'] ?? 'Delegate';
+    final regNo = participant?['registration_no'] ?? 'MAPCON-2026-DEL';
+
+    return ListView(
+      padding: const EdgeInsets.all(18),
+      children: [
+        // Top Banner
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF8C1119), Color(0xFF5B0A0F)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: maroon.withOpacity(0.25),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: gold.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.workspace_premium_rounded, color: gold, size: 26),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'VALEDICTORY EVALUATION',
+                          style: TextStyle(color: gold, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1),
+                        ),
+                        Text(
+                          'Unlock Your Certificate',
+                          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'As per academic accreditation and MAPCON guidelines, please fill this quick feedback form to automatically generate your verified Certificate of Participation.',
+                style: TextStyle(color: Color(0xFFF8FAFC), fontSize: 13, height: 1.4),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white24),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.badge_outlined, color: gold, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      '$pName ($regNo)',
+                      style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // Feedback Form Card
+        Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: Colors.grey.shade200, width: 1.2),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Conference Evaluation & Ratings',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: slate),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Rate each aspect on a scale of 1 to 5 stars:',
+                  style: TextStyle(fontSize: 12.5, color: muted),
+                ),
+                const SizedBox(height: 18),
+
+                _buildStarRatingRow(
+                  title: '1. Overall Conference Experience',
+                  subtitle: 'Coordination, schedule management & overall impression',
+                  currentValue: _overallRating,
+                  onChanged: (val) => setState(() => _overallRating = val),
+                ),
+                const Divider(height: 24),
+
+                _buildStarRatingRow(
+                  title: '2. Scientific Sessions & Keynotes',
+                  subtitle: 'Relevance of pathology tracks & diagnostic updates',
+                  currentValue: _contentRating,
+                  onChanged: (val) => setState(() => _contentRating = val),
+                ),
+                const Divider(height: 24),
+
+                _buildStarRatingRow(
+                  title: '3. Speakers & Academic Content',
+                  subtitle: 'Faculty expertise, presentation quality & Q&A interaction',
+                  currentValue: _speakerRating,
+                  onChanged: (val) => setState(() => _speakerRating = val),
+                ),
+                const Divider(height: 24),
+
+                _buildStarRatingRow(
+                  title: '4. Venue & Hospitality (Hotel Sayaji)',
+                  subtitle: 'Hall comfort, meals, dining and delegate reception',
+                  currentValue: _hospitalityRating,
+                  onChanged: (val) => setState(() => _hospitalityRating = val),
+                ),
+                const Divider(height: 24),
+
+                const Text(
+                  'Suggestions & Key Takeaways (Optional)',
+                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: slate),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _commentController,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    hintText: 'Share your feedback, favorite sessions, or recommendations for future MAPCON editions...',
+                    hintStyle: const TextStyle(fontSize: 12.5, color: muted),
+                    filled: true,
+                    fillColor: const Color(0xFFF8FAFC),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: maroon, width: 1.5),
+                    ),
+                    contentPadding: const EdgeInsets.all(14),
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Submit Button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: maroon,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      elevation: 3,
+                    ),
+                    icon: _isSubmitting
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          )
+                        : const Icon(Icons.auto_awesome, color: gold, size: 22),
+                    label: Text(
+                      _isSubmitting ? 'Generating Certificate...' : 'Submit Feedback & Generate Certificate',
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+                    ),
+                    onPressed: _isSubmitting ? null : _submitFeedbackAndGenerate,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStarRatingRow({
+    required String title,
+    required String subtitle,
+    required int currentValue,
+    required ValueChanged<int> onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5, color: slate)),
+        const SizedBox(height: 2),
+        Text(subtitle, style: const TextStyle(fontSize: 11.5, color: muted)),
+        const SizedBox(height: 8),
+        Row(
+          children: List.generate(5, (index) {
+            final starNum = index + 1;
+            final isFilled = starNum <= currentValue;
+            return GestureDetector(
+              onTap: () => onChanged(starNum),
               child: Padding(
-                padding: EdgeInsets.all(24.0),
-                child: Text(
-                  'Certificate will be issued post valedictory session',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: muted, fontSize: 16),
+                padding: const EdgeInsets.only(right: 6),
+                child: Icon(
+                  isFilled ? Icons.star_rounded : Icons.star_outline_rounded,
+                  color: isFilled ? const Color(0xFFF59E0B) : Colors.grey.shade400,
+                  size: 32,
                 ),
               ),
             );
-          }
+          }),
+        ),
+      ],
+    );
+  }
 
-          final certificateNo = data['certificate_no']?.toString() ?? '—';
-          final issuedAt = data['issued_at']?.toString() ?? '—';
-          final certUrl = data['certificate_url']?.toString();
+  Widget _buildUnlockedCertificateView(Map cert, String fullImageUrl) {
+    final certificateNo = cert['certificate_no']?.toString() ?? '—';
+    final issuedAt = cert['issued_at']?.toString() ?? '—';
 
-          final String imageBaseUrl = apiBaseUrl.replaceAll('/api', '');
-          final String? fullImageUrl = certUrl != null ? '$imageBaseUrl$certUrl' : null;
-
-          return ListView(
-            padding: const EdgeInsets.all(18),
+    return ListView(
+      padding: const EdgeInsets.all(18),
+      children: [
+        // Success Verified Pill
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFECFDF5),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF10B981), width: 1.2),
+          ),
+          child: const Row(
             children: [
-              if (fullImageUrl != null) ...[
-                Card(
-                  elevation: 4,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Image.network(
-                    fullImageUrl,
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Container(
-                        height: 250,
-                        color: Colors.grey.shade100,
-                        child: const Center(
-                          child: CircularProgressIndicator(color: maroon),
-                        ),
-                      );
-                    },
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        height: 250,
-                        color: Colors.grey.shade100,
-                        child: const Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.error_outline, size: 40, color: Colors.red),
-                            SizedBox(height: 8),
-                            Text('Failed to load certificate image'),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 20),
-              ],
-              Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                  side: BorderSide(color: Colors.grey.shade200, width: 1.2),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    children: [
-                      ListTile(
-                        leading: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: maroon.withOpacity(0.08),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.workspace_premium, color: maroon, size: 20),
-                        ),
-                        title: const Text(
-                          'CERTIFICATE NO',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: muted),
-                        ),
-                        subtitle: Text(
-                          certificateNo,
-                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: slate),
-                        ),
-                      ),
-                      ListTile(
-                        leading: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: maroon.withOpacity(0.08),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.calendar_month, color: maroon, size: 20),
-                        ),
-                        title: const Text(
-                          'ISSUED AT',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: muted),
-                        ),
-                        subtitle: Text(
-                          issuedAt.contains('T') || issuedAt.contains('-') ? formatSessionDate(issuedAt) : issuedAt,
-                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: slate),
-                        ),
-                      ),
-                    ],
-                  ),
+              Icon(Icons.verified_rounded, color: Color(0xFF047857), size: 24),
+              SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Certificate Verified & Issued',
+                      style: TextStyle(color: Color(0xFF065F46), fontWeight: FontWeight.w900, fontSize: 13.5),
+                    ),
+                    Text(
+                      'Feedback submitted. Your certificate is ready for download.',
+                      style: TextStyle(color: Color(0xFF047857), fontSize: 12),
+                    ),
+                  ],
                 ),
               ),
-              if (fullImageUrl != null) ...[
-                const SizedBox(height: 24),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: maroon,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+
+        // Certificate Image Card
+        Card(
+          elevation: 6,
+          shadowColor: maroon.withOpacity(0.2),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: const BorderSide(color: gold, width: 1.5),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              Image.network(
+                fullImageUrl,
+                fit: BoxFit.contain,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Container(
+                    height: 250,
+                    color: Colors.grey.shade100,
+                    child: const Center(
+                      child: CircularProgressIndicator(color: maroon),
                     ),
-                    elevation: 2,
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    height: 250,
+                    color: Colors.grey.shade100,
+                    child: const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.error_outline, size: 40, color: Colors.red),
+                        SizedBox(height: 8),
+                        Text('Failed to load certificate image'),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // Certificate Metadata Card
+        Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: BorderSide(color: Colors.grey.shade200, width: 1.2),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              children: [
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: maroon.withOpacity(0.08),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.workspace_premium, color: maroon, size: 22),
                   ),
-                  icon: const Icon(Icons.download, size: 22),
-                  label: const Text(
-                    'Download Certificate',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  title: const Text(
+                    'CERTIFICATE NUMBER',
+                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w900, color: muted),
                   ),
-                  onPressed: () async {
-                    final uri = Uri.parse(fullImageUrl);
-                    if (await canLaunchUrl(uri)) {
-                      await launchUrl(uri, mode: LaunchMode.externalApplication);
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Could not open download link')),
-                      );
-                    }
-                  },
+                  subtitle: Text(
+                    certificateNo,
+                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14.5, color: slate),
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: maroon.withOpacity(0.08),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.calendar_month, color: maroon, size: 22),
+                  ),
+                  title: const Text(
+                    'DATE OF ISSUANCE',
+                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w900, color: muted),
+                  ),
+                  subtitle: Text(
+                    issuedAt.contains('T') || issuedAt.contains('-') ? formatSessionDate(issuedAt) : issuedAt,
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: slate),
+                  ),
                 ),
               ],
-            ],
-          );
-        },
-      ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // Download High-Res Certificate Button
+        ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: maroon,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+            elevation: 3,
+          ),
+          icon: const Icon(Icons.download_rounded, size: 22, color: gold),
+          label: const Text(
+            'Download High-Res Certificate (PNG)',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+          ),
+          onPressed: () async {
+            final uri = Uri.parse(fullImageUrl);
+            if (await canLaunchUrl(uri)) {
+              await launchUrl(uri, mode: LaunchMode.externalApplication);
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Could not open download link')),
+              );
+            }
+          },
+        ),
+      ],
     );
   }
 }
