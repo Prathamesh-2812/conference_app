@@ -78,7 +78,46 @@ function App(){
     if(logged)loadConference();
     const handleUnauth=()=>setLogged(false);
     window.addEventListener('auth:unauthorized',handleUnauth);
-    return ()=>window.removeEventListener('auth:unauthorized',handleUnauth);
+
+    let socket = null;
+    if (logged && typeof window !== 'undefined' && window.io) {
+      try {
+        const socketUrl = API.replace(/\/api\/?$/, '');
+        const token = localStorage.getItem('token');
+        socket = window.io(socketUrl, {
+          auth: { token },
+          query: { token },
+          transports: ['websocket', 'polling']
+        });
+
+        socket.on('connect', () => {
+          socket.emit('join_conference', 1);
+        });
+
+        const handleRealtime = (eventName, data) => {
+          window.dispatchEvent(new CustomEvent('app:realtime', { detail: { event: eventName, data } }));
+          if (eventName === 'conference_updated') {
+            loadConference();
+          }
+        };
+
+        const events = [
+          'conference_updated', 'participant_registered', 'participant_status_updated',
+          'participant_deleted', 'meal_scanned', 'new_scan', 'sessions_updated',
+          'speakers_updated', 'new_notice', 'room_allocated', 'room_deallocated',
+          'transport_assigned', 'gallery_updated', 'sliders_updated'
+        ];
+
+        events.forEach(ev => socket.on(ev, data => handleRealtime(ev, data)));
+      } catch (err) {
+        console.warn('Socket connect error:', err);
+      }
+    }
+
+    return ()=>{
+      window.removeEventListener('auth:unauthorized',handleUnauth);
+      if(socket) socket.disconnect();
+    };
   },[logged]);
   const notify=msg=>{setToast(msg);setTimeout(()=>setToast(''),2800)};
   if(!logged)return <Login onLogin={()=>setLogged(true)}/>;

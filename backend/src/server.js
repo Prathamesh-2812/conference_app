@@ -36,8 +36,54 @@ const pick=(src,fields)=>fields.reduce((out,k)=>{if(src[k]!==undefined)out[k]=sr
 async function audit(req,action,module,recordId,oldValue,newValue){
   await pool.query('INSERT INTO audit_logs(user_id,action,entity,entity_id,details) VALUES(?,?,?,?,?)',[req.user?.id||null,action,module,recordId||null,JSON.stringify({oldValue,newValue,ip:req.ip})]);
 }
+async function createAndSendNotification({ user_id = null, conference_id = 1, title, message, type = 'GENERAL', target_role = null, metadata = null }) {
+  try {
+    const [r] = await pool.query(
+      'INSERT INTO notifications (user_id, conference_id, title, message, type, created_at) VALUES (?, ?, ?, ?, ?, NOW())',
+      [user_id, conference_id, title, message, type]
+    );
+    const notif = {
+      id: r.insertId,
+      user_id,
+      conference_id,
+      title,
+      message,
+      type,
+      target_role,
+      metadata,
+      created_at: new Date().toISOString()
+    };
+    if (user_id) {
+      io.to(`user_${user_id}`).emit('new_notification', notif);
+    } else if (target_role) {
+      io.to(`role_${target_role}`).emit('new_notification', notif);
+      io.to(`conference_${conference_id}`).emit('new_notification', notif);
+    } else {
+      io.to(`conference_${conference_id}`).emit('new_notification', notif);
+      io.emit('new_notification', notif);
+    }
+    return notif;
+  } catch (err) {
+    console.error('Error creating notification:', err);
+    return null;
+  }
+}
 async function runMigrations(){
   try{
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        conference_id INT NOT NULL DEFAULT 1,
+        user_id INT NULL,
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        type VARCHAR(50) DEFAULT 'GENERAL',
+        read_at TIMESTAMP NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_notif_conf_user (conference_id, user_id),
+        INDEX idx_notif_read (read_at)
+      )
+    `);
     const [cols]=await pool.query("SHOW COLUMNS FROM users LIKE 'must_change_password'");
     if(!cols.length){
       await pool.query("ALTER TABLE users ADD COLUMN must_change_password TINYINT(1) DEFAULT 0");
@@ -401,11 +447,13 @@ app.post('/api/admin/participants',auth,roles('ADMIN','SUPER_ADMIN'),[
     req.body.liaison_id||null, qrToken
   ]);
 
-  created(res,{id:pRes.insertId, userId, registrationNo:regNo, qrToken},'Participant registered');
+  const createdPart = { id: pRes.insertId, userId, registrationNo: regNo, qrToken, name: req.body.name, status: req.body.status || 'PENDING' };
+  io.emit('participant_registered', createdPart);
+  created(res, { id: pRes.insertId, userId, registrationNo: regNo, qrToken }, 'Participant registered');
 }));
 
 app.put('/api/admin/participants/:id',auth,roles('ADMIN','SUPER_ADMIN'),validate,asyncRoute(async(req,res)=>{
-  const [[p]]=await pool.query('SELECT user_id FROM participants WHERE id=?',[req.params.id]);
+  const [[p]]=await pool.query('SELECT p.*, u.id as user_id, u.name, u.email, u.phone FROM participants p JOIN users u ON u.id=p.user_id WHERE p.id=?',[req.params.id]);
   if(!p) return res.status(404).json({message:'Participant not found'});
 
   if(req.body.name || req.body.phone || req.body.designation || req.body.university || req.body.email){
@@ -428,7 +476,35 @@ app.put('/api/admin/participants/:id',auth,roles('ADMIN','SUPER_ADMIN'),validate
     req.body.liaison_id||null, req.params.id
   ]);
 
-  ok(res,null,'Participant updated');
+  const [[updatedP]]=await pool.query(`
+    SELECT p.*, u.name, u.email, u.phone, u.designation, u.university, u.blood_group, u.photo, u.last_login_at,
+           l.name as liaison_name, l.phone as liaison_phone,
+           h.id as hotel_id, h.name as hotel_name, r.room_number, r.room_type,
+           ra.check_in, ra.check_out,
+           (SELECT COUNT(*) FROM certificates WHERE participant_id=p.id) as has_certificate,
+           (SELECT COUNT(*) FROM feedback WHERE participant_id=p.id) as has_feedback
+    FROM participants p
+    JOIN users u ON u.id = p.user_id
+    LEFT JOIN liaison_faculty l ON l.id = p.liaison_id
+    LEFT JOIN room_allocations ra ON ra.participant_id = p.id
+    LEFT JOIN rooms r ON r.id = ra.room_id
+    LEFT JOIN hotels h ON h.id = r.hotel_id
+    WHERE p.id = ?
+  `, [req.params.id]);
+
+  io.emit('participant_status_updated', { id: req.params.id, userId: p.user_id, participant: updatedP });
+
+  if(req.body.status === 'APPROVED' && p.status !== 'APPROVED'){
+    await createAndSendNotification({
+      user_id: p.user_id,
+      conference_id: p.conference_id || 1,
+      title: 'Registration Approved! 🎉',
+      message: `Dear ${p.name}, your MAPCON 2026 registration (${updatedP?.registration_no || p.registration_no}) has been officially approved. Welcome to the conference!`,
+      type: 'REGISTRATION'
+    });
+  }
+
+  ok(res, updatedP, 'Participant updated');
 }));
 
 app.delete('/api/admin/participants/:id',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
@@ -436,6 +512,7 @@ app.delete('/api/admin/participants/:id',auth,roles('ADMIN','SUPER_ADMIN'),async
   if(p){
     await pool.query('DELETE FROM participants WHERE id=?',[req.params.id]);
     await pool.query('DELETE FROM users WHERE id=?',[p.user_id]);
+    io.emit('participant_deleted', { id: req.params.id, userId: p.user_id });
   }
   ok(res,null,'Participant deleted');
 }));
@@ -673,17 +750,20 @@ app.get('/api/admin/speakers',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async
 app.post('/api/admin/speakers',auth,roles('ADMIN','SUPER_ADMIN'),[body('name').notEmpty()],validate,asyncRoute(async(req,res)=>{
   const [r]=await pool.query('INSERT INTO speakers(conference_id,name,designation,organization,bio,email,phone,photo) VALUES(?,?,?,?,?,?,?,?)',
     [req.body.conferenceId||1, req.body.name, req.body.designation, req.body.organization, req.body.bio, req.body.email, req.body.phone, req.body.photo]);
+  io.emit('speakers_updated', { action: 'create', id: r.insertId });
   created(res,{id:r.insertId},'Speaker added');
 }));
 
 app.put('/api/admin/speakers/:id',auth,roles('ADMIN','SUPER_ADMIN'),validate,asyncRoute(async(req,res)=>{
   await pool.query('UPDATE speakers SET name=?, designation=?, organization=?, bio=?, email=?, phone=?, photo=? WHERE id=?',
     [req.body.name, req.body.designation, req.body.organization, req.body.bio, req.body.email, req.body.phone, req.body.photo, req.params.id]);
+  io.emit('speakers_updated', { action: 'update', id: req.params.id });
   ok(res,null,'Speaker updated');
 }));
 
 app.delete('/api/admin/speakers/:id',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
   await pool.query('DELETE FROM speakers WHERE id=?',[req.params.id]);
+  io.emit('speakers_updated', { action: 'delete', id: req.params.id });
   ok(res,null,'Speaker deleted');
 }));
 
@@ -713,17 +793,20 @@ app.get('/api/admin/sessions',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async
 app.post('/api/admin/sessions',auth,roles('ADMIN','SUPER_ADMIN'),[body('title').notEmpty()],validate,asyncRoute(async(req,res)=>{
   const [r]=await pool.query('INSERT INTO sessions(conference_id,hall_id,speaker_id,title,description,session_date,start_time,end_time,category) VALUES(?,?,?,?,?,?,?,?,?)',
     [req.body.conferenceId||1, req.body.hall_id, req.body.speaker_id, req.body.title, req.body.description, req.body.session_date, req.body.start_time, req.body.end_time, req.body.category]);
+  io.emit('sessions_updated', { action: 'create', id: r.insertId });
   created(res,{id:r.insertId},'Session created');
 }));
 
 app.put('/api/admin/sessions/:id',auth,roles('ADMIN','SUPER_ADMIN'),validate,asyncRoute(async(req,res)=>{
   await pool.query('UPDATE sessions SET hall_id=?, speaker_id=?, title=?, description=?, session_date=?, start_time=?, end_time=?, category=? WHERE id=?',
     [req.body.hall_id, req.body.speaker_id, req.body.title, req.body.description, req.body.session_date, req.body.start_time, req.body.end_time, req.body.category, req.params.id]);
+  io.emit('sessions_updated', { action: 'update', id: req.params.id });
   ok(res,null,'Session updated');
 }));
 
 app.delete('/api/admin/sessions/:id',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
   await pool.query('DELETE FROM sessions WHERE id=?',[req.params.id]);
+  io.emit('sessions_updated', { action: 'delete', id: req.params.id });
   ok(res,null,'Session deleted');
 }));
 app.get('/api/sessions',asyncRoute(async(req,res)=>{const [r]=await pool.query(`SELECT s.*, DATE_FORMAT(s.session_date, '%Y-%m-%d') as session_date, sp.name speaker_name,sp.photo speaker_photo,v.name venue_name,h.name hall_name FROM sessions s LEFT JOIN speakers sp ON sp.id=s.speaker_id LEFT JOIN halls h ON h.id=s.hall_id LEFT JOIN venues v ON v.id=h.venue_id WHERE s.conference_id=? ORDER BY s.session_date,s.start_time`,[req.query.conferenceId||1]);res.json(r)}));
@@ -917,7 +1000,85 @@ app.get('/api/gallery/my-photos',auth,asyncRoute(async(req,res)=>{
   }, `Found ${matched.length} photos of you in the conference gallery`);
 }));
 
-app.get('/api/me/profile',auth,asyncRoute(async(req,res)=>{const [[u]]=await pool.query(`SELECT u.id,u.name,u.email,u.phone,u.role,u.designation,u.university,u.blood_group,u.photo,p.registration_no,p.category,p.mode_of_travel,p.arrival_date,p.arrival_time,p.departure_date,p.departure_time,p.emergency_contact,h.name hotel_name,r.room_number,r.room_type,l.name liaison_name,l.phone liaison_phone FROM users u LEFT JOIN participants p ON p.user_id=u.id LEFT JOIN room_allocations ra ON ra.participant_id=p.id LEFT JOIN rooms r ON r.id=ra.room_id LEFT JOIN hotels h ON h.id=r.hotel_id LEFT JOIN liaison_faculty l ON l.id=p.liaison_id WHERE u.id=?`,[req.user.id]);if(!u)return res.status(404).json({message:'Profile not found'});res.json(u)}));
+app.get('/api/me/profile',auth,asyncRoute(async(req,res)=>{
+  const [[u]]=await pool.query(`
+    SELECT u.id,u.name,u.email,u.phone,u.role,u.designation,u.university,u.blood_group,u.photo,
+           p.registration_no,p.category,p.mode_of_travel,p.flight_number,p.arrival_date,p.arrival_time,p.departure_date,p.departure_time,p.emergency_contact,
+           h.name hotel_name,r.room_number,r.room_type,l.name liaison_name,l.phone liaison_phone 
+    FROM users u 
+    LEFT JOIN participants p ON p.user_id=u.id 
+    LEFT JOIN room_allocations ra ON ra.participant_id=p.id 
+    LEFT JOIN rooms r ON r.id=ra.room_id 
+    LEFT JOIN hotels h ON h.id=r.hotel_id 
+    LEFT JOIN liaison_faculty l ON l.id=p.liaison_id 
+    WHERE u.id=?
+  `,[req.user.id]);
+  if(!u)return res.status(404).json({message:'Profile not found'});
+  res.json(u);
+}));
+
+app.put('/api/me/profile',auth,asyncRoute(async(req,res)=>{
+  const userId = req.user.id;
+  const name = req.body.name !== undefined ? (req.body.name ? String(req.body.name).trim() : null) : undefined;
+  const phone = req.body.phone !== undefined ? (req.body.phone ? String(req.body.phone).trim() : null) : undefined;
+  const designation = req.body.designation !== undefined ? (req.body.designation ? String(req.body.designation).trim() : null) : undefined;
+  const university = req.body.university !== undefined ? (req.body.university ? String(req.body.university).trim() : null) : undefined;
+  const bloodGroup = (req.body.blood_group !== undefined ? req.body.blood_group : req.body.bloodGroup) !== undefined 
+    ? ((req.body.blood_group || req.body.bloodGroup) ? String(req.body.blood_group || req.body.bloodGroup).trim() : null) 
+    : undefined;
+
+  const userUpdates = [];
+  const userParams = [];
+  if (name !== undefined) { userUpdates.push('name = ?'); userParams.push(name); }
+  if (phone !== undefined) { userUpdates.push('phone = ?'); userParams.push(phone); }
+  if (designation !== undefined) { userUpdates.push('designation = ?'); userParams.push(designation); }
+  if (university !== undefined) { userUpdates.push('university = ?'); userParams.push(university); }
+  if (bloodGroup !== undefined) { userUpdates.push('blood_group = ?'); userParams.push(bloodGroup); }
+
+  if (userUpdates.length > 0) {
+    userParams.push(userId);
+    await pool.query(`UPDATE users SET ${userUpdates.join(', ')} WHERE id = ?`, userParams);
+  }
+
+  const emergencyContact = req.body.emergency_contact !== undefined ? (req.body.emergency_contact ? String(req.body.emergency_contact).trim() : null) : (req.body.emergencyContact !== undefined ? (req.body.emergencyContact ? String(req.body.emergencyContact).trim() : null) : undefined);
+  const modeOfTravel = (req.body.mode_of_travel !== undefined ? req.body.mode_of_travel : req.body.modeOfTravel) !== undefined ? ((req.body.mode_of_travel || req.body.modeOfTravel) ? String(req.body.mode_of_travel || req.body.modeOfTravel).trim() : null) : undefined;
+  const flightNumber = (req.body.flight_number !== undefined ? req.body.flight_number : req.body.flightNumber) !== undefined ? ((req.body.flight_number || req.body.flightNumber) ? String(req.body.flight_number || req.body.flightNumber).trim() : null) : undefined;
+  const arrivalDate = (req.body.arrival_date !== undefined ? req.body.arrival_date : req.body.arrivalDate) !== undefined ? (req.body.arrival_date || req.body.arrivalDate || null) : undefined;
+  const arrivalTime = (req.body.arrival_time !== undefined ? req.body.arrival_time : req.body.arrivalTime) !== undefined ? (req.body.arrival_time || req.body.arrivalTime || null) : undefined;
+  const departureDate = (req.body.departure_date !== undefined ? req.body.departure_date : req.body.departureDate) !== undefined ? (req.body.departure_date || req.body.departureDate || null) : undefined;
+  const departureTime = (req.body.departure_time !== undefined ? req.body.departure_time : req.body.departureTime) !== undefined ? (req.body.departure_time || req.body.departureTime || null) : undefined;
+
+  const partUpdates = [];
+  const partParams = [];
+  if (emergencyContact !== undefined) { partUpdates.push('emergency_contact = ?'); partParams.push(emergencyContact); }
+  if (modeOfTravel !== undefined) { partUpdates.push('mode_of_travel = ?'); partParams.push(modeOfTravel); }
+  if (flightNumber !== undefined) { partUpdates.push('flight_number = ?'); partParams.push(flightNumber); }
+  if (arrivalDate !== undefined) { partUpdates.push('arrival_date = ?'); partParams.push(arrivalDate); }
+  if (arrivalTime !== undefined) { partUpdates.push('arrival_time = ?'); partParams.push(arrivalTime); }
+  if (departureDate !== undefined) { partUpdates.push('departure_date = ?'); partParams.push(departureDate); }
+  if (departureTime !== undefined) { partUpdates.push('departure_time = ?'); partParams.push(departureTime); }
+
+  if (partUpdates.length > 0) {
+    partParams.push(userId);
+    await pool.query(`UPDATE participants SET ${partUpdates.join(', ')} WHERE user_id = ?`, partParams);
+  }
+
+  const [[u]] = await pool.query(`
+    SELECT u.id,u.name,u.email,u.phone,u.role,u.designation,u.university,u.blood_group,u.photo,
+           p.registration_no,p.category,p.mode_of_travel,p.flight_number,p.arrival_date,p.arrival_time,p.departure_date,p.departure_time,p.emergency_contact,
+           h.name hotel_name,r.room_number,r.room_type,l.name liaison_name,l.phone liaison_phone 
+    FROM users u 
+    LEFT JOIN participants p ON p.user_id=u.id 
+    LEFT JOIN room_allocations ra ON ra.participant_id=p.id 
+    LEFT JOIN rooms r ON r.id=ra.room_id 
+    LEFT JOIN hotels h ON h.id=r.hotel_id 
+    LEFT JOIN liaison_faculty l ON l.id=p.liaison_id 
+    WHERE u.id=?
+  `, [userId]);
+
+  io.emit('participant_status_updated', { userId, participant: u });
+  ok(res, u, 'Profile updated successfully');
+}));
 app.post('/api/me/photo',auth,asyncRoute(async(req,res)=>{
   let photoUrl = req.body.photo || req.body.photoUrl;
   if(req.body.file){
@@ -1159,7 +1320,7 @@ app.post('/api/admin/sliders',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async
     'INSERT INTO main_sliders(conference_id, title, media_type, media_url, thumbnail_url, display_order, active) VALUES(?,?,?,?,?,?,?)',
     [conferenceId, title, mediaType, mediaUrl, thumbnailUrl, displayOrder, active]
   );
-
+  io.emit('sliders_updated', { action: 'create', id: r.insertId });
   created(res, { id: r.insertId, conference_id: conferenceId, title, media_type: mediaType, media_url: mediaUrl, active }, 'Slider item added');
 }));
 
@@ -1180,11 +1341,13 @@ app.put('/api/admin/sliders/:id',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(as
     WHERE id=?
   `, [req.body.title, req.body.media_type||req.body.mediaType, mediaUrl, req.body.thumbnail_url||req.body.thumbnailUrl, req.body.display_order||req.body.displayOrder, req.body.active!==undefined?(req.body.active?1:0):null, req.params.id]);
 
+  io.emit('sliders_updated', { action: 'update', id: req.params.id });
   ok(res, null, 'Slider item updated');
 }));
 
 app.delete('/api/admin/sliders/:id',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
   await pool.query('DELETE FROM main_sliders WHERE id=?',[req.params.id]);
+  io.emit('sliders_updated', { action: 'delete', id: req.params.id });
   ok(res, null, 'Slider item deleted');
 }));
 app.get('/api/me/attendance',auth,asyncRoute(async(req,res)=>{const [r]=await pool.query(`SELECT a.*,s.title,s.session_date,s.start_time FROM attendance a JOIN participants p ON p.id=a.participant_id JOIN sessions s ON s.id=a.session_id WHERE p.user_id=? ORDER BY s.session_date,s.start_time`,[req.user.id]);res.json(r)}));
@@ -1423,8 +1586,25 @@ app.post('/api/admin/duty-assignments',auth,roles('ADMIN','SUPER_ADMIN'),asyncRo
     [req.body.duty_id, req.body.user_id, req.body.status||'ASSIGNED']);
   created(res,{id:r.insertId},'Duty assigned');
 }));
-app.get('/api/me/notifications',auth,asyncRoute(async(req,res)=>{const [r]=await pool.query('SELECT * FROM notifications WHERE conference_id=? AND (user_id IS NULL OR user_id=?) ORDER BY created_at DESC LIMIT 100',[req.query.conferenceId||1,req.user.id]);res.json(r)}));
-app.post('/api/notifications/:id/read',auth,asyncRoute(async(req,res)=>{await pool.query('UPDATE notifications SET read_at=NOW() WHERE id=? AND (user_id IS NULL OR user_id=?)',[req.params.id,req.user.id]);res.json({message:'Notification marked as read'})}));
+app.get('/api/me/notifications',auth,asyncRoute(async(req,res)=>{
+  const [r]=await pool.query('SELECT * FROM notifications WHERE conference_id=? AND (user_id IS NULL OR user_id=?) ORDER BY created_at DESC LIMIT 100',[req.query.conferenceId||1,req.user.id]);
+  res.json(r);
+}));
+
+app.get('/api/me/notifications/unread-count',auth,asyncRoute(async(req,res)=>{
+  const [[r]]=await pool.query('SELECT COUNT(*) as unread FROM notifications WHERE (user_id = ? OR (user_id IS NULL AND conference_id = ?)) AND read_at IS NULL',[req.user.id, req.query.conferenceId||1]);
+  ok(res, { unread: r?.unread || 0 });
+}));
+
+app.post('/api/me/notifications/read-all',auth,asyncRoute(async(req,res)=>{
+  await pool.query('UPDATE notifications SET read_at=NOW() WHERE (user_id=? OR (user_id IS NULL AND conference_id=?)) AND read_at IS NULL',[req.user.id, req.query.conferenceId||1]);
+  ok(res, { success: true }, 'All notifications marked as read');
+}));
+
+app.post('/api/notifications/:id/read',auth,asyncRoute(async(req,res)=>{
+  await pool.query('UPDATE notifications SET read_at=NOW() WHERE id=? AND (user_id IS NULL OR user_id=?)',[req.params.id,req.user.id]);
+  res.json({message:'Notification marked as read'});
+}));
 app.get('/api/polls',auth,asyncRoute(async(req,res)=>{const [r]=await pool.query('SELECT p.id,p.question,p.active,o.id option_id,o.option_text FROM polls p JOIN poll_options o ON o.poll_id=p.id WHERE p.conference_id=? AND p.active=1 ORDER BY p.created_at DESC',[req.query.conferenceId||1]);const out={};for(const x of r){out[x.id]??={id:x.id,question:x.question,options:[]};out[x.id].options.push({id:x.option_id,text:x.option_text})}res.json(Object.values(out))}));
 app.post('/api/polls/:id/vote',auth,[body('optionId').isInt()],validate,asyncRoute(async(req,res)=>{const [[p]]=await pool.query('SELECT id FROM participants WHERE user_id=? LIMIT 1',[req.user.id]);if(!p)return res.status(400).json({message:'Participant profile not found'});await pool.query('INSERT INTO poll_votes(poll_id,option_id,participant_id) VALUES(?,?,?) ON DUPLICATE KEY UPDATE option_id=VALUES(option_id)',[req.params.id,req.body.optionId,p.id]);res.json({message:'Vote recorded'})}));
 app.get('/api/meals',auth,asyncRoute(async(req,res)=>{
@@ -1663,6 +1843,7 @@ app.post('/api/admin/gallery',auth,roles('ADMIN','SUPER_ADMIN','PHOTOGRAPHER'),a
     );
   }
 
+  io.emit('gallery_updated', { action: 'create', id: photoId });
   created(res,{id:photoId, url, indexedFaces:faces.length},'Photo added and AI faces indexed');
 }));
 
@@ -1706,12 +1887,14 @@ app.post('/api/admin/gallery/bulk-upload',auth,roles('ADMIN','SUPER_ADMIN','PHOT
     totalFacesIndexed += faces.length;
   }
 
+  io.emit('gallery_updated', { action: 'bulk_create', count: totalUploaded });
   ok(res, { uploaded: totalUploaded, facesIndexed: totalFacesIndexed }, `Uploaded ${totalUploaded} photos with ${totalFacesIndexed} faces indexed for AI matching.`);
 }));
 
 app.delete('/api/admin/gallery/:id',auth,roles('ADMIN','SUPER_ADMIN','PHOTOGRAPHER'),asyncRoute(async(req,res)=>{
   await pool.query('DELETE FROM photo_faces WHERE photo_id=?',[req.params.id]);
   await pool.query('DELETE FROM photos WHERE id=?',[req.params.id]);
+  io.emit('gallery_updated', { action: 'delete', id: req.params.id });
   ok(res,null,'Photo deleted');
 }));
 
@@ -2157,7 +2340,8 @@ app.post('/api/admin/room-allocations',auth,roles('ADMIN','SUPER_ADMIN'),asyncRo
   const [existing]=await pool.query('SELECT id FROM room_allocations WHERE participant_id=?',[req.body.participant_id]);
   if(existing.length) return res.status(400).json({message:'Participant already has a room allocation'});
 
-  const [[room]]=await pool.query('SELECT capacity, (SELECT COUNT(*) FROM room_allocations WHERE room_id=?) as used FROM rooms WHERE id=?',[req.body.room_id, req.body.room_id]);
+  const [[room]]=await pool.query('SELECT r.*, h.name as hotel_name, (SELECT COUNT(*) FROM room_allocations WHERE room_id=r.id) as used FROM rooms r JOIN hotels h ON h.id=r.hotel_id WHERE r.id=?',[req.body.room_id]);
+  if(!room) return res.status(404).json({message:'Room not found'});
   if(room.used >= room.capacity) return res.status(400).json({message:'Room is at full capacity'});
 
   const [r]=await pool.query('INSERT INTO room_allocations(participant_id,room_id,check_in,check_out) VALUES(?,?,?,?)',
@@ -2165,6 +2349,18 @@ app.post('/api/admin/room-allocations',auth,roles('ADMIN','SUPER_ADMIN'),asyncRo
 
   if(room.used + 1 >= room.capacity) await pool.query("UPDATE rooms SET status='FULL' WHERE id=?",[req.body.room_id]);
 
+  const [[part]]=await pool.query('SELECT p.*, u.id as user_id, u.name FROM participants p JOIN users u ON u.id=p.user_id WHERE p.id=?',[req.body.participant_id]);
+  if(part){
+    await createAndSendNotification({
+      user_id: part.user_id,
+      conference_id: part.conference_id || 1,
+      title: 'Accommodation Allocated 🏨',
+      message: `Dear ${part.name}, your stay is confirmed at ${room.hotel_name}, Room ${room.room_number} (${room.room_type || 'Standard'}). Check-in: ${req.body.check_in || '2026-09-25'}.`,
+      type: 'ACCOMMODATION'
+    });
+  }
+
+  io.emit('room_allocated', { id: r.insertId, participant_id: req.body.participant_id, room_id: req.body.room_id });
   created(res,{id:r.insertId},'Room allocated');
 }));
 
@@ -2172,6 +2368,7 @@ app.delete('/api/admin/room-allocations/:id',auth,roles('ADMIN','SUPER_ADMIN'),a
   const [[ra]]=await pool.query('SELECT room_id FROM room_allocations WHERE id=?',[req.params.id]);
   await pool.query('DELETE FROM room_allocations WHERE id=?',[req.params.id]);
   if(ra) await pool.query("UPDATE rooms SET status='AVAILABLE' WHERE id=?",[ra.room_id]);
+  io.emit('room_deallocated', { id: req.params.id });
   ok(res,null,'Allocation removed');
 }));
 app.get('/api/admin/drivers',auth,roles('ADMIN','SUPER_ADMIN','TRANSPORT_ADMIN'),asyncRoute(async(req,res)=>{
@@ -2225,6 +2422,25 @@ app.get('/api/admin/transport-assignments',auth,roles('ADMIN','SUPER_ADMIN','TRA
 app.post('/api/admin/transport-assignments',auth,roles('ADMIN','SUPER_ADMIN','TRANSPORT_ADMIN'),asyncRoute(async(req,res)=>{
   const [r]=await pool.query('INSERT INTO transport_assignments(participant_id,vehicle_id,pickup_location,drop_location,pickup_time,status,notes) VALUES(?,?,?,?,?,?,?)',
     [req.body.participant_id, req.body.vehicle_id, req.body.pickup_location, req.body.drop_location, req.body.pickup_time, req.body.status||'ASSIGNED', req.body.notes]);
+  
+  const [[part]]=await pool.query('SELECT p.*, u.id as user_id, u.name FROM participants p JOIN users u ON u.id=p.user_id WHERE p.id=?',[req.body.participant_id]);
+  let vehicleInfo = 'Vehicle assigned';
+  if(req.body.vehicle_id){
+    const [[veh]]=await pool.query('SELECT v.*, d.name as driver_name, d.phone as driver_phone FROM vehicles v LEFT JOIN drivers d ON d.id=v.driver_id WHERE v.id=?',[req.body.vehicle_id]);
+    if(veh) vehicleInfo = `${veh.vehicle_number} (${veh.driver_name ? 'Driver: ' + veh.driver_name : 'Assigned'})`;
+  }
+
+  if(part){
+    await createAndSendNotification({
+      user_id: part.user_id,
+      conference_id: part.conference_id || 1,
+      title: 'Transport Arranged 🚗',
+      message: `Dear ${part.name}, your conference transport is arranged: ${vehicleInfo}. Pickup from ${req.body.pickup_location || 'Designated Point'} to ${req.body.drop_location || 'Conference Venue'}.`,
+      type: 'TRANSPORT'
+    });
+  }
+
+  io.emit('transport_assigned', { id: r.insertId, participant_id: req.body.participant_id });
   created(res,{id:r.insertId},'Transport assigned');
 }));
 app.get('/api/admin/feedback',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
@@ -2262,6 +2478,40 @@ app.get('/api/admin/stats',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(re
     assignments: await q('SELECT COUNT(*) FROM transport_assignments')
   });
 }));
-io.on('connection',socket=>{socket.on('join_conversation',id=>socket.join(`conversation:${id}`));socket.on('send_message',async m=>{try{await pool.query('INSERT INTO messages(conversation_id,sender_id,message_type,body) VALUES(?,?,?,?)',[m.conversationId,m.senderId,m.messageType||'TEXT',m.body]);io.to(`conversation:${m.conversationId}`).emit('new_message',m)}catch(e){socket.emit('error_message',{message:e.message})}})});
+
+io.use((socket, next) => {
+  try {
+    const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+    if (token) {
+      const secret = process.env.JWT_SECRET || 'conference-app-secret-jwt-key-2026';
+      const decoded = jwt.verify(token.replace(/^Bearer\s+/i, ''), secret);
+      socket.user = decoded;
+    }
+  } catch (_) {}
+  next();
+});
+
+io.on('connection', socket => {
+  if (socket.user) {
+    socket.join(`user_${socket.user.id}`);
+    if (socket.user.role) socket.join(`role_${socket.user.role}`);
+  }
+  socket.on('join_conference', (confId = 1) => {
+    socket.join(`conference_${confId}`);
+  });
+  socket.on('join_user', (userId) => {
+    if (userId) socket.join(`user_${userId}`);
+  });
+  socket.on('join_conversation', id => socket.join(`conversation:${id}`));
+  socket.on('send_message', async m => {
+    try {
+      await pool.query('INSERT INTO messages(conversation_id,sender_id,message_type,body) VALUES(?,?,?,?)',
+        [m.conversationId, m.senderId, m.messageType || 'TEXT', m.body]);
+      io.to(`conversation:${m.conversationId}`).emit('new_message', m);
+    } catch (e) {
+      socket.emit('error_message', { message: e.message });
+    }
+  });
+});
 app.use(errorHandler);
 const port=Number(process.env.PORT||5000);server.listen(port,()=>console.log(`API + Socket.IO running on http://localhost:${port}`));

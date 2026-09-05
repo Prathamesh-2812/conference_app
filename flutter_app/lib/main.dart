@@ -9,6 +9,7 @@ import 'config.dart';
 import 'services/api_service.dart';
 import 'services/webcam_service.dart';
 import 'services/qr_scanner_service.dart';
+import 'services/realtime_service.dart';
 
 const Color maroon = Color(0xFF8C1119);
 const Color cream = Color(0xFFFCFAF5);
@@ -316,13 +317,30 @@ class ConferenceApp extends StatefulWidget {
   State<ConferenceApp> createState() => _ConferenceAppState();
 }
 
-class _ConferenceAppState extends State<ConferenceApp> {
+class _ConferenceAppState extends State<ConferenceApp> with WidgetsBindingObserver {
   ConferenceInfo info = ConferenceInfo.fallback();
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    RealtimeSyncService.instance.init();
+    RealtimeSyncService.instance.syncNotifier.addListener(_loadConference);
     _loadConference();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      RealtimeSyncService.instance.triggerSync();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    RealtimeSyncService.instance.syncNotifier.removeListener(_loadConference);
+    super.dispose();
   }
 
   Future<void> _loadConference() async {
@@ -475,20 +493,28 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     Center(
                       child: Container(
-                        width: 84,
-                        height: 84,
-                        padding: const EdgeInsets.all(8),
+                        width: 96,
+                        height: 96,
+                        padding: const EdgeInsets.all(3),
                         decoration: BoxDecoration(
-                          color: conference.primaryColor.withOpacity(0.06),
+                          color: Colors.white,
                           shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.08),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                         ),
                         child: ClipOval(
                           child: Image.asset(
                             'assets/images/logo.png',
                             fit: BoxFit.contain,
+                            filterQuality: FilterQuality.high,
                             errorBuilder: (_, __, ___) => Icon(
                               Icons.school,
-                              size: 44,
+                              size: 50,
                               color: conference.primaryColor,
                             ),
                           ),
@@ -840,9 +866,9 @@ class Header extends StatelessWidget {
                   ),
                 ),
               Container(
-                width: 46,
-                height: 46,
-                padding: const EdgeInsets.all(3),
+                width: 48,
+                height: 48,
+                padding: const EdgeInsets.all(1.5),
                 decoration: const BoxDecoration(
                   color: Colors.white,
                   shape: BoxShape.circle,
@@ -851,10 +877,11 @@ class Header extends StatelessWidget {
                   child: Image.asset(
                     'assets/images/logo.png',
                     fit: BoxFit.contain,
+                    filterQuality: FilterQuality.high,
                     errorBuilder: (_, __, ___) => Icon(
                       Icons.school,
                       color: conference.primaryColor,
-                      size: 26,
+                      size: 28,
                     ),
                   ),
                 ),
@@ -1003,7 +1030,15 @@ class _MainMediaSliderState extends State<MainMediaSlider> {
   @override
   void initState() {
     super.initState();
+    RealtimeSyncService.instance.syncNotifier.addListener(_fetchSliders);
     _fetchSliders();
+  }
+
+  @override
+  void dispose() {
+    RealtimeSyncService.instance.syncNotifier.removeListener(_fetchSliders);
+    _pageController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchSliders() async {
@@ -1197,11 +1232,18 @@ class HomeScreen extends StatelessWidget {
 
     return SafeArea(
       top: false,
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Header(title: 'Overview'),
+      child: RefreshIndicator(
+        color: maroon,
+        onRefresh: () async {
+          RealtimeSyncService.instance.triggerSync();
+          await Future.delayed(const Duration(milliseconds: 600));
+        },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Header(title: 'Overview'),
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 18, 18, 90),
               child: Column(
@@ -1415,8 +1457,9 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 // ----------------------------------------------------
@@ -2082,6 +2125,7 @@ class _SponsorsScreenState extends State<SponsorsScreen> {
                           ),
                         )
                       : ListView.builder(
+                          physics: const AlwaysScrollableScrollPhysics(),
                           padding: const EdgeInsets.all(16),
                           itemCount: filtered.length,
                           itemBuilder: (context, index) {
@@ -2321,6 +2365,23 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   String searchQuery = '';
   final TextEditingController searchController = TextEditingController();
   final Set<int> bookmarkedSessions = {};
+
+  @override
+  void initState() {
+    super.initState();
+    RealtimeSyncService.instance.syncNotifier.addListener(_onSync);
+  }
+
+  void _onSync() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    RealtimeSyncService.instance.syncNotifier.removeListener(_onSync);
+    searchController.dispose();
+    super.dispose();
+  }
 
   Future<List<dynamic>> load() async {
     final result = await ApiService.get('/sessions?conferenceId=1');
@@ -3021,8 +3082,29 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 // ----------------------------------------------------
 // SPEAKERS SCREEN
 // ----------------------------------------------------
-class SpeakersScreen extends StatelessWidget {
+class SpeakersScreen extends StatefulWidget {
   const SpeakersScreen({super.key});
+
+  @override
+  State<SpeakersScreen> createState() => _SpeakersScreenState();
+}
+
+class _SpeakersScreenState extends State<SpeakersScreen> {
+  @override
+  void initState() {
+    super.initState();
+    RealtimeSyncService.instance.syncNotifier.addListener(_onSync);
+  }
+
+  void _onSync() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    RealtimeSyncService.instance.syncNotifier.removeListener(_onSync);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -3036,28 +3118,35 @@ class SpeakersScreen extends StatelessWidget {
         elevation: 0,
       ),
       body: Center(
-        child: FutureBuilder(
-          future: ApiService.get('/speakers?conferenceId=1'),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator(color: maroon));
-            }
+        child: RefreshIndicator(
+          color: maroon,
+          onRefresh: () async {
+            setState(() {});
+            await Future.delayed(const Duration(milliseconds: 500));
+          },
+          child: FutureBuilder(
+            future: ApiService.get('/speakers?conferenceId=1'),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator(color: maroon));
+              }
 
-            if (snapshot.hasError) {
-              return const Center(child: Text('Unable to load speakers'));
-            }
+              if (snapshot.hasError) {
+                return const Center(child: Text('Unable to load speakers'));
+              }
 
-            final list = snapshot.data is List ? snapshot.data as List : [];
-            if (list.isEmpty) {
-              return const Center(child: Text('No speakers announced yet'));
-            }
+              final list = snapshot.data is List ? snapshot.data as List : [];
+              if (list.isEmpty) {
+                return const Center(child: Text('No speakers announced yet'));
+              }
 
-            return ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-              itemCount: list.length,
-              itemBuilder: (context, index) {
-                final s = list[index];
-                final photoUrl = resolveSpeakerPhoto(s['photo']);
+              return ListView.builder(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                itemCount: list.length,
+                itemBuilder: (context, index) {
+                  final s = list[index];
+                  final photoUrl = resolveSpeakerPhoto(s['photo']);
 
                 return Card(
                   elevation: 0,
@@ -3202,15 +3291,37 @@ class SpeakersScreen extends StatelessWidget {
             },
           ),
         ),
-      );
+      ),
+    );
   }
 }
 
 // ----------------------------------------------------
 // NOTICES SCREEN
 // ----------------------------------------------------
-class NoticesScreen extends StatelessWidget {
+class NoticesScreen extends StatefulWidget {
   const NoticesScreen({super.key});
+
+  @override
+  State<NoticesScreen> createState() => _NoticesScreenState();
+}
+
+class _NoticesScreenState extends State<NoticesScreen> {
+  @override
+  void initState() {
+    super.initState();
+    RealtimeSyncService.instance.syncNotifier.addListener(_onSync);
+  }
+
+  void _onSync() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    RealtimeSyncService.instance.syncNotifier.removeListener(_onSync);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -3220,43 +3331,56 @@ class NoticesScreen extends StatelessWidget {
         children: [
           const Header(title: 'Notices & Announcements'),
           Expanded(
-            child: FutureBuilder(
-              future: ApiService.get('/notices?conferenceId=1'),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator(color: maroon));
-                }
+            child: RefreshIndicator(
+              color: maroon,
+              onRefresh: () async {
+                setState(() {});
+                await Future.delayed(const Duration(milliseconds: 500));
+              },
+              child: FutureBuilder(
+                future: ApiService.get('/notices?conferenceId=1'),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator(color: maroon));
+                  }
 
-                if (snapshot.hasError) {
-                  return const Center(child: Text('Unable to load notices'));
-                }
+                  if (snapshot.hasError) {
+                    return const Center(child: Text('Unable to load notices'));
+                  }
 
-                final data = snapshot.data is List ? snapshot.data as List : <dynamic>[];
+                  final data = snapshot.data is List ? snapshot.data as List : <dynamic>[];
 
-                if (data.isEmpty) {
-                  return const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.notifications_none, size: 54, color: muted),
-                        SizedBox(height: 12),
-                        Text(
-                          'No Announcements Yet',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: slate),
+                  if (data.isEmpty) {
+                    return ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: const [
+                        SizedBox(height: 120),
+                        Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.notifications_none, size: 54, color: muted),
+                              SizedBox(height: 12),
+                              Text(
+                                'No Announcements Yet',
+                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: slate),
+                              ),
+                              SizedBox(height: 4),
+                              Text('Check back later for event updates', style: TextStyle(color: muted)),
+                            ],
+                          ),
                         ),
-                        SizedBox(height: 4),
-                        Text('Check back later for event updates', style: TextStyle(color: muted)),
                       ],
-                    ),
-                  );
-                }
+                    );
+                  }
 
-                return ListView.builder(
-                  padding: const EdgeInsets.all(18),
-                  itemCount: data.length,
-                  itemBuilder: (context, index) {
-                    final item = data[index];
-                    final isUrgent = item['priority'] == 'URGENT';
+                  return ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(18),
+                    itemCount: data.length,
+                    itemBuilder: (context, index) {
+                      final item = data[index];
+                      final isUrgent = item['priority'] == 'URGENT';
 
                     return Card(
                       elevation: 0,
@@ -3330,10 +3454,11 @@ class NoticesScreen extends StatelessWidget {
               },
             ),
           ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
 }
 
 // ----------------------------------------------------
@@ -4550,6 +4675,188 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  void _showEditProfileDialog(Map<dynamic, dynamic> current) {
+    final nameCtrl = TextEditingController(text: current['name']?.toString() ?? '');
+    final phoneCtrl = TextEditingController(text: current['phone']?.toString() ?? '');
+    final designationCtrl = TextEditingController(text: current['designation']?.toString() ?? '');
+    final universityCtrl = TextEditingController(text: current['university']?.toString() ?? '');
+    final bloodGroupCtrl = TextEditingController(text: current['blood_group']?.toString() ?? '');
+    final emergencyCtrl = TextEditingController(text: current['emergency_contact']?.toString() ?? '');
+    final travelModeCtrl = TextEditingController(text: current['mode_of_travel']?.toString() ?? '');
+    final flightCtrl = TextEditingController(text: current['flight_number']?.toString() ?? '');
+
+    bool isSaving = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Container(
+          padding: EdgeInsets.only(
+            top: 20,
+            left: 20,
+            right: 20,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Edit Delegate Profile',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: slate),
+                    ),
+                    IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: nameCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Full Name',
+                    prefixIcon: const Icon(Icons.person_outline, color: maroon),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: phoneCtrl,
+                  keyboardType: TextInputType.phone,
+                  decoration: InputDecoration(
+                    labelText: 'Mobile Number',
+                    prefixIcon: const Icon(Icons.phone_outlined, color: maroon),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: designationCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Designation',
+                    prefixIcon: const Icon(Icons.work_outline, color: maroon),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: universityCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'University / Institute',
+                    prefixIcon: const Icon(Icons.account_balance_outlined, color: maroon),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: bloodGroupCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Blood Group (e.g. O+, B+, A+)',
+                    prefixIcon: const Icon(Icons.bloodtype_outlined, color: maroon),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: emergencyCtrl,
+                  keyboardType: TextInputType.phone,
+                  decoration: InputDecoration(
+                    labelText: 'Emergency Contact Phone',
+                    prefixIcon: const Icon(Icons.contact_emergency_outlined, color: maroon),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: travelModeCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Travel Mode (e.g. Flight, Train, Car)',
+                    prefixIcon: const Icon(Icons.flight_takeoff_outlined, color: maroon),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: flightCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Flight / Train Number',
+                    prefixIcon: const Icon(Icons.directions_transit_outlined, color: maroon),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: maroon,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: isSaving
+                        ? null
+                        : () async {
+                            setModalState(() => isSaving = true);
+                            try {
+                              await ApiService.put('/me/profile', {
+                                'name': nameCtrl.text.trim(),
+                                'phone': phoneCtrl.text.trim(),
+                                'designation': designationCtrl.text.trim(),
+                                'university': universityCtrl.text.trim(),
+                                'blood_group': bloodGroupCtrl.text.trim(),
+                                'emergency_contact': emergencyCtrl.text.trim(),
+                                'mode_of_travel': travelModeCtrl.text.trim(),
+                                'flight_number': flightCtrl.text.trim(),
+                              });
+                              if (mounted) {
+                                Navigator.pop(ctx);
+                                setState(() => _refreshKey++);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Profile updated successfully!'),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                              }
+                            } catch (e) {
+                              setModalState(() => isSaving = false);
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Failed to update: $e'), backgroundColor: Colors.red),
+                                );
+                              }
+                            }
+                          },
+                    child: isSaving
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : const Text('Save Profile Changes', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> logout() async {
     final p = await SharedPreferences.getInstance();
     await p.clear();
@@ -4619,7 +4926,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     );
                   }
-                  final x = s.data ?? {};
+                  final x = s.data is Map ? s.data as Map : {};
                   final photoUrl = _formatPhotoUrl(x['photo']);
 
                   return ListView(
@@ -4699,7 +5006,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         textAlign: TextAlign.center,
                         style: const TextStyle(color: muted, fontSize: 13.5),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 12),
+                      Center(
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: maroon,
+                            side: const BorderSide(color: maroon, width: 1.5),
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                          ),
+                          icon: const Icon(Icons.edit_outlined, size: 16),
+                          label: const Text('Edit Profile Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          onPressed: () => _showEditProfileDialog(x),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
                       InfoSection(
                         title: 'BASIC INFORMATION',
                         items: {
@@ -4708,6 +5029,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           'University': x['university'],
                           'Designation': x['designation'],
                           'Blood Group': x['blood_group'],
+                          'Emergency Contact': x['emergency_contact'],
                           'Registration No': x['registration_no'],
                         },
                       ),
@@ -4724,6 +5046,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         title: 'TRAVEL DETAILS',
                         items: {
                           'Mode of Travel': x['mode_of_travel'],
+                          'Flight/Train No': x['flight_number'],
                           'Arrival Date': formatSessionDate(x['arrival_date']),
                           'Arrival Time': formatSingleTime(x['arrival_time']),
                           'Departure Date': formatSessionDate(x['departure_date']),

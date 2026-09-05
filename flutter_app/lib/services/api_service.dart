@@ -103,6 +103,57 @@ class ApiService {
     return data;
   }
 
+  static Future<dynamic> put(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
+    final url = Uri.parse('$apiBaseUrl$path');
+
+    print('PUT $url');
+    print('BODY: $body');
+
+    final response = await http.put(
+      url,
+      headers: await _headers(),
+      body: jsonEncode(body),
+    );
+
+    print('PUT ${response.statusCode}: ${response.body}');
+
+    final data = _decode(response.body);
+
+    if (response.statusCode >= 400) {
+      throw Exception(
+        _errorMessage(data, 'Request failed (${response.statusCode})'),
+      );
+    }
+
+    return data;
+  }
+
+  static Future<dynamic> delete(String path) async {
+    final url = Uri.parse('$apiBaseUrl$path');
+
+    print('DELETE $url');
+
+    final response = await http.delete(
+      url,
+      headers: await _headers(),
+    );
+
+    print('DELETE ${response.statusCode}: ${response.body}');
+
+    final data = _decode(response.body);
+
+    if (response.statusCode >= 400) {
+      throw Exception(
+        _errorMessage(data, 'Request failed (${response.statusCode})'),
+      );
+    }
+
+    return data;
+  }
+
   static Future<Map<String, dynamic>> login(
     String email,
     String password,
