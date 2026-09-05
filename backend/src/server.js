@@ -19,12 +19,15 @@ import sharp from 'sharp';
 
 dotenv.config();
 const app=express(); const server=http.createServer(app);
+app.set('trust proxy', 1);
 const io=new Server(server,{cors:{origin:true,credentials:true}});
 const __dirname=path.dirname(fileURLToPath(import.meta.url));
 const uploadRoot=path.resolve(__dirname,'..','uploads');
 app.use(helmet({crossOriginResourcePolicy:{policy:'cross-origin'}})); app.use(cors({origin:true,credentials:true})); app.use(express.json({limit:'12mb'})); app.use(morgan('dev'));
 app.use('/uploads',express.static(uploadRoot));
 app.use(rateLimit({windowMs:15*60*1000,max:500,standardHeaders:true,legacyHeaders:false}));
+app.get('/', (req, res) => res.json({ success: true, message: 'DY Patil Conference Management API Live' }));
+app.get('/api/health', (req, res) => res.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() }));
 const validate=(req,res,next)=>{const e=validationResult(req);if(!e.isEmpty())return res.status(400).json({message:'Validation failed',errors:e.array()});next()};
 const asyncRoute=fn=>(req,res,next)=>Promise.resolve(fn(req,res,next)).catch(next);
 const ok=(res,data,message='Operation successful')=>res.json({success:true,message,data});
