@@ -61,6 +61,21 @@ async function runMigrations(){
       )
     `);
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS photo_faces (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        photo_id INT NOT NULL,
+        conference_id INT NOT NULL DEFAULT 1,
+        face_token VARCHAR(100) NULL,
+        bounding_box JSON NULL,
+        embedding LONGTEXT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (photo_id) REFERENCES photos(id) ON DELETE CASCADE,
+        FOREIGN KEY (conference_id) REFERENCES conferences(id) ON DELETE CASCADE,
+        INDEX idx_photo_faces_conf (conference_id),
+        INDEX idx_photo_faces_photo (photo_id)
+      )
+    `);
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS feedback (
         id BIGINT AUTO_INCREMENT PRIMARY KEY,
         participant_id INT NOT NULL,
@@ -2085,7 +2100,8 @@ app.get('/api/admin/users',auth,roles('SUPER_ADMIN'),asyncRoute(async(req,res)=>
 app.post('/api/admin/users',auth,roles('SUPER_ADMIN'),[body('email').isEmail(), body('password').isLength({min:6})],validate,asyncRoute(async(req,res)=>{
   const hash=await bcrypt.hash(req.body.password, 10);
   const [r]=await pool.query('INSERT INTO users(name,email,password_hash,role,phone,designation) VALUES(?,?,?,?,?,?)',
-    [req.body.name, req.body.email, hash, req.body.role, req.body.phone, req.body.designation]);
+    [req.body.name || req.body.email, req.body.email, hash, req.body.role || 'ADMIN', req.body.phone || null, req.body.designation || null]);
+  await audit(req, 'admin_user.create', 'users', r.insertId, null, { name: req.body.name, email: req.body.email, role: req.body.role || 'ADMIN' });
   created(res,{id:r.insertId},'Admin user created');
 }));
 
