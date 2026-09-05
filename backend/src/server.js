@@ -33,6 +33,35 @@ const pick=(src,fields)=>fields.reduce((out,k)=>{if(src[k]!==undefined)out[k]=sr
 async function audit(req,action,module,recordId,oldValue,newValue){
   await pool.query('INSERT INTO audit_logs(user_id,action,entity,entity_id,details) VALUES(?,?,?,?,?)',[req.user?.id||null,action,module,recordId||null,JSON.stringify({oldValue,newValue,ip:req.ip})]);
 }
+async function runMigrations(){
+  try{
+    const [cols]=await pool.query("SHOW COLUMNS FROM users LIKE 'must_change_password'");
+    if(!cols.length){
+      await pool.query("ALTER TABLE users ADD COLUMN must_change_password TINYINT(1) DEFAULT 0");
+    }
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS main_sliders (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        conference_id INT NOT NULL DEFAULT 1,
+        title VARCHAR(255),
+        media_type ENUM('IMAGE','VIDEO') NOT NULL DEFAULT 'IMAGE',
+        media_url TEXT NOT NULL,
+        thumbnail_url TEXT,
+        display_order INT DEFAULT 0,
+        active TINYINT(1) DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(conference_id) REFERENCES conferences(id) ON DELETE CASCADE
+      )
+    `);
+    const [fbCols]=await pool.query("SHOW COLUMNS FROM feedback LIKE 'session_id'");
+    if(fbCols.length && fbCols[0].Null === 'NO'){
+      await pool.query("ALTER TABLE feedback MODIFY COLUMN session_id INT NULL");
+    }
+  }catch(err){
+    console.log('Migration check:', err.message);
+  }
+}
+runMigrations();
 async function ensureConferenceChildren(conferenceId=1){
   await pool.query(`INSERT INTO conference_branding(conference_id) VALUES(?) ON DUPLICATE KEY UPDATE conference_id=conference_id`,[conferenceId]);
   await pool.query(`INSERT INTO conference_settings(conference_id) VALUES(?) ON DUPLICATE KEY UPDATE conference_id=conference_id`,[conferenceId]);
@@ -50,11 +79,17 @@ function emptyToNull(v){return v===''?null:v}
 function normalizeValues(obj){return Object.fromEntries(Object.entries(obj).map(([k,v])=>[k,emptyToNull(v)]))}
 async function saveDataUrlUpload(folder,file){
   if(!file?.dataUrl||!file?.name)throw Object.assign(new Error('File data is required'),{status:400});
-  const m=String(file.dataUrl).match(/^data:(image\/(?:png|jpe?g|webp)|application\/pdf);base64,(.+)$/);
-  if(!m)throw Object.assign(new Error('Only JPG, PNG, WEBP and PDF uploads are supported'),{status:422});
-  const ext={ 'image/png':'png','image/jpeg':'jpg','image/jpg':'jpg','image/webp':'webp','application/pdf':'pdf'}[m[1]];
+  const m=String(file.dataUrl).match(/^data:((?:image\/(?:png|jpe?g|webp|gif)|video\/(?:mp4|webm|quicktime|x-msvideo|ogg)|application\/pdf));base64,(.+)$/i);
+  if(!m)throw Object.assign(new Error('Unsupported file format. Upload JPG, PNG, WEBP, MP4, WEBM or PDF'),{status:422});
+  const mimeType=m[1].toLowerCase();
+  const mimeExtMap={
+    'image/png':'png','image/jpeg':'jpg','image/jpg':'jpg','image/webp':'webp','image/gif':'gif',
+    'video/mp4':'mp4','video/webm':'webm','video/quicktime':'mov','video/x-msvideo':'avi','video/ogg':'ogv',
+    'application/pdf':'pdf'
+  };
+  const ext=mimeExtMap[mimeType]||'bin';
   const buffer=Buffer.from(m[2],'base64');
-  if(buffer.length>5*1024*1024)throw Object.assign(new Error('File size must be 5 MB or less'),{status:422});
+  if(buffer.length>50*1024*1024)throw Object.assign(new Error('File size must be 50 MB or less'),{status:422});
   const safeFolder=String(folder||'conference').replace(/[^a-z0-9_-]/gi,'').toLowerCase()||'conference';
   const dir=path.join(uploadRoot,safeFolder);
   await fs.mkdir(dir,{recursive:true});
@@ -207,16 +242,23 @@ app.put('/api/admin/conference/settings',auth,roles('ADMIN','SUPER_ADMIN'),async
  ok(res,after,'Settings updated');
 }));
 app.post('/api/admin/uploads',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{const url=await saveDataUrlUpload(req.body.folder,req.body.file);await audit(req,'file.upload','uploads',null,null,{url});created(res,{url},'File uploaded');}));
-app.post('/api/auth/login',[body('email').isEmail(),body('password').isLength({min:6})],validate,asyncRoute(async(req,res)=>{
-  const [rows]=await pool.query('SELECT id,name,email,password_hash,role FROM users WHERE email=? LIMIT 1',[req.body.email]);
-  if(!rows.length)return res.status(401).json({message:'Invalid credentials'});
-  const u=rows[0];
-  if(!await bcrypt.compare(req.body.password,u.password_hash))return res.status(401).json({message:'Invalid credentials'});
+app.post('/api/auth/login',[body('email').notEmpty(),body('password').notEmpty()],validate,asyncRoute(async(req,res)=>{
+  const loginInput = req.body.email.trim();
+  const [rows] = await pool.query('SELECT id,name,email,phone,password_hash,role,must_change_password FROM users WHERE email=? OR phone=? LIMIT 1',[loginInput, loginInput]);
+  if(!rows.length) return res.status(401).json({message:'Invalid credentials'});
+  const u = rows[0];
+  if(!await bcrypt.compare(req.body.password, u.password_hash)) return res.status(401).json({message:'Invalid credentials'});
   await pool.query('UPDATE users SET last_login_at=NOW() WHERE id=?',[u.id]);
-  const token=jwt.sign({id:u.id,name:u.name,email:u.email,role:u.role},process.env.JWT_SECRET,{expiresIn:'7d'});
-  res.json({token,user:{id:u.id,name:u.name,email:u.email,role:u.role}})
+  const secret = process.env.JWT_SECRET || 'conference-app-secret-jwt-key-2026';
+  const token = jwt.sign({id:u.id, name:u.name, email:u.email, role:u.role}, secret, {expiresIn:'7d'});
+  res.json({token, user:{id:u.id, name:u.name, email:u.email, phone:u.phone, role:u.role, last_login_at: new Date(), mustChangePassword: !!u.must_change_password}});
 }));
-app.get('/api/auth/me',auth,asyncRoute(async(req,res)=>{const [[u]]=await pool.query('SELECT id,name,email,phone,role,designation,university,blood_group,photo,last_login_at FROM users WHERE id=?',[req.user.id]);res.json(u)}));
+app.post('/api/auth/change-password', auth, [body('newPassword').isLength({min:4})], validate, asyncRoute(async(req,res)=>{
+  const newHash = await bcrypt.hash(req.body.newPassword, 10);
+  await pool.query('UPDATE users SET password_hash=?, must_change_password=0 WHERE id=?', [newHash, req.user.id]);
+  ok(res, {success: true}, 'Password changed successfully');
+}));
+app.get('/api/auth/me',auth,asyncRoute(async(req,res)=>{const [[u]]=await pool.query('SELECT id,name,email,phone,role,designation,university,blood_group,photo,last_login_at,must_change_password FROM users WHERE id=?',[req.user.id]);res.json(u)}));
 app.get('/api/conferences',asyncRoute(async(req,res)=>{const [r]=await pool.query('SELECT * FROM conferences ORDER BY start_date DESC');res.json(r)}));
 app.get('/api/conferences/:id',asyncRoute(async(req,res)=>{const [[c]]=await pool.query('SELECT * FROM conferences WHERE id=?',[req.params.id]);if(!c)return res.status(404).json({message:'Conference not found'});res.json(c)}));
 app.get('/api/admin/liaisons',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
@@ -329,40 +371,132 @@ app.post('/api/admin/participants/bulk-import',auth,roles('ADMIN','SUPER_ADMIN')
     return res.status(400).json({message: 'No participant data provided'});
   }
 
-  const defaultHash=await bcrypt.hash('Demo@123',10);
-  let imported=0, skipped=0;
+  const defaultHash = await bcrypt.hash('changeme', 10);
+  let imported = 0, skipped = 0;
 
   for(const row of participants){
-    if(!row.email || !row.name){
+    const name = row.name || row.Name || row['Full Name'];
+    let phone = row.phone || row.Phone || row['Mobile Number'] || row['Mobile'] || row['Phone Number'] || row['Contact'];
+    if(phone) phone = String(phone).replace(/[^0-9]/g,'');
+    let email = row.email || row.Email || row['Email Address'];
+    if(!email && phone) email = `${phone}@conference.local`;
+    if(!name || (!phone && !email)){
       skipped++;
       continue;
     }
+
     try{
-      const [uRows]=await pool.query('SELECT id FROM users WHERE email=? LIMIT 1',[row.email]);
       let uid;
+      const [uRows] = await pool.query('SELECT id FROM users WHERE (phone=? AND phone IS NOT NULL AND phone!="") OR email=? LIMIT 1',[phone||'', email||'']);
       if(uRows.length){
-        uid=uRows[0].id;
+        uid = uRows[0].id;
+        await pool.query('UPDATE users SET name=COALESCE(?,name), phone=COALESCE(?,phone), email=COALESCE(?,email), designation=COALESCE(?,designation), university=COALESCE(?,university) WHERE id=?',
+          [name, phone||null, email||null, row.designation||row.Designation||null, row.university||row.University||row.Institution||null, uid]);
       } else {
-        const [uRes]=await pool.query(
-          'INSERT INTO users(name,email,password_hash,phone,role,designation,university) VALUES(?,?,?,?,?,?,?)',
-          [row.name, row.email, defaultHash, row.phone||null, 'PARTICIPANT', row.designation||null, row.university||null]
+        const [uRes] = await pool.query(
+          'INSERT INTO users(name,email,password_hash,phone,role,designation,university,must_change_password) VALUES(?,?,?,?,?,?,?,1)',
+          [name, email, defaultHash, phone||null, 'PARTICIPANT', row.designation||row.Designation||null, row.university||row.University||row.Institution||null]
         );
-        uid=uRes.insertId;
+        uid = uRes.insertId;
       }
-      const regNo=row.registration_no || `CONF-${Date.now().toString().slice(-4)}${Math.floor(Math.random()*1000)}`;
-      const qrToken=`QR-${uid}-${Date.now().toString(36)}`;
-      await pool.query(`
-        INSERT INTO participants(user_id, conference_id, registration_no, category, status, payment_status, mode_of_travel, qr_token)
-        VALUES(?,?,?,?,?,?,?,?)
-        ON DUPLICATE KEY UPDATE category=VALUES(category), status=VALUES(status)
-      `, [uid, conferenceId, regNo, row.category||'Delegate', row.status||'APPROVED', row.payment_status||'PAID', row.mode_of_travel||null, qrToken]);
+
+      const regNo = row.registration_no || row.RegistrationNo || row['Reg No'] || row['Registration Number'] || `CONF-${Date.now().toString().slice(-4)}${Math.floor(Math.random()*1000)}`;
+      const qrToken = `QR-${uid}-${Date.now().toString(36)}`;
+      const modeOfTravel = row.mode_of_travel || row.ModeOfTravel || row['Travel Mode'] || row['Mode of Travel'] || null;
+      const flightNumber = row.flight_number || row.FlightNumber || row['Flight/Train No'] || row['Flight Number'] || row['Train Number'] || null;
+      const arrivalDate = row.arrival_date || row.ArrivalDate || row['Arrival Date'] || null;
+      const arrivalTime = row.arrival_time || row.ArrivalTime || row['Arrival Time'] || null;
+      const departureDate = row.departure_date || row.DepartureDate || row['Departure Date'] || null;
+      const departureTime = row.departure_time || row.DepartureTime || row['Departure Time'] || null;
+
+      const [pRows] = await pool.query('SELECT id FROM participants WHERE user_id=? AND conference_id=? LIMIT 1',[uid, conferenceId]);
+      let participantId;
+      if(pRows.length){
+        participantId = pRows[0].id;
+        await pool.query(`
+          UPDATE participants SET category=?, mode_of_travel=?, flight_number=?, arrival_date=?, arrival_time=?, departure_date=?, departure_time=?
+          WHERE id=?
+        `, [row.category||row.Category||'Delegate', modeOfTravel, flightNumber, arrivalDate||null, arrivalTime||null, departureDate||null, departureTime||null, participantId]);
+      } else {
+        const [pRes] = await pool.query(`
+          INSERT INTO participants(user_id, conference_id, registration_no, category, status, payment_status, mode_of_travel, flight_number, arrival_date, arrival_time, departure_date, departure_time, qr_token)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+        `, [uid, conferenceId, regNo, row.category||row.Category||'Delegate', 'APPROVED', 'PAID', modeOfTravel, flightNumber, arrivalDate||null, arrivalTime||null, departureDate||null, departureTime||null, qrToken]);
+        participantId = pRes.insertId;
+      }
+
+      // Hotel Mapping
+      const hotelName = row.hotel_name || row.HotelName || row['Hotel'] || row['Hotel Name'];
+      const roomNumber = row.room_number || row.RoomNumber || row['Room No'] || row['Room Number'];
+      if(hotelName || roomNumber){
+        const hName = hotelName || 'Conference Partner Hotel';
+        const hAddr = row.hotel_address || row.HotelAddress || row['Hotel Address'] || 'Conference Accommodation';
+        let [[hotel]] = await pool.query('SELECT id FROM hotels WHERE name=? LIMIT 1',[hName]);
+        if(!hotel){
+          const [hRes] = await pool.query('INSERT INTO hotels(name, address) VALUES(?,?)',[hName, hAddr]);
+          hotel = { id: hRes.insertId };
+        }
+
+        const rNum = String(roomNumber || 'TBD');
+        const rType = row.room_type || row.RoomType || row['Room Type'] || 'Deluxe';
+        let [[room]] = await pool.query('SELECT id FROM rooms WHERE hotel_id=? AND room_number=? LIMIT 1',[hotel.id, rNum]);
+        if(!room){
+          const [rRes] = await pool.query('INSERT INTO rooms(hotel_id, room_number, room_type) VALUES(?,?,?)',[hotel.id, rNum, rType]);
+          room = { id: rRes.insertId };
+        }
+
+        const checkIn = row.check_in || row.CheckIn || row['Check In Date'] || '2026-04-27';
+        const checkOut = row.check_out || row.CheckOut || row['Check Out Date'] || '2026-04-30';
+        await pool.query(`
+          INSERT INTO room_allocations(participant_id, room_id, check_in, check_out)
+          VALUES(?,?,?,?)
+          ON DUPLICATE KEY UPDATE room_id=VALUES(room_id), check_in=VALUES(check_in), check_out=VALUES(check_out)
+        `, [participantId, room.id, checkIn, checkOut]);
+      }
+
+      // Travel Assignment Mapping
+      const pickupLoc = row.pickup_location || row.PickupLocation || row['Pickup Point'] || row['Pickup Location'];
+      const dropLoc = row.drop_location || row.DropLocation || row['Drop Point'] || row['Drop Location'];
+      const driverName = row.driver_name || row.DriverName || row['Driver Name'];
+      const driverPhone = row.driver_phone || row.DriverPhone || row['Driver Phone'];
+      const vehicleNum = row.vehicle_number || row.VehicleNumber || row['Vehicle No'] || row['Vehicle Number'];
+      if(pickupLoc || dropLoc || driverName || vehicleNum){
+        let vehicleId = null;
+        if(driverName || vehicleNum){
+          let driverId = null;
+          if(driverName){
+            let [[driver]] = await pool.query('SELECT id FROM drivers WHERE name=? LIMIT 1',[driverName]);
+            if(!driver){
+              const [dRes] = await pool.query('INSERT INTO drivers(name, phone) VALUES(?,?)',[driverName, driverPhone||null]);
+              driver = { id: dRes.insertId };
+            }
+            driverId = driver.id;
+          }
+
+          const vNum = vehicleNum || `VEH-${Math.floor(1000 + Math.random()*9000)}`;
+          let [[veh]] = await pool.query('SELECT id FROM vehicles WHERE vehicle_number=? LIMIT 1',[vNum]);
+          if(!veh){
+            const [vRes] = await pool.query('INSERT INTO vehicles(driver_id, vehicle_number, vehicle_type) VALUES(?,?,?)',[driverId, vNum, 'Sedan/SUV']);
+            veh = { id: vRes.insertId };
+          }
+          vehicleId = veh.id;
+        }
+
+        await pool.query(`
+          INSERT INTO transport_assignments(participant_id, vehicle_id, pickup_location, drop_location, pickup_time, notes)
+          VALUES(?,?,?,?,NOW(),?)
+          ON DUPLICATE KEY UPDATE vehicle_id=VALUES(vehicle_id), pickup_location=VALUES(pickup_location), drop_location=VALUES(drop_location), notes=VALUES(notes)
+        `, [participantId, vehicleId, pickupLoc||'Airport/Station', dropLoc||'Conference Venue/Hotel', row.travel_notes||row['Travel Notes']||'Pickup scheduled']);
+      }
+
       imported++;
     } catch(err){
+      console.error('Row import error:', err);
       skipped++;
     }
   }
 
-  ok(res, { imported, skipped }, `Imported ${imported} participants (${skipped} skipped)`);
+  ok(res, { imported, skipped }, `Successfully imported ${imported} participants with mapped hotel & travel details (${skipped} skipped)`);
 }));
 
 app.get('/api/speakers',asyncRoute(async(req,res)=>{
@@ -458,19 +592,48 @@ app.get('/api/me/duties',auth,asyncRoute(async(req,res)=>{const [r]=await pool.q
 app.get('/api/me/registration',auth,asyncRoute(async(req,res)=>{const [[r]]=await pool.query(`SELECT p.registration_no,p.category,p.status,p.payment_status,p.amount,p.qr_token,c.name conference_name,c.start_date,c.end_date FROM participants p JOIN conferences c ON c.id=p.conference_id WHERE p.user_id=? ORDER BY p.id DESC LIMIT 1`,[req.user.id]);res.json(r||null)}));
 app.get('/api/me/certificate',auth,asyncRoute(async(req,res)=>{
   const [[p]]=await pool.query(`SELECT p.id, p.registration_no, u.name, u.email FROM participants p JOIN users u ON u.id=p.user_id WHERE u.id=? LIMIT 1`,[req.user.id]);
-  if(!p) return res.json({ hasFeedback: false, certificate: null, participant: null });
+  if(!p) return res.json(null);
 
-  const [[feedback]]=await pool.query(`SELECT id, rating, content_rating, speaker_rating, comment, created_at FROM feedback WHERE participant_id=? ORDER BY id DESC LIMIT 1`,[p.id]);
-  const hasFeedback = !!feedback;
+  const [fb]=await pool.query(`SELECT id, rating, content_rating, speaker_rating, comment, created_at FROM feedback WHERE participant_id=? ORDER BY id DESC LIMIT 1`,[p.id]);
+  const hasFeedback = fb.length > 0;
 
   const [[cert]]=await pool.query(`SELECT cert.*, p.registration_no, u.name as participant_name FROM certificates cert JOIN participants p ON p.id=cert.participant_id JOIN users u ON u.id=p.user_id WHERE p.user_id=? AND cert.certificate_url IS NOT NULL ORDER BY cert.id DESC LIMIT 1`,[req.user.id]);
 
-  res.json({
-    hasFeedback,
-    feedback: feedback || null,
-    certificate: cert || null,
-    participant: { id: p.id, name: p.name, registration_no: p.registration_no }
-  });
+  if (cert) {
+    res.json({
+      ...cert,
+      hasFeedback,
+      feedback_submitted: hasFeedback,
+      feedback: hasFeedback ? fb[0] : null,
+      certificate: cert,
+      participant: { id: p.id, name: p.name, registration_no: p.registration_no }
+    });
+  } else {
+    res.json({
+      hasFeedback,
+      feedback_submitted: hasFeedback,
+      feedback: hasFeedback ? fb[0] : null,
+      certificate: null,
+      participant: { id: p.id, name: p.name, registration_no: p.registration_no }
+    });
+  }
+}));
+
+app.post('/api/me/feedback',auth,[body('rating').isInt({min:1,max:5})],validate,asyncRoute(async(req,res)=>{
+  const [[p]]=await pool.query('SELECT id FROM participants WHERE user_id=? LIMIT 1',[req.user.id]);
+  if(!p) return res.status(400).json({message:'Participant profile not found'});
+
+  const rating = req.body.rating;
+  const contentRating = req.body.contentRating || req.body.content_rating || rating;
+  const speakerRating = req.body.speakerRating || req.body.speaker_rating || rating;
+  const comment = req.body.comment || req.body.feedback || '';
+
+  await pool.query(`
+    INSERT INTO feedback(participant_id, session_id, rating, content_rating, speaker_rating, comment)
+    VALUES(?, NULL, ?, ?, ?, ?)
+  `, [p.id, rating, contentRating, speakerRating, comment]);
+
+  ok(res, { feedbackSubmitted: true }, 'Feedback submitted successfully');
 }));
 
 app.post('/api/me/feedback-and-certificate',auth,asyncRoute(async(req,res)=>{
@@ -510,6 +673,67 @@ app.post('/api/me/feedback-and-certificate',auth,asyncRoute(async(req,res)=>{
     certificate: freshCert,
     hasFeedback: true
   }, 'Feedback recorded and certificate generated successfully!');
+}));
+
+app.get('/api/sliders',asyncRoute(async(req,res)=>{
+  const conferenceId = req.query.conferenceId || 1;
+  const [rows] = await pool.query('SELECT * FROM main_sliders WHERE conference_id=? AND active=1 ORDER BY display_order ASC, id ASC',[conferenceId]);
+  res.json(rows);
+}));
+
+app.get('/api/admin/sliders',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
+  const conferenceId = req.query.conferenceId || 1;
+  const [rows] = await pool.query('SELECT * FROM main_sliders WHERE conference_id=? ORDER BY display_order ASC, id ASC',[conferenceId]);
+  res.json(rows);
+}));
+
+app.post('/api/admin/sliders',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
+  const conferenceId = req.body.conferenceId || 1;
+  let mediaUrl = req.body.media_url || req.body.mediaUrl;
+  if(req.body.file){
+    mediaUrl = await saveDataUrlUpload('sliders', req.body.file);
+  }
+  if(!mediaUrl){
+    return res.status(400).json({message: 'Media file or URL is required'});
+  }
+
+  const title = req.body.title || null;
+  const mediaType = req.body.media_type || req.body.mediaType || 'IMAGE';
+  const thumbnailUrl = req.body.thumbnail_url || req.body.thumbnailUrl || null;
+  const displayOrder = req.body.display_order || req.body.displayOrder || 0;
+  const active = req.body.active !== undefined ? (req.body.active ? 1 : 0) : 1;
+
+  const [r] = await pool.query(
+    'INSERT INTO main_sliders(conference_id, title, media_type, media_url, thumbnail_url, display_order, active) VALUES(?,?,?,?,?,?,?)',
+    [conferenceId, title, mediaType, mediaUrl, thumbnailUrl, displayOrder, active]
+  );
+
+  created(res, { id: r.insertId, conference_id: conferenceId, title, media_type: mediaType, media_url: mediaUrl, active }, 'Slider item added');
+}));
+
+app.put('/api/admin/sliders/:id',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
+  let mediaUrl = req.body.media_url || req.body.mediaUrl;
+  if(req.body.file){
+    mediaUrl = await saveDataUrlUpload('sliders', req.body.file);
+  }
+
+  await pool.query(`
+    UPDATE main_sliders SET
+      title=COALESCE(?,title),
+      media_type=COALESCE(?,media_type),
+      media_url=COALESCE(?,media_url),
+      thumbnail_url=COALESCE(?,thumbnail_url),
+      display_order=COALESCE(?,display_order),
+      active=COALESCE(?,active)
+    WHERE id=?
+  `, [req.body.title, req.body.media_type||req.body.mediaType, mediaUrl, req.body.thumbnail_url||req.body.thumbnailUrl, req.body.display_order||req.body.displayOrder, req.body.active!==undefined?(req.body.active?1:0):null, req.params.id]);
+
+  ok(res, null, 'Slider item updated');
+}));
+
+app.delete('/api/admin/sliders/:id',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
+  await pool.query('DELETE FROM main_sliders WHERE id=?',[req.params.id]);
+  ok(res, null, 'Slider item deleted');
 }));
 app.get('/api/me/attendance',auth,asyncRoute(async(req,res)=>{const [r]=await pool.query(`SELECT a.*,s.title,s.session_date,s.start_time FROM attendance a JOIN participants p ON p.id=a.participant_id JOIN sessions s ON s.id=a.session_id WHERE p.user_id=? ORDER BY s.session_date,s.start_time`,[req.user.id]);res.json(r)}));
 app.post('/api/attendance/scan',auth,roles('ADMIN','SUPER_ADMIN','VOLUNTEER'),[body('qrToken').notEmpty()],validate,asyncRoute(async(req,res)=>{
@@ -991,6 +1215,29 @@ app.get('/api/certificates/verify/:certificateNumber',asyncRoute(async(req,res)=
   ok(res,c,'Certificate verified');
 }));
 
+app.get('/api/admin/certificates/settings',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
+  try { await pool.query('ALTER TABLE conference_settings ADD COLUMN certificate_template LONGTEXT NULL'); } catch(e) {}
+  try { await pool.query('ALTER TABLE conference_settings ADD COLUMN certificate_layout JSON NULL'); } catch(e) {}
+  const [[s]]=await pool.query('SELECT certificate_template, certificate_layout FROM conference_settings WHERE conference_id=1');
+  let layout = null;
+  if(s?.certificate_layout){
+    try { layout = typeof s.certificate_layout === 'string' ? JSON.parse(s.certificate_layout) : s.certificate_layout; } catch(e){}
+  }
+  ok(res, { template: s?.certificate_template || null, layout }, 'Certificate settings fetched');
+}));
+
+app.post('/api/admin/certificates/settings',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
+  const { template, layout } = req.body;
+  try { await pool.query('ALTER TABLE conference_settings ADD COLUMN certificate_template LONGTEXT NULL'); } catch(e) {}
+  try { await pool.query('ALTER TABLE conference_settings ADD COLUMN certificate_layout JSON NULL'); } catch(e) {}
+  await pool.query(`
+    INSERT INTO conference_settings(conference_id, certificate_template, certificate_layout)
+    VALUES(1, ?, ?)
+    ON DUPLICATE KEY UPDATE certificate_template=VALUES(certificate_template), certificate_layout=VALUES(certificate_layout)
+  `, [template || null, layout ? JSON.stringify(layout) : null]);
+  ok(res, null, 'Certificate layout settings saved');
+}));
+
 app.get('/api/admin/certificates',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
   const [r]=await pool.query(`
     SELECT cert.*, u.name as participant_name, p.registration_no
@@ -1002,13 +1249,14 @@ app.get('/api/admin/certificates',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(a
 }));
 
 app.post('/api/admin/certificates/:participantId/issue',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
-  const certNo = req.body.certificateNo || `CERT-${Date.now().toString().slice(-6)}-${Math.floor(Math.random()*1000)}`;
+  const certNo = req.body.certificateNo || req.body.certificate_no || `CERT-${Date.now().toString().slice(-6)}-${Math.floor(Math.random()*1000)}`;
+  const certUrl = req.body.certificateUrl || req.body.certificate_url || `https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=1200`;
   const [r]=await pool.query(`
-    INSERT INTO certificates(participant_id, certificate_no, issued_at)
-    VALUES(?, ?, NOW())
-    ON DUPLICATE KEY UPDATE certificate_no=VALUES(certificate_no), issued_at=NOW()
-  `, [req.params.participantId, certNo]);
-  created(res,{id:r.insertId, certificateNo:certNo},'Certificate issued');
+    INSERT INTO certificates(participant_id, certificate_no, certificate_url, issued_at)
+    VALUES(?, ?, ?, NOW())
+    ON DUPLICATE KEY UPDATE certificate_no=VALUES(certificate_no), certificate_url=VALUES(certificate_url), issued_at=NOW()
+  `, [req.params.participantId, certNo, certUrl]);
+  created(res,{id:r.insertId, certificateNo:certNo, certificateUrl:certUrl},'Certificate issued');
 }));
 
 app.post('/api/admin/certificates/generate',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
@@ -1016,6 +1264,19 @@ app.post('/api/admin/certificates/generate',auth,roles('ADMIN','SUPER_ADMIN'),as
   if(!template || !participantIds || !participantIds.length || !layout){
     return res.status(400).json({success:false,message:'Template, participantIds, and layout are required'});
   }
+
+  try {
+    await pool.query('ALTER TABLE conference_settings ADD COLUMN certificate_template LONGTEXT NULL');
+    await pool.query('ALTER TABLE conference_settings ADD COLUMN certificate_layout JSON NULL');
+  } catch(e) {}
+
+  try {
+    await pool.query(`
+      INSERT INTO conference_settings(conference_id, certificate_template, certificate_layout)
+      VALUES(1, ?, ?)
+      ON DUPLICATE KEY UPDATE certificate_template=VALUES(certificate_template), certificate_layout=VALUES(certificate_layout)
+    `, [template, JSON.stringify(layout)]);
+  } catch(e) {}
 
   const m=String(template).match(/^data:(image\/(?:png|jpe?g|webp));base64,(.+)$/);
   if(!m)return res.status(422).json({success:false,message:'Only JPG, PNG and WEBP image templates are supported'});
@@ -1039,17 +1300,35 @@ app.post('/api/admin/certificates/generate',auth,roles('ADMIN','SUPER_ADMIN'),as
     `,[pId]);
     if(!p)continue;
 
+    const nameX = layout.nameX ?? 50;
+    const nameY = layout.nameY ?? 45;
+    const nameAlign = layout.nameAlign || 'center';
+    const nameAnchor = nameAlign === 'left' ? 'start' : nameAlign === 'right' ? 'end' : 'middle';
+
+    const regX = layout.regX ?? 50;
+    const regY = layout.regY ?? 55;
+    const regAlign = layout.regAlign || 'center';
+    const regAnchor = regAlign === 'left' ? 'start' : regAlign === 'right' ? 'end' : 'middle';
+
+    const certX = layout.certX ?? 50;
+    const certY = layout.certY ?? 65;
+    const certAlign = layout.certAlign || 'center';
+    const certAnchor = certAlign === 'left' ? 'start' : certAlign === 'right' ? 'end' : 'middle';
+
     const certNo = `CERT-${Date.now().toString().slice(-6)}-${Math.floor(Math.random()*1000)}`;
+
+    const escapeXml = (str) => String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+
     const svgOverlay = `
       <svg width="${width}" height="${height}">
         <style>
-          .nameText { font-family: 'Arial', sans-serif; font-weight: bold; fill: ${layout.nameColor || '#000000'}; font-size: ${layout.nameSize || 48}px; text-anchor: middle; }
-          .regText { font-family: 'Arial', sans-serif; fill: ${layout.regColor || '#000000'}; font-size: ${layout.regSize || 24}px; text-anchor: middle; }
-          .certText { font-family: 'Arial', sans-serif; fill: ${layout.certColor || '#000000'}; font-size: ${layout.certSize || 20}px; text-anchor: middle; }
+          .nameText { font-family: 'Arial', sans-serif; font-weight: bold; fill: ${layout.nameColor || '#000000'}; font-size: ${layout.nameSize || 48}px; text-anchor: ${nameAnchor}; dominant-baseline: middle; }
+          .regText { font-family: 'Arial', sans-serif; fill: ${layout.regColor || '#000000'}; font-size: ${layout.regSize || 24}px; text-anchor: ${regAnchor}; dominant-baseline: middle; }
+          .certText { font-family: 'Arial', sans-serif; fill: ${layout.certColor || '#000000'}; font-size: ${layout.certSize || 20}px; text-anchor: ${certAnchor}; dominant-baseline: middle; }
         </style>
-        <text x="50%" y="${height * (layout.nameY / 100)}" class="nameText">${p.name}</text>
-        <text x="50%" y="${height * (layout.regY / 100)}" class="regText">Registration No: ${p.registration_no}</text>
-        <text x="50%" y="${height * (layout.certY / 100)}" class="certText">Certificate No: ${certNo}</text>
+        <text x="${nameX}%" y="${height * (nameY / 100)}" class="nameText">${escapeXml(p.name)}</text>
+        <text x="${regX}%" y="${height * (regY / 100)}" class="regText">Registration No: ${escapeXml(p.registration_no)}</text>
+        <text x="${certX}%" y="${height * (certY / 100)}" class="certText">Certificate No: ${escapeXml(certNo)}</text>
       </svg>
     `;
 

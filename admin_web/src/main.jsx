@@ -2,6 +2,7 @@ import React,{useEffect,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {Bell,Building2,Bus,CalendarDays,CheckCircle,ChevronDown,FileCheck,Hotel,Image,LayoutDashboard,Lock,LogOut,MapPin,Palette,RefreshCw,Search,Settings,Shield,Upload,Users,QrCode,Maximize2,Minimize2,Printer,Tv,UserCheck,MessageCircle,Send,Share2} from 'lucide-react';
 import {QRCodeSVG} from 'qrcode.react';
+import * as XLSX from 'xlsx';
 import './style.css';
 
 const API=import.meta.env.VITE_API_URL||'http://localhost:5000/api';
@@ -14,7 +15,13 @@ async function req(path,opt={}){
   const token=localStorage.getItem('token');
   const r=await fetch(API+path,{...opt,headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{}),...(opt.headers||{})}});
   const d=await r.json().catch(()=>({}));
-  if(!r.ok)throw Error(d.message||'Request failed');
+  if(!r.ok){
+    if(r.status===401){
+      localStorage.removeItem('token');
+      window.dispatchEvent(new Event('auth:unauthorized'));
+    }
+    throw Error(d.message||'Request failed');
+  }
   return d?.success?d.data:d;
 }
 
@@ -33,7 +40,7 @@ function Login({onLogin}){const[e,setE]=useState('admin@conference.local'),[p,se
 
 const menu=[
   {title:'Dashboard',icon:LayoutDashboard},
-  {title:'Conference',icon:Building2,children:['Conference Details','Venue & Location','Branding','Conference Settings']},
+  {title:'Conference',icon:Building2,children:['Conference Details','Venue & Location','Branding','Conference Settings','Main Screen Slider']},
   {title:'Participants',icon:Users,children:['All Participants','Add Participant','Import Participants','Registration & Passes','QR Codes']},
   {title:'Speakers',icon:Users,children:['All Speakers','Add Speaker']},
   {title:'Schedule',icon:CalendarDays,children:['Sessions Timeline','Tracks & Halls','Add Session']},
@@ -58,7 +65,12 @@ function App(){
   const[conference,setConference]=useState(null);
   const[toast,setToast]=useState('');
   const loadConference=()=>req('/conference').then(x=>setConference(normalizeConference(x))).catch(e=>setToast(e.message));
-  useEffect(()=>{if(logged)loadConference()},[logged]);
+  useEffect(()=>{
+    if(logged)loadConference();
+    const handleUnauth=()=>setLogged(false);
+    window.addEventListener('auth:unauthorized',handleUnauth);
+    return ()=>window.removeEventListener('auth:unauthorized',handleUnauth);
+  },[logged]);
   const notify=msg=>{setToast(msg);setTimeout(()=>setToast(''),2800)};
   if(!logged)return <Login onLogin={()=>setLogged(true)}/>;
   return <div className="app"><aside><div className="sidebrand"><div className="sidebrand-header"><img src="/logo.png" alt="Logo" className="sidebrand-logo" /><div><strong>DY Patil</strong><span>Conference</span></div></div></div><nav>{menu.map(item=><NavItem key={item.title} item={item} active={tab} open={open[item.title]} onToggle={()=>setOpen(o=>({...o,[item.title]:!o[item.title]}))} onSelect={setTab}/>)}</nav><button className="logout" onClick={()=>{localStorage.clear();setLogged(false)}}><LogOut size={18}/>Sign out</button></aside><main><header><div><h2>{tab}</h2><p>{conference?.name||'Conference Management System'}</p></div><button className="icon" onClick={loadConference} title="Refresh conference"><RefreshCw size={18}/></button></header>{renderPage(tab,conference,setConference,notify)}{toast&&<div className="toast">{toast}</div>}</main></div>
@@ -68,7 +80,7 @@ function NavItem({item,active,open,onToggle,onSelect}){const I=item.icon;const p
 
 function renderPage(tab,conference,setConference,notify){
   if(tab==='Dashboard')return <Dashboard/>;
-  if(['Conference','Conference Details','Venue & Location','Branding','Conference Settings'].includes(tab))return <ConferenceModule tab={tab} conference={conference} setConference={setConference} notify={notify}/>;
+  if(['Conference','Conference Details','Venue & Location','Branding','Conference Settings','Main Screen Slider'].includes(tab))return <ConferenceModule tab={tab} conference={conference} setConference={setConference} notify={notify}/>;
   if(['Participants','All Participants','Add Participant','Import Participants','Registration & Passes','QR Codes'].includes(tab))return <Participants tab={tab} notify={notify}/>;
   if(['Speakers','All Speakers','Add Speaker'].includes(tab))return <Speakers tab={tab} notify={notify}/>;
   if(['Schedule','Sessions Timeline','Tracks & Halls','Add Session','Sessions','Tracks','Halls'].includes(tab))return <Schedule tab={tab} notify={notify}/>;
@@ -330,8 +342,7 @@ function Participants({tab, notify}){
     </div>
 
     {edit && <ParticipantModal value={edit} liaisons={liaisons} onSave={save} onClose={()=>setEdit(null)} notify={notify}/>}
-    {importModal && <ImportParticipantsModal onClose={()=>setImportModal(false)} onImportSuccess={()=>{setImportModal(false);load();notify('Participants imported successfully!')}}/>}
-    {qrModal && <QrPassModal participant={qrModal} onClose={()=>setQrModal(null)}/>}
+    {importModal && <BulkImportModal onClose={()=>setImportModal(false)} onImportSuccess={()=>{setImportModal(false);load();notify('Participants imported successfully!')}}/>}
     {whatsappModal && <WhatsAppBroadcasterModal participants={d} onClose={()=>setWhatsappModal(false)} notify={notify}/>}
   </div>
 }
@@ -449,70 +460,261 @@ function WhatsAppBroadcasterModal({participants, onClose, notify}){
   );
 }
 
-function ImportParticipantsModal({onClose, onImportSuccess}){
-  const[csvText,setCsvText]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
-  
-  const handleFile=e=>{
-    const file=e.target.files?.[0];
-    if(!file)return;
-    const reader=new FileReader();
-    reader.onload=event=>setCsvText(event.target.result);
-    reader.readAsText(file);
+function BulkImportModal({onClose, onImportSuccess}){
+  const [csvText, setCsvText] = useState('');
+  const [parsedData, setParsedData] = useState(null);
+  const [fileName, setFileName] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const downloadTemplate = () => {
+    const templateData = [
+      {
+        'Full Name': 'Dr. Rajesh Sharma',
+        'Mobile Number': '9876543210',
+        'Email Address': 'rajesh.sharma@example.com',
+        'Category': 'VIP Delegate',
+        'Designation': 'Professor & Head',
+        'University': 'AIIMS Delhi',
+        'Registration Number': 'DPU-2026-001',
+        'Hotel Name': 'Hyatt Regency Pune',
+        'Hotel Address': 'Viman Nagar, Pune',
+        'Room Number': '501',
+        'Room Type': 'Executive Suite',
+        'Check In Date': '2026-04-27',
+        'Check Out Date': '2026-04-30',
+        'Travel Mode': 'Flight',
+        'Flight/Train No': 'AI-852',
+        'Arrival Date': '2026-04-27',
+        'Arrival Time': '10:30 AM',
+        'Departure Date': '2026-04-30',
+        'Departure Time': '06:00 PM',
+        'Pickup Point': 'Pune Airport Terminal 1',
+        'Drop Point': 'Hyatt Regency Pune',
+        'Driver Name': 'Rajesh Patil',
+        'Driver Phone': '9876543210',
+        'Vehicle Number': 'MH12AB1234'
+      },
+      {
+        'Full Name': 'Dr. Sunita Deshmukh',
+        'Mobile Number': '9876543211',
+        'Email Address': 'sunita.d@example.com',
+        'Category': 'Speaker',
+        'Designation': 'Dean Academics',
+        'University': 'Mumbai University',
+        'Registration Number': 'DPU-2026-002',
+        'Hotel Name': 'Sayaji Hotel',
+        'Hotel Address': 'Kawala Naka, Kolhapur',
+        'Room Number': '302',
+        'Room Type': 'Deluxe Double',
+        'Check In Date': '2026-04-27',
+        'Check Out Date': '2026-04-30',
+        'Travel Mode': 'Train',
+        'Flight/Train No': 'Koyna Express (11029)',
+        'Arrival Date': '2026-04-27',
+        'Arrival Time': '02:15 PM',
+        'Departure Date': '2026-04-30',
+        'Departure Time': '08:00 AM',
+        'Pickup Point': 'Kolhapur Railway Station',
+        'Drop Point': 'Sayaji Hotel',
+        'Driver Name': 'Amit Jadhav',
+        'Driver Phone': '9876543211',
+        'Vehicle Number': 'MH12CD5678'
+      }
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(templateData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Participants");
+    XLSX.writeFile(wb, "Conference_Participant_Import_Template.xlsx");
   };
 
-  const processImport=async()=>{
-    if(!csvText.trim()){setError('Please upload or paste CSV data');return}
+  const handleFile = (e) => {
+    const file = e.target.files?.[0];
+    if(!file) return;
+    setFileName(file.name);
+    setError('');
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = new Uint8Array(evt.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const json = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+        if(!json || !json.length) {
+          setError('No data found in the selected Excel sheet');
+          return;
+        }
+
+        setParsedData(json);
+      } catch(err) {
+        setError('Failed to parse Excel file: ' + err.message);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const processImport = async () => {
+    let rowsToImport = [];
+
+    if(parsedData && parsedData.length > 0) {
+      rowsToImport = parsedData;
+    } else if(csvText.trim()) {
+      const lines = csvText.trim().split('\n').map(l => l.trim()).filter(Boolean);
+      if(lines.length < 2) {
+        setError('CSV must contain at least a header row and 1 data row');
+        return;
+      }
+      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+      rowsToImport = lines.slice(1).map(line => {
+        const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+        const obj = {};
+        headers.forEach((h, idx) => { obj[h] = values[idx]; });
+        return obj;
+      });
+    }
+
+    if(!rowsToImport.length) {
+      setError('Please upload an Excel file or paste CSV data');
+      return;
+    }
+
     setBusy(true);
     setError('');
-    try{
-      const lines=csvText.trim().split('\n').map(l=>l.trim()).filter(Boolean);
-      if(lines.length<2){setError('CSV must contain at least a header row and 1 data row');setBusy(false);return}
-      const headers=lines[0].split(',').map(h=>h.trim().replace(/^"|"$/g,'').toLowerCase());
-      
-      const participants=lines.slice(1).map(line=>{
-        const values=line.split(',').map(v=>v.trim().replace(/^"|"$/g,''));
-        const obj={};
-        headers.forEach((h,idx)=>{
-          if(h.includes('name'))obj.name=values[idx];
-          else if(h.includes('email'))obj.email=values[idx];
-          else if(h.includes('phone')||h.includes('mobile'))obj.phone=values[idx];
-          else if(h.includes('university')||h.includes('org'))obj.university=values[idx];
-          else if(h.includes('desig'))obj.designation=values[idx];
-          else if(h.includes('cat'))obj.category=values[idx];
-          else if(h.includes('reg'))obj.registration_no=values[idx];
-          else if(h.includes('travel'))obj.mode_of_travel=values[idx];
-        });
-        return obj;
-      }).filter(p=>p.name && p.email);
 
-      if(!participants.length){setError('No valid participants found (Name and Email required per row)');setBusy(false);return}
-      
-      await req('/admin/participants/bulk-import',{method:'POST',body:JSON.stringify({participants})});
+    try {
+      const res = await req('/admin/participants/bulk-import', {
+        method: 'POST',
+        body: JSON.stringify({ participants: rowsToImport })
+      });
+      alert(res.message || 'Import completed successfully');
       onImportSuccess();
-    }catch(err){
-      setError(err.message||'Import failed');
-    }finally{
+    } catch(err) {
+      setError(err.message || 'Import failed');
+    } finally {
       setBusy(false);
     }
   };
 
   return <div className="modal-overlay">
-    <div className="modal" style={{maxWidth:'600px'}}>
-      <div className="modal-header"><h3>Bulk Import Participants</h3><button className="close" onClick={onClose}>&times;</button></div>
+    <div className="modal" style={{maxWidth:'680px'}}>
+      <div className="modal-header">
+        <h3>Bulk Import Participants & Mapping (Excel / CSV)</h3>
+        <button className="close" onClick={onClose}>&times;</button>
+      </div>
       <div className="modal-body">
-        <p style={{marginBottom:'12px'}}>Upload a CSV file with columns: <code>name, email, phone, designation, university, category, registration_no</code></p>
-        <div style={{marginBottom:'16px'}}>
-          <input type="file" accept=".csv" onChange={handleFile}/>
+        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', background:'#f8fafc', padding:'12px 16px', borderRadius:'10px', marginBottom:'16px', border:'1px solid #e2e8f0'}}>
+          <div>
+            <strong style={{color:'#1e293b', fontSize:'14px'}}>Need a ready Excel template?</strong>
+            <p style={{margin:0, fontSize:'12px', color:'#64748b'}}>Includes all Participant, Hotel Stay & Transport columns.</p>
+          </div>
+          <button className="secondary" style={{background:'#fff', border:'1px solid #cbd5e1', cursor:'pointer'}} onClick={downloadTemplate}>
+            📥 Download Sample Template
+          </button>
         </div>
-        <Field textarea label="Or Paste CSV Content Directly" value={csvText} onChange={setCsvText}/>
-        {error && <p style={{color:'red',marginTop:'8px'}}>{error}</p>}
+
+        <p style={{marginBottom:'10px', fontSize:'13px', color:'#475569'}}>
+          Upload an Excel file (<code>.xlsx</code>, <code>.xls</code>) or CSV. Mobile number will become participant's default username & initial password set to <code>changeme</code>.
+        </p>
+
+        <div style={{marginBottom:'16px', padding:'16px', border:'2px dashed #cbd5e1', borderRadius:'12px', textAlign:'center', background:'#fafafa'}}>
+          <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFile} id="excel-file-input" style={{display:'none'}} />
+          <label htmlFor="excel-file-input" className="button primary" style={{cursor:'pointer', display:'inline-flex', alignItems:'center', gap:'8px', padding:'10px 20px', borderRadius:'8px', background:'#8C1119', color:'#fff', fontWeight:'bold'}}>
+            <Upload size={16} /> Select Excel / CSV File
+          </label>
+          {fileName && <div style={{marginTop:'10px', color:'#2563eb', fontWeight:'bold', fontSize:'14px'}}>File Loaded: {fileName} ({parsedData?.length||0} rows detected)</div>}
+        </div>
+
+        <Field textarea label="Or Paste CSV / Tab-separated Content Directly" value={csvText} onChange={setCsvText} placeholder="Name, Mobile, Email, Category, Hotel, Room..." />
+        {error && <p style={{color:'red', marginTop:'8px', fontWeight:'bold'}}>{error}</p>}
       </div>
       <div className="modal-footer">
         <button onClick={onClose}>Cancel</button>
-        <button className="primary" disabled={busy} onClick={processImport}>{busy?'Importing...':'Start Import'}</button>
+        <button className="primary" disabled={busy} onClick={processImport}>{busy ? 'Importing & Mapping...' : `Import ${parsedData?.length ? parsedData.length + ' Rows' : 'Participants'}`}</button>
       </div>
     </div>
-  </div>
+  </div>;
+}
+
+function AddSlideModal({notify, onSave, onClose}){
+  const [title, setTitle] = useState('');
+  const [mediaType, setMediaType] = useState('IMAGE');
+  const [mediaUrl, setMediaUrl] = useState('');
+  const [file, setFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!mediaUrl && !file) {
+      alert('Please select a media file or provide a URL');
+      return;
+    }
+
+    setBusy(true);
+    try {
+      let filePayload = null;
+      if (file) {
+        const reader = new FileReader();
+        filePayload = await new Promise((res, rej) => {
+          reader.onload = () => res({ name: file.name, dataUrl: reader.result });
+          reader.onerror = rej;
+          reader.readAsDataURL(file);
+        });
+      }
+
+      await req('/admin/sliders', {
+        method: 'POST',
+        body: JSON.stringify({
+          title,
+          media_type: mediaType,
+          media_url: mediaUrl,
+          file: filePayload,
+          active: 1
+        })
+      });
+
+      notify('Slider item added successfully');
+      onSave();
+    } catch(err) {
+      alert(err.message || 'Failed to add slide');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return <div className="modal-overlay">
+    <div className="modal" style={{maxWidth:'500px'}}>
+      <div className="modal-header">
+        <h3>Add Home Screen Media Slide</h3>
+        <button className="close" onClick={onClose}>&times;</button>
+      </div>
+      <form onSubmit={handleSubmit}>
+        <div className="modal-body">
+          <Field label="Slide Title / Headline" value={title} onChange={setTitle} placeholder="e.g. Welcome to 100th VC Conference" />
+          <SelectField label="Media Type" value={mediaType} onChange={setMediaType} options={[{value:'IMAGE',label:'Image (JPG, PNG, WEBP)'},{value:'VIDEO',label:'Video (MP4, WEBM)'}]} />
+          
+          <label className="field uploadfield" style={{marginTop:'12px'}}>
+            <span>Upload Media File (Image or Video)</span>
+            <div>
+              <input value={mediaUrl} onChange={e => setMediaUrl(e.target.value)} placeholder="Or paste direct HTTP video/image URL" />
+              <label className="uploadBtn">
+                <Upload size={16}/>Select File
+                <input type="file" accept={mediaType==='VIDEO'?'video/mp4,video/webm,video/quicktime':'image/*'} onChange={e => setFile(e.target.files?.[0])} />
+              </label>
+            </div>
+            {file && <small style={{color:'#2563eb', marginTop:'4px'}}>Selected: {file.name} ({(file.size/1024/1024).toFixed(1)} MB)</small>}
+          </label>
+        </div>
+        <div className="modal-footer">
+          <button type="button" onClick={onClose}>Cancel</button>
+          <button type="submit" className="primary" disabled={busy}>{busy ? 'Uploading...' : 'Save & Publish'}</button>
+        </div>
+      </form>
+    </div>
+  </div>;
 }
 
 function QrPassModal({participant, onClose}){
@@ -1408,18 +1610,51 @@ function Certificates({tab, notify}){
   
   // Generator states
   const[template,setTemplate]=useState(null);
+  const[imgSize,setImgSize]=useState({width: 1200, height: 800});
   const[layout,setLayout]=useState({
-    nameY: 45, nameSize: 32, nameColor: '#8C1119',
-    regY: 55, regSize: 18, regColor: '#2E6F95',
-    certY: 65, certSize: 16, certColor: '#64748b'
+    nameX: 50, nameY: 45, nameSize: 32, nameColor: '#8C1119', nameAlign: 'center',
+    regX: 50, regY: 55, regSize: 18, regColor: '#2E6F95', regAlign: 'center',
+    certX: 50, certY: 65, certSize: 16, certColor: '#64748b', certAlign: 'center'
   });
   const[selectedIds,setSelectedIds]=useState([]);
   const[searchQuery,setSearchQuery]=useState('');
   const[generating,setGenerating]=useState(false);
 
-  const load=async()=>{setBusy(true); try{const[c,p]=await Promise.all([req('/admin/certificates'),req('/admin/participants?conferenceId=1')]);setD(c); setParticipants(p);}finally{setBusy(false)}};
+  const[savingLayout,setSavingLayout]=useState(false);
+
+  const load=async()=>{
+    setBusy(true); 
+    try{
+      const[c,p,s]=await Promise.all([
+        req('/admin/certificates'),
+        req('/admin/participants?conferenceId=1'),
+        req('/admin/certificates/settings').catch(()=>null)
+      ]);
+      setD(c); 
+      setParticipants(p);
+      if(s?.template) setTemplate(s.template);
+      if(s?.layout) setLayout(prev => ({...prev, ...s.layout}));
+    }finally{
+      setBusy(false)
+    }
+  };
   useEffect(()=>{load()},[]);
   useEffect(()=>{if(tab==='Issue Certificate')setShowAdd(true)},[tab]);
+
+  const handleSaveLayout = async () => {
+    setSavingLayout(true);
+    try {
+      await req('/admin/certificates/settings', {
+        method: 'POST',
+        body: JSON.stringify({ template, layout })
+      });
+      notify('Certificate alignment settings saved successfully!');
+    } catch(e) {
+      alert(e.message);
+    } finally {
+      setSavingLayout(false);
+    }
+  };
 
   const handleSelectAll = (checked) => {
     if(checked) {
@@ -1458,7 +1693,6 @@ function Certificates({tab, notify}){
       });
       notify(`Successfully generated ${selectedIds.length} certificates!`);
       setSelectedIds([]);
-      setTemplate(null);
       setSubTab('issued');
       load();
     } catch(e) {
@@ -1492,7 +1726,7 @@ function Certificates({tab, notify}){
               <b>{x.participant_name}</b>
               {x.certificate_url && (
                 <span style={{marginLeft:'10px', fontSize:'12px'}}>
-                  [<a href={API.replace('/api','')+x.certificate_url} target="_blank" rel="noopener noreferrer">View PNG</a>]
+                  [<a href={resolveMediaUrl(x.certificate_url)} target="_blank" rel="noopener noreferrer">View PNG</a>]
                 </span>
               )}
               <br/><small>{x.registration_no}</small>
@@ -1553,73 +1787,121 @@ function Certificates({tab, notify}){
             <div style={{display:'flex', flexDirection:'column', gap:'20px'}}>
               <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                 <h4 style={{margin:0}}>Design Layout Preview</h4>
-                <button className="secondary" style={{padding:'4px 10px', fontSize:'12px'}} onClick={()=>setTemplate(null)}>Remove Template</button>
+                <div style={{display:'flex', gap:'8px', alignItems:'center'}}>
+                  <button className="primary" style={{padding:'5px 12px', fontSize:'12px'}} onClick={handleSaveLayout} disabled={savingLayout}>
+                    {savingLayout ? 'Saving...' : '💾 Save Alignment'}
+                  </button>
+                  <button className="secondary" style={{padding:'5px 10px', fontSize:'12px'}} onClick={()=>setTemplate(null)}>Remove Template</button>
+                </div>
               </div>
 
-              {/* Responsive Live Preview Box */}
+              {/* 1-to-1 SVG Live Preview Box matching backend Sharp renderer */}
               <div style={{position:'relative', width:'100%', border:'1px solid var(--border)', borderRadius:'var(--radius-md)', overflow:'hidden', background:'#f8fafc', boxShadow:'var(--shadow-sm)'}}>
-                <img src={template} style={{width:'100%', height:'auto', display:'block'}} alt="Certificate template"/>
+                <img 
+                  src={template} 
+                  style={{width:'100%', height:'auto', display:'block'}} 
+                  alt="Certificate template"
+                  onLoad={e => setImgSize({ width: e.target.naturalWidth || 1200, height: e.target.naturalHeight || 800 })}
+                />
                 
-                {/* Overlaid Texts */}
-                <div style={{position:'absolute', left:'50%', transform:'translateX(-50%)', top:`${layout.nameY}%`, color:layout.nameColor, fontSize:`clamp(12px, 3.5vw, ${layout.nameSize}px)`, fontWeight:'bold', textShadow:'0 1px 2px rgba(0,0,0,0.1)', whiteSpace:'nowrap', textAlign:'center'}}>
-                  John Doe
-                </div>
-                <div style={{position:'absolute', left:'50%', transform:'translateX(-50%)', top:`${layout.regY}%`, color:layout.regColor, fontSize:`clamp(8px, 2vw, ${layout.regSize}px)`, whiteSpace:'nowrap', textAlign:'center'}}>
-                  Registration No: REG-12345
-                </div>
-                <div style={{position:'absolute', left:'50%', transform:'translateX(-50%)', top:`${layout.certY}%`, color:layout.certColor, fontSize:`clamp(8px, 1.8vw, ${layout.certSize}px)`, whiteSpace:'nowrap', textAlign:'center'}}>
-                  Certificate No: CERT-987654
-                </div>
+                <svg 
+                  viewBox={`0 0 ${imgSize.width} ${imgSize.height}`} 
+                  style={{position:'absolute', top:0, left:0, width:'100%', height:'100%', pointerEvents:'none'}}
+                >
+                  <style>{`
+                    .nameText { font-family: 'Arial', sans-serif; font-weight: bold; fill: ${layout.nameColor || '#8C1119'}; font-size: ${layout.nameSize || 32}px; text-anchor: ${layout.nameAlign === 'left' ? 'start' : layout.nameAlign === 'right' ? 'end' : 'middle'}; dominant-baseline: middle; }
+                    .regText { font-family: 'Arial', sans-serif; fill: ${layout.regColor || '#2E6F95'}; font-size: ${layout.regSize || 18}px; text-anchor: ${layout.regAlign === 'left' ? 'start' : layout.regAlign === 'right' ? 'end' : 'middle'}; dominant-baseline: middle; }
+                    .certText { font-family: 'Arial', sans-serif; fill: ${layout.certColor || '#64748b'}; font-size: ${layout.certSize || 16}px; text-anchor: ${layout.certAlign === 'left' ? 'start' : layout.certAlign === 'right' ? 'end' : 'middle'}; dominant-baseline: middle; }
+                  `}</style>
+                  <text x={`${layout.nameX ?? 50}%`} y={`${imgSize.height * ((layout.nameY ?? 45) / 100)}`} className="nameText">John Doe</text>
+                  <text x={`${layout.regX ?? 50}%`} y={`${imgSize.height * ((layout.regY ?? 55) / 100)}`} className="regText">Registration No: REG-12345</text>
+                  <text x={`${layout.certX ?? 50}%`} y={`${imgSize.height * ((layout.certY ?? 65) / 100)}`} className="certText">Certificate No: CERT-987654</text>
+                </svg>
               </div>
 
               {/* Styling Controllers */}
               <div style={{background:'var(--bg-app)', padding:'16px', borderRadius:'var(--radius-md)', border:'1px solid var(--border)', display:'grid', gridTemplateColumns:'1fr 1fr', gap:'16px'}}>
                 <div>
                   <h5 style={{margin:'0 0 10px 0', color:'var(--primary)'}}>Participant Name</h5>
-                  <label style={{display:'flex', flexDirection:'column', gap:'6px', fontSize:'13px', marginBottom:'10px'}}>
+                  <label style={{display:'flex', flexDirection:'column', gap:'4px', fontSize:'13px', marginBottom:'8px'}}>
+                    X-Position ({layout.nameX ?? 50}%)
+                    <input type="range" min="0" max="100" value={layout.nameX ?? 50} onChange={e=>setLayout(l=>({...l, nameX: parseInt(e.target.value)}))}/>
+                  </label>
+                  <label style={{display:'flex', flexDirection:'column', gap:'4px', fontSize:'13px', marginBottom:'8px'}}>
                     Y-Position ({layout.nameY}%)
                     <input type="range" min="5" max="95" value={layout.nameY} onChange={e=>setLayout(l=>({...l, nameY: parseInt(e.target.value)}))}/>
                   </label>
-                  <label style={{display:'flex', flexDirection:'column', gap:'6px', fontSize:'13px', marginBottom:'10px'}}>
+                  <label style={{display:'flex', flexDirection:'column', gap:'4px', fontSize:'13px', marginBottom:'8px'}}>
                     Font Size ({layout.nameSize}px)
                     <input type="range" min="12" max="100" value={layout.nameSize} onChange={e=>setLayout(l=>({...l, nameSize: parseInt(e.target.value)}))}/>
                   </label>
-                  <label style={{display:'flex', alignItems:'center', gap:'8px', fontSize:'13px'}}>
-                    Text Color
-                    <input type="color" value={layout.nameColor} onChange={e=>setLayout(l=>({...l, nameColor: e.target.value}))} style={{width:'32px', height:'24px', border:0, padding:0, background:'transparent', cursor:'pointer'}}/>
-                  </label>
+                  <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:'8px', fontSize:'13px', marginTop:'4px'}}>
+                    <div style={{display:'flex', gap:'4px'}}>
+                      {['left','center','right'].map(align => (
+                        <button key={align} type="button" style={{padding:'2px 8px', fontSize:'11px', textTransform:'capitalize', background:(layout.nameAlign||'center')===align?'var(--primary)':'var(--bg-card)', color:(layout.nameAlign||'center')===align?'#fff':'var(--text-main)', border:'1px solid var(--border)', borderRadius:'4px'}} onClick={()=>setLayout(l=>({...l, nameAlign: align}))}>{align}</button>
+                      ))}
+                    </div>
+                    <label style={{display:'flex', alignItems:'center', gap:'6px'}}>
+                      Color
+                      <input type="color" value={layout.nameColor} onChange={e=>setLayout(l=>({...l, nameColor: e.target.value}))} style={{width:'28px', height:'22px', border:0, padding:0, background:'transparent', cursor:'pointer'}}/>
+                    </label>
+                  </div>
                 </div>
                 <div>
                   <h5 style={{margin:'0 0 10px 0', color:'var(--accent)'}}>Registration No.</h5>
-                  <label style={{display:'flex', flexDirection:'column', gap:'6px', fontSize:'13px', marginBottom:'10px'}}>
+                  <label style={{display:'flex', flexDirection:'column', gap:'4px', fontSize:'13px', marginBottom:'8px'}}>
+                    X-Position ({layout.regX ?? 50}%)
+                    <input type="range" min="0" max="100" value={layout.regX ?? 50} onChange={e=>setLayout(l=>({...l, regX: parseInt(e.target.value)}))}/>
+                  </label>
+                  <label style={{display:'flex', flexDirection:'column', gap:'4px', fontSize:'13px', marginBottom:'8px'}}>
                     Y-Position ({layout.regY}%)
                     <input type="range" min="5" max="95" value={layout.regY} onChange={e=>setLayout(l=>({...l, regY: parseInt(e.target.value)}))}/>
                   </label>
-                  <label style={{display:'flex', flexDirection:'column', gap:'6px', fontSize:'13px', marginBottom:'10px'}}>
+                  <label style={{display:'flex', flexDirection:'column', gap:'4px', fontSize:'13px', marginBottom:'8px'}}>
                     Font Size ({layout.regSize}px)
                     <input type="range" min="10" max="60" value={layout.regSize} onChange={e=>setLayout(l=>({...l, regSize: parseInt(e.target.value)}))}/>
                   </label>
-                  <label style={{display:'flex', alignItems:'center', gap:'8px', fontSize:'13px'}}>
-                    Text Color
-                    <input type="color" value={layout.regColor} onChange={e=>setLayout(l=>({...l, regColor: e.target.value}))} style={{width:'32px', height:'24px', border:0, padding:0, background:'transparent', cursor:'pointer'}}/>
-                  </label>
+                  <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:'8px', fontSize:'13px', marginTop:'4px'}}>
+                    <div style={{display:'flex', gap:'4px'}}>
+                      {['left','center','right'].map(align => (
+                        <button key={align} type="button" style={{padding:'2px 8px', fontSize:'11px', textTransform:'capitalize', background:(layout.regAlign||'center')===align?'var(--accent)':'var(--bg-card)', color:(layout.regAlign||'center')===align?'#fff':'var(--text-main)', border:'1px solid var(--border)', borderRadius:'4px'}} onClick={()=>setLayout(l=>({...l, regAlign: align}))}>{align}</button>
+                      ))}
+                    </div>
+                    <label style={{display:'flex', alignItems:'center', gap:'6px'}}>
+                      Color
+                      <input type="color" value={layout.regColor} onChange={e=>setLayout(l=>({...l, regColor: e.target.value}))} style={{width:'28px', height:'22px', border:0, padding:0, background:'transparent', cursor:'pointer'}}/>
+                    </label>
+                  </div>
                 </div>
                 <div style={{gridColumn:'1 / -1', borderTop:'1px solid var(--border)', paddingTop:'12px', marginTop:'4px'}}>
                   <h5 style={{margin:'0 0 10px 0', color:'var(--text-muted)'}}>Certificate No.</h5>
                   <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'16px'}}>
-                    <label style={{display:'flex', flexDirection:'column', gap:'6px', fontSize:'13px'}}>
+                    <label style={{display:'flex', flexDirection:'column', gap:'4px', fontSize:'13px'}}>
+                      X-Position ({layout.certX ?? 50}%)
+                      <input type="range" min="0" max="100" value={layout.certX ?? 50} onChange={e=>setLayout(l=>({...l, certX: parseInt(e.target.value)}))}/>
+                    </label>
+                    <label style={{display:'flex', flexDirection:'column', gap:'4px', fontSize:'13px'}}>
                       Y-Position ({layout.certY}%)
                       <input type="range" min="5" max="95" value={layout.certY} onChange={e=>setLayout(l=>({...l, certY: parseInt(e.target.value)}))}/>
                     </label>
-                    <label style={{display:'flex', flexDirection:'column', gap:'6px', fontSize:'13px'}}>
-                      Font Size ({layout.certSize}px)
-                      <input type="range" min="10" max="50" value={layout.certSize} onChange={e=>setLayout(l=>({...l, certSize: parseInt(e.target.value)}))}/>
-                    </label>
                   </div>
-                  <label style={{display:'flex', alignItems:'center', gap:'8px', fontSize:'13px', marginTop:'10px'}}>
-                    Text Color
-                    <input type="color" value={layout.certColor} onChange={e=>setLayout(l=>({...l, certColor: e.target.value}))} style={{width:'32px', height:'24px', border:0, padding:0, background:'transparent', cursor:'pointer'}}/>
-                  </label>
+                  <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:'8px', fontSize:'13px', marginTop:'8px'}}>
+                    <label style={{display:'flex', alignItems:'center', gap:'8px'}}>
+                      Font Size ({layout.certSize}px)
+                      <input type="range" min="10" max="50" value={layout.certSize} onChange={e=>setLayout(l=>({...l, certSize: parseInt(e.target.value)}))} style={{width:'120px'}}/>
+                    </label>
+                    <div style={{display:'flex', alignItems:'center', gap:'12px'}}>
+                      <div style={{display:'flex', gap:'4px'}}>
+                        {['left','center','right'].map(align => (
+                          <button key={align} type="button" style={{padding:'2px 8px', fontSize:'11px', textTransform:'capitalize', background:(layout.certAlign||'center')===align?'var(--text-muted)':'var(--bg-card)', color:(layout.certAlign||'center')===align?'#fff':'var(--text-main)', border:'1px solid var(--border)', borderRadius:'4px'}} onClick={()=>setLayout(l=>({...l, certAlign: align}))}>{align}</button>
+                        ))}
+                      </div>
+                      <label style={{display:'flex', alignItems:'center', gap:'6px'}}>
+                        Color
+                        <input type="color" value={layout.certColor} onChange={e=>setLayout(l=>({...l, certColor: e.target.value}))} style={{width:'28px', height:'22px', border:0, padding:0, background:'transparent', cursor:'pointer'}}/>
+                      </label>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
