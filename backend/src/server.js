@@ -42,6 +42,10 @@ async function runMigrations(){
     if(!cols.length){
       await pool.query("ALTER TABLE users ADD COLUMN must_change_password TINYINT(1) DEFAULT 0");
     }
+    const [loginCols]=await pool.query("SHOW COLUMNS FROM users LIKE 'last_login_at'");
+    if(!loginCols.length){
+      await pool.query("ALTER TABLE users ADD COLUMN last_login_at TIMESTAMP NULL DEFAULT NULL");
+    }
     await pool.query(`
       CREATE TABLE IF NOT EXISTS main_sliders (
         id INT AUTO_INCREMENT PRIMARY KEY,
