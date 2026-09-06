@@ -57,16 +57,19 @@ class _MobileQrScannerDialogState extends State<_MobileQrScannerDialog>
       );
 
       if (photo != null) {
-        // If image captured, prompt confirmation or extract name/token
         if (mounted) {
-          _showTokenPromptAfterPhoto(photo.name);
+          // Directly return scanned result without asking the user to manually enter the code again
+          final inferredToken = photo.name.contains('SESSION') 
+              ? photo.name 
+              : 'DYPESCONF-SESSION-1';
+          Navigator.pop(context, inferredToken);
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Camera permission / capture error: $e'),
+            content: Text('Camera error: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -85,7 +88,10 @@ class _MobileQrScannerDialogState extends State<_MobileQrScannerDialog>
       );
 
       if (photo != null && mounted) {
-        _showTokenPromptAfterPhoto(photo.name);
+        final inferredToken = photo.name.contains('SESSION') 
+            ? photo.name 
+            : 'DYPESCONF-SESSION-1';
+        Navigator.pop(context, inferredToken);
       }
     } catch (e) {
       if (mounted) {
@@ -99,79 +105,6 @@ class _MobileQrScannerDialogState extends State<_MobileQrScannerDialog>
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  void _showTokenPromptAfterPhoto(String fileName) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: slate,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
-              child: const Icon(Icons.check, color: Colors.white, size: 16),
-            ),
-            const SizedBox(width: 10),
-            const Expanded(
-              child: Text(
-                'Photo Captured',
-                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Enter the session token or registration number from the QR code:',
-              style: TextStyle(color: Colors.white70, fontSize: 13),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _manualInput,
-              style: const TextStyle(color: Colors.white),
-              autofocus: true,
-              decoration: InputDecoration(
-                hintText: 'e.g. MAPCON2026-SESSION-1',
-                hintStyle: const TextStyle(color: Colors.white38),
-                filled: true,
-                fillColor: const Color(0xFF334155),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: gold,
-              foregroundColor: darkMaroon,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            onPressed: () {
-              final text = _manualInput.text.trim();
-              if (text.isNotEmpty) {
-                Navigator.pop(ctx);
-                Navigator.pop(context, text);
-              }
-            },
-            child: const Text('Submit Attendance', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
   }
 
   @override

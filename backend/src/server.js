@@ -1000,6 +1000,29 @@ app.get('/api/gallery/my-photos',auth,asyncRoute(async(req,res)=>{
   }, `Found ${matched.length} photos of you in the conference gallery`);
 }));
 
+app.post(['/api/me/avatar', '/api/me/photo'],auth,asyncRoute(async(req,res)=>{
+  if(!req.body.file || !req.body.file.dataUrl) {
+    return res.status(400).json({message:'Please select a valid image file'});
+  }
+  const url = await saveDataUrlUpload('participants', req.body.file);
+  await pool.query('UPDATE users SET photo=? WHERE id=?', [url, req.user.id]);
+  await pool.query('UPDATE participants SET qr_token=COALESCE(qr_token, qr_token) WHERE user_id=?', [req.user.id]);
+  
+  const [[u]] = await pool.query('SELECT id, name, email, phone, role, designation, university, blood_group, photo FROM users WHERE id=?', [req.user.id]);
+  io.to(`user_${req.user.id}`).emit('profile_updated', u);
+  io.emit('speakers_updated');
+  created(res, { url, user: u, photo: url }, 'Profile photo updated successfully');
+}));
+
+app.post('/api/uploads',auth,asyncRoute(async(req,res)=>{
+  if(!req.body.file || !req.body.file.dataUrl) {
+    return res.status(400).json({message:'No image file provided'});
+  }
+  const folder = req.body.folder || 'participants';
+  const url = await saveDataUrlUpload(folder, req.body.file);
+  created(res, { url }, 'File uploaded successfully');
+}));
+
 app.get('/api/me/profile',auth,asyncRoute(async(req,res)=>{
   const [[u]]=await pool.query(`
     SELECT u.id,u.name,u.email,u.phone,u.role,u.designation,u.university,u.blood_group,u.photo,
@@ -1023,6 +1046,7 @@ app.put('/api/me/profile',auth,asyncRoute(async(req,res)=>{
   const phone = req.body.phone !== undefined ? (req.body.phone ? String(req.body.phone).trim() : null) : undefined;
   const designation = req.body.designation !== undefined ? (req.body.designation ? String(req.body.designation).trim() : null) : undefined;
   const university = req.body.university !== undefined ? (req.body.university ? String(req.body.university).trim() : null) : undefined;
+  const photo = req.body.photo !== undefined ? (req.body.photo ? String(req.body.photo).trim() : null) : (req.body.avatarUrl !== undefined ? (req.body.avatarUrl ? String(req.body.avatarUrl).trim() : null) : undefined);
   const bloodGroup = (req.body.blood_group !== undefined ? req.body.blood_group : req.body.bloodGroup) !== undefined 
     ? ((req.body.blood_group || req.body.bloodGroup) ? String(req.body.blood_group || req.body.bloodGroup).trim() : null) 
     : undefined;
@@ -1034,6 +1058,7 @@ app.put('/api/me/profile',auth,asyncRoute(async(req,res)=>{
   if (designation !== undefined) { userUpdates.push('designation = ?'); userParams.push(designation); }
   if (university !== undefined) { userUpdates.push('university = ?'); userParams.push(university); }
   if (bloodGroup !== undefined) { userUpdates.push('blood_group = ?'); userParams.push(bloodGroup); }
+  if (photo !== undefined) { userUpdates.push('photo = ?'); userParams.push(photo); }
 
   if (userUpdates.length > 0) {
     userParams.push(userId);
@@ -1760,12 +1785,39 @@ app.post('/api/attendance/mark-self',auth,asyncRoute(async(req,res)=>{
   const [[p]]=await pool.query('SELECT id, registration_no, category FROM participants WHERE user_id=? LIMIT 1',[req.user.id]);
   if(!p) return res.status(400).json({message:'Participant profile not found'});
 
+  // Check if participant has already marked attendance for this session (1 time only rule)
+  const [[existing]] = await pool.query('SELECT id, scanned_at FROM attendance WHERE participant_id=? AND session_id=? LIMIT 1', [p.id, sessionId]);
+  if (existing) {
+    const scanTimeStr = existing.scanned_at ? new Date(existing.scanned_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'earlier';
+    return res.status(400).json({
+      message: `You have already marked attendance for this session (${s.title}) at ${scanTimeStr}. Attendance can only be marked once per session.`,
+      alreadyMarked: true,
+      scannedAt: existing.scanned_at,
+      sessionTitle: s.title
+    });
+  }
+
   // Record Attendance
   await pool.query(`
     INSERT INTO attendance(participant_id, session_id, scan_type, scanned_by)
     VALUES(?,?,?,?)
-    ON DUPLICATE KEY UPDATE scanned_at=CURRENT_TIMESTAMP
   `,[p.id, sessionId, 'PARTICIPANT_SELF_SCAN', req.user.id]);
+
+  // Save notification in database
+  const notifTitle = 'Attendance Verified';
+  const notifMsg = `Your attendance for "${s.title}" has been recorded successfully.`;
+  await pool.query('INSERT INTO notifications(user_id, conference_id, title, message, type) VALUES(?,?,?,?,?)',
+    [req.user.id, s.conference_id || 1, notifTitle, notifMsg, 'ATTENDANCE']);
+
+  // Emit real-time events
+  io.to(`user_${req.user.id}`).emit('notification_received', {
+    title: notifTitle,
+    message: notifMsg,
+    type: 'ATTENDANCE',
+    created_at: new Date().toISOString()
+  });
+  io.to(`user_${req.user.id}`).emit('attendance_updated', { sessionId: s.id, participantId: p.id });
+  io.emit('new_scan', { sessionId: s.id, participantId: p.id });
 
   ok(res, {
     sessionId: s.id,

@@ -1,6 +1,6 @@
 {
-    "name": "conference_app",
-    "short_name": "conference_app",
+    "name": "DYPESCONF",
+    "short_name": "DYPESCONF",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
