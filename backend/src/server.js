@@ -162,6 +162,25 @@ async function runMigrations(){
         await pool.query(`ALTER TABLE feedback ADD COLUMN ${colDef}`);
       }
     }
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS sponsors (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        conference_id INT NOT NULL DEFAULT 1,
+        name VARCHAR(255) NOT NULL,
+        category VARCHAR(100) DEFAULT 'Gold Sponsor',
+        tier ENUM('TITLE','PLATINUM','GOLD','SILVER','BRONZE','PARTNER') DEFAULT 'GOLD',
+        logo_url TEXT,
+        website_url VARCHAR(255),
+        description TEXT,
+        stall_number VARCHAR(50),
+        contact_person VARCHAR(100),
+        contact_phone VARCHAR(50),
+        display_order INT DEFAULT 0,
+        active TINYINT(1) DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(conference_id) REFERENCES conferences(id) ON DELETE CASCADE
+      )
+    `);
     // Repair broken gallery photo records pointing to missing local files
     await pool.query(`
       UPDATE photos SET url='https://images.unsplash.com/photo-1587825140708-dfaf72ae4b04?w=1200&auto=format&fit=crop&q=80', caption='Keynote address on Advances in Molecular Pathology'
@@ -1374,6 +1393,70 @@ app.delete('/api/admin/sliders/:id',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute
   await pool.query('DELETE FROM main_sliders WHERE id=?',[req.params.id]);
   io.emit('sliders_updated', { action: 'delete', id: req.params.id });
   ok(res, null, 'Slider item deleted');
+}));
+
+app.get('/api/sponsors',asyncRoute(async(req,res)=>{
+  const conferenceId = req.query.conferenceId || 1;
+  const [rows] = await pool.query('SELECT * FROM sponsors WHERE conference_id=? AND active=1 ORDER BY display_order ASC, id ASC',[conferenceId]);
+  res.json(rows);
+}));
+
+app.get('/api/admin/sponsors',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
+  const conferenceId = req.query.conferenceId || 1;
+  const [rows] = await pool.query('SELECT * FROM sponsors WHERE conference_id=? ORDER BY display_order ASC, id ASC',[conferenceId]);
+  res.json(rows);
+}));
+
+app.post('/api/admin/sponsors',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
+  const conferenceId = req.body.conferenceId || 1;
+  let logoUrl = req.body.logo_url || req.body.logoUrl;
+  if(req.body.file){
+    logoUrl = await saveDataUrlUpload('sponsors', req.body.file);
+  }
+  const name = req.body.name || 'Sponsor';
+  const category = req.body.category || 'Partner';
+  const tier = req.body.tier || 'GOLD';
+  const websiteUrl = req.body.website_url || req.body.websiteUrl || null;
+  const description = req.body.description || null;
+  const stallNumber = req.body.stall_number || req.body.stallNumber || null;
+  const contactPerson = req.body.contact_person || req.body.contactPerson || null;
+  const contactPhone = req.body.contact_phone || req.body.contactPhone || null;
+  const displayOrder = req.body.display_order || req.body.displayOrder || 0;
+  const active = req.body.active !== undefined ? (req.body.active ? 1 : 0) : 1;
+
+  const [r] = await pool.query(
+    'INSERT INTO sponsors(conference_id, name, category, tier, logo_url, website_url, description, stall_number, contact_person, contact_phone, display_order, active) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
+    [conferenceId, name, category, tier, logoUrl, websiteUrl, description, stallNumber, contactPerson, contactPhone, displayOrder, active]
+  );
+  created(res, { id: r.insertId, name, category, tier, logo_url: logoUrl }, 'Sponsor added');
+}));
+
+app.put('/api/admin/sponsors/:id',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
+  let logoUrl = req.body.logo_url || req.body.logoUrl;
+  if(req.body.file){
+    logoUrl = await saveDataUrlUpload('sponsors', req.body.file);
+  }
+  await pool.query(`
+    UPDATE sponsors SET
+      name=COALESCE(?,name),
+      category=COALESCE(?,category),
+      tier=COALESCE(?,tier),
+      logo_url=COALESCE(?,logo_url),
+      website_url=COALESCE(?,website_url),
+      description=COALESCE(?,description),
+      stall_number=COALESCE(?,stall_number),
+      contact_person=COALESCE(?,contact_person),
+      contact_phone=COALESCE(?,contact_phone),
+      display_order=COALESCE(?,display_order),
+      active=COALESCE(?,active)
+    WHERE id=?
+  `, [req.body.name, req.body.category, req.body.tier, logoUrl, req.body.website_url||req.body.websiteUrl, req.body.description, req.body.stall_number||req.body.stallNumber, req.body.contact_person||req.body.contactPerson, req.body.contact_phone||req.body.contactPhone, req.body.display_order||req.body.displayOrder, req.body.active!==undefined?(req.body.active?1:0):null, req.params.id]);
+  ok(res, null, 'Sponsor updated');
+}));
+
+app.delete('/api/admin/sponsors/:id',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
+  await pool.query('DELETE FROM sponsors WHERE id=?',[req.params.id]);
+  ok(res, null, 'Sponsor deleted');
 }));
 app.get('/api/me/attendance',auth,asyncRoute(async(req,res)=>{const [r]=await pool.query(`SELECT a.*,s.title,s.session_date,s.start_time FROM attendance a JOIN participants p ON p.id=a.participant_id JOIN sessions s ON s.id=a.session_id WHERE p.user_id=? ORDER BY s.session_date,s.start_time`,[req.user.id]);res.json(r)}));
 app.post('/api/attendance/scan',auth,roles('ADMIN','SUPER_ADMIN','VOLUNTEER'),[body('qrToken').notEmpty()],validate,asyncRoute(async(req,res)=>{
