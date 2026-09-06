@@ -1,6 +1,6 @@
 import React,{useEffect,useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import {Bell,Building2,Bus,CalendarDays,CheckCircle,ChevronDown,FileCheck,Hotel,Image,LayoutDashboard,Lock,LogOut,MapPin,Palette,RefreshCw,Search,Settings,Shield,Upload,Users,QrCode,Maximize2,Minimize2,Printer,Tv,UserCheck,MessageCircle,Send,Share2} from 'lucide-react';
+import {Bell,Building2,Bus,CalendarDays,CheckCircle,ChevronDown,FileCheck,Hotel,Image,LayoutDashboard,Lock,LogOut,MapPin,Palette,RefreshCw,Search,Settings,Shield,Upload,Users,QrCode,Maximize2,Minimize2,Printer,Tv,UserCheck,MessageCircle,Send,Share2,Menu,X} from 'lucide-react';
 import {QRCodeSVG} from 'qrcode.react';
 import * as XLSX from 'xlsx';
 import './style.css';
@@ -25,12 +25,11 @@ async function req(path,opt={}){
   const d=await r.json().catch(()=>({}));
   if(!r.ok){
     if(r.status===401){
-      localStorage.removeItem('token');
-      window.dispatchEvent(new Event('auth:unauthorized'));
+      window.dispatchEvent(new CustomEvent('auth:unauthorized'));
     }
-    throw Error(d.message||'Request failed');
+    throw new Error(d.message||`HTTP ${r.status}`);
   }
-  return d?.success?d.data:d;
+  return d;
 }
 
 function toInputDate(value){return value?String(value).slice(0,10):''}
@@ -73,7 +72,12 @@ function App(){
   const[open,setOpen]=useState({Conference:true,Participants:false,Schedule:false});
   const[conference,setConference]=useState(null);
   const[toast,setToast]=useState('');
+  const[mobileNavOpen,setMobileNavOpen]=useState(false);
   const loadConference=()=>req('/conference').then(x=>setConference(normalizeConference(x))).catch(e=>setToast(e.message));
+  const handleSelectTab=(t)=>{
+    setTab(t);
+    setMobileNavOpen(false);
+  };
   useEffect(()=>{
     if(logged)loadConference();
     const handleUnauth=()=>setLogged(false);
@@ -121,7 +125,36 @@ function App(){
   },[logged]);
   const notify=msg=>{setToast(msg);setTimeout(()=>setToast(''),2800)};
   if(!logged)return <Login onLogin={()=>setLogged(true)}/>;
-  return <div className="app"><aside><div className="sidebrand"><div className="sidebrand-header"><img src="/logo.png" alt="Logo" className="sidebrand-logo" /><div><strong>DY Patil</strong><span>Conference</span></div></div></div><nav>{menu.map(item=><NavItem key={item.title} item={item} active={tab} open={open[item.title]} onToggle={()=>setOpen(o=>({...o,[item.title]:!o[item.title]}))} onSelect={setTab}/>)}</nav><button className="logout" onClick={()=>{localStorage.clear();setLogged(false)}}><LogOut size={18}/>Sign out</button></aside><main><header><div><h2>{tab}</h2><p>{conference?.name||'Conference Management System'}</p></div><button className="icon" onClick={loadConference} title="Refresh conference"><RefreshCw size={18}/></button></header>{renderPage(tab,conference,setConference,notify)}{toast&&<div className="toast">{toast}</div>}</main></div>
+  return <div className="app">
+    <div className={`sidebar-backdrop ${mobileNavOpen ? 'show' : ''}`} onClick={()=>setMobileNavOpen(false)} />
+    <aside className={mobileNavOpen ? 'mobile-open' : ''}>
+      <div className="sidebrand">
+        <div className="sidebrand-header">
+          <img src="/logo.png" alt="Logo" className="sidebrand-logo" />
+          <div style={{flex:1}}><strong>DY Patil</strong><span>Conference</span></div>
+          <button className="sidebar-close-btn" onClick={()=>setMobileNavOpen(false)} title="Close menu"><X size={20}/></button>
+        </div>
+      </div>
+      <nav>{menu.map(item=><NavItem key={item.title} item={item} active={tab} open={open[item.title]} onToggle={()=>setOpen(o=>({...o,[item.title]:!o[item.title]}))} onSelect={handleSelectTab}/>)}</nav>
+      <button className="logout" onClick={()=>{localStorage.clear();setLogged(false)}}><LogOut size={18}/>Sign out</button>
+    </aside>
+    <main>
+      <header>
+        <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
+          <button className="menu-toggle-btn icon" onClick={()=>setMobileNavOpen(o=>!o)} title="Toggle menu" aria-label="Toggle navigation menu"><Menu size={20}/></button>
+          <div>
+            <h2>{tab}</h2>
+            <p>{conference?.name||'Conference Management System'}</p>
+          </div>
+        </div>
+        <div className="header-actions">
+          <button className="icon" onClick={loadConference} title="Refresh conference"><RefreshCw size={18}/></button>
+        </div>
+      </header>
+      {renderPage(tab,conference,setConference,notify)}
+      {toast&&<div className="toast">{toast}</div>}
+    </main>
+  </div>;
 }
 
 function NavItem({item,active,open,onToggle,onSelect}){const I=item.icon;const parentActive=active===item.title||item.children?.includes(active);return <div className="navgroup"><button className={parentActive?'active':''} onClick={()=>item.children?onToggle():onSelect(item.title)}><I size={18}/><span>{item.title}</span>{item.children&&<ChevronDown className={open?'rotated':''} size={15}/>}</button>{item.children&&open&&<div className="subnav">{item.children.map(child=><button key={child} className={active===child?'active child':'child'} onClick={()=>onSelect(child)}>{child}</button>)}</div>}</div>}
