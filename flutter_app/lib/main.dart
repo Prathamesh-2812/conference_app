@@ -407,6 +407,7 @@ class _AuthGateState extends State<AuthGate> {
     try {
       final res = await ApiService.get('/auth/me');
       if (res != null && res is Map && res['id'] != null) {
+        await ConferenceService.refreshEnrolledConferences();
         if (mounted) setState(() { logged = true; loading = false; });
         return;
       }
@@ -830,14 +831,100 @@ class Header extends StatelessWidget {
     this.trailing,
   });
 
+  Future<void> _showConferencePickerModal(BuildContext context) async {
+    if (ConferenceService.enrolledConferences.isEmpty) {
+      await ConferenceService.refreshEnrolledConferences();
+    }
+
+    if (!context.mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        final enrolled = ConferenceService.enrolledConferences;
+        final activeId = ConferenceService.activeConferenceId;
+
+        return Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: maroon.withOpacity(0.1), shape: BoxShape.circle),
+                    child: const Icon(Icons.business_center, color: maroon, size: 24),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Your Registered Conferences', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: slate)),
+                        Text('Select a conference to view its schedule & data', style: TextStyle(fontSize: 12, color: muted)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (enrolled.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  alignment: Alignment.center,
+                  child: const Text('No registered conferences found for your account.', style: TextStyle(color: muted)),
+                )
+              else
+                ...enrolled.map((item) {
+                  final confId = item['id'] is int ? item['id'] : (int.tryParse(item['id'].toString()) ?? 1);
+                  final isSelected = confId == activeId;
+                  final name = item['name'] ?? item['short_name'] ?? 'Conference #$confId';
+                  final regNo = item['registration_no'] ?? '';
+                  final category = item['category'] ?? 'Participant';
+
+                  return Card(
+                    elevation: isSelected ? 2 : 0,
+                    color: isSelected ? maroon.withOpacity(0.06) : Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(color: isSelected ? maroon : Colors.grey.shade200, width: isSelected ? 1.5 : 1),
+                    ),
+                    margin: const EdgeInsets.only(bottom: 10),
+                    child: ListTile(
+                      title: Text(name, style: TextStyle(fontWeight: FontWeight.bold, color: isSelected ? maroon : slate)),
+                      subtitle: Text(regNo.isNotEmpty ? 'Reg: $regNo • $category' : category, style: const TextStyle(fontSize: 12, color: muted)),
+                      trailing: isSelected
+                          ? const Icon(Icons.check_circle, color: maroon)
+                          : const Icon(Icons.arrow_forward_ios, size: 14, color: muted),
+                      onTap: () async {
+                        Navigator.pop(ctx);
+                        await ConferenceService.switchConference(confId);
+                        RealtimeSyncService.instance.triggerSync();
+                      },
+                    ),
+                  );
+                }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext c) {
     final conference = ConferenceScope.of(c);
     final topInset = MediaQuery.of(c).padding.top;
+    final enrolledCount = ConferenceService.enrolledConferences.length;
+
     return Container(
       padding: EdgeInsets.fromLTRB(20, topInset + 10, 20, 16),
       decoration: BoxDecoration(
-
         gradient: LinearGradient(
           colors: [conference.primaryColor, darkMaroon],
           begin: Alignment.topLeft,
@@ -903,7 +990,9 @@ class Header extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 2),
-                    Row(
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
                       children: [
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -918,6 +1007,32 @@ class Header extends StatelessWidget {
                               color: Color(0xFFFFF8E7),
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => _showConferencePickerModal(c),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.25),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.white54, width: 0.8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.arrow_drop_down_circle_outlined, color: Colors.white, size: 12),
+                                const SizedBox(width: 4),
+                                Text(
+                                  enrolledCount > 1 ? 'Conferences ($enrolledCount) ▾' : 'My Conferences ▾',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -1606,7 +1721,7 @@ class _HomeSponsorsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder(
-      future: ApiService.get('/sponsors?conferenceId=1'),
+      future: ApiService.get('/sponsors'),
       builder: (context, snapshot) {
         List<dynamic> list = defaultSponsors;
         if (snapshot.hasData && snapshot.data is List && (snapshot.data as List).isNotEmpty) {
@@ -2000,7 +2115,7 @@ class _SponsorsScreenState extends State<SponsorsScreen> {
 
   Future<List<dynamic>> _loadSponsors() async {
     try {
-      final res = await ApiService.get('/sponsors?conferenceId=1');
+      final res = await ApiService.get('/sponsors');
       if (res is List && res.isNotEmpty) {
         return res;
       }
@@ -2384,7 +2499,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   }
 
   Future<List<dynamic>> load() async {
-    final result = await ApiService.get('/sessions?conferenceId=1');
+    final result = await ApiService.get('/sessions');
     return result is List ? result : <dynamic>[];
   }
 
@@ -3125,7 +3240,7 @@ class _SpeakersScreenState extends State<SpeakersScreen> {
             await Future.delayed(const Duration(milliseconds: 500));
           },
           child: FutureBuilder(
-            future: ApiService.get('/speakers?conferenceId=1'),
+            future: ApiService.get('/speakers'),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator(color: maroon));
@@ -3338,7 +3453,7 @@ class _NoticesScreenState extends State<NoticesScreen> {
                 await Future.delayed(const Duration(milliseconds: 500));
               },
               child: FutureBuilder(
-                future: ApiService.get('/notices?conferenceId=1'),
+                future: ApiService.get('/notices'),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator(color: maroon));
@@ -3493,7 +3608,7 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
 
   Future<void> _loadInitialMatchedPhotos() async {
     try {
-      final res = await ApiService.get('/gallery/my-photos?conferenceId=1');
+      final res = await ApiService.get('/gallery/my-photos');
       List<dynamic> list = [];
       if (res is Map) {
         if (res['data'] is Map && res['data']['matches'] is List) {
@@ -3542,7 +3657,7 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
       });
 
       final res = await ApiService.post('/gallery/match-selfie', {
-        'conferenceId': 1,
+        'conferenceId': ConferenceService.activeConferenceId,
         'selfie': base64Image,
       });
 
@@ -4008,7 +4123,7 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
 
   Widget _buildAllPhotosTab() {
     return FutureBuilder(
-      future: ApiService.get('/gallery?conferenceId=1'),
+      future: ApiService.get('/gallery'),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator(color: maroon));
@@ -4264,7 +4379,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
   Future<void> _loadMessages() async {
     try {
-      final res = await ApiService.get('/chat/messages?conferenceId=1');
+      final res = await ApiService.get('/chat/messages');
       if (mounted) {
         setState(() {
           if (res is Map && res['messages'] is List) {
@@ -5857,7 +5972,7 @@ class _MealsScreenState extends State<MealsScreen> {
   int _refreshKey = 0;
 
   Future<List<dynamic>> _loadMeals() async {
-    final res = await ApiService.get('/meals?conferenceId=1');
+    final res = await ApiService.get('/meals');
     return res is List ? res : <dynamic>[];
   }
 

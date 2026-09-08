@@ -186,6 +186,19 @@ async function runMigrations(){
       UPDATE photos SET url='https://images.unsplash.com/photo-1587825140708-dfaf72ae4b04?w=1200&auto=format&fit=crop&q=80', caption='Keynote address on Advances in Molecular Pathology'
       WHERE url LIKE '%rakesh-sharma%' OR url LIKE '%gold-modern-appreciation%'
     `);
+
+    try {
+      const [idxRows] = await pool.query("SHOW INDEX FROM participants WHERE Key_name = 'user_id'");
+      if(idxRows.length){
+        await pool.query("ALTER TABLE participants DROP INDEX user_id");
+      }
+      const [ucRows] = await pool.query("SHOW INDEX FROM participants WHERE Key_name = 'user_conf_unique'");
+      if(!ucRows.length){
+        await pool.query("ALTER TABLE participants ADD UNIQUE KEY user_conf_unique (user_id, conference_id)");
+      }
+    } catch(migErr) {
+      console.warn("Participants composite key migration notice:", migErr.message);
+    }
   }catch(err){
     console.log('Migration check:', err.message);
   }
@@ -372,28 +385,276 @@ app.put('/api/admin/conference/settings',auth,roles('ADMIN','SUPER_ADMIN'),async
 }));
 app.post('/api/admin/uploads',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{const url=await saveDataUrlUpload(req.body.folder,req.body.file);await audit(req,'file.upload','uploads',null,null,{url});created(res,{url},'File uploaded');}));
 app.post('/api/auth/login', asyncRoute(async(req,res)=>{
-  const loginInput = (req.body.identifier || req.body.email || req.body.phone || req.body.username || '').toString().trim();
-  const password = (req.body.password || '').toString();
+  const loginInput = (req.body.identifier || req.body.email || req.body.phone || req.body.username || req.body.registration_no || '').toString().trim();
+  const password = (req.body.password || '').toString().trim();
   if(!loginInput || !password) {
-    return res.status(400).json({ message: 'Email/phone and password are required' });
+    return res.status(400).json({ message: 'Email, phone or Registration No. and password are required' });
   }
-  const [rows] = await pool.query('SELECT id,name,email,phone,password_hash,role,must_change_password FROM users WHERE email=? OR phone=? LIMIT 1',[loginInput, loginInput]);
+
+  const cleanPhone = loginInput.replace(/[^0-9]/g, '');
+
+  const [rows] = await pool.query(`
+    SELECT DISTINCT u.id, u.name, u.email, u.phone, u.password_hash, u.role, u.must_change_password
+    FROM users u
+    LEFT JOIN participants p ON p.user_id = u.id
+    WHERE LOWER(u.email) = LOWER(?)
+       OR u.phone = ?
+       OR (? != '' AND u.phone = ?)
+       OR LOWER(p.registration_no) = LOWER(?)
+    LIMIT 1
+  `, [loginInput, loginInput, cleanPhone, cleanPhone, loginInput]);
+
   if(!rows.length) return res.status(401).json({message:'Invalid credentials'});
   const u = rows[0];
-  if(!await bcrypt.compare(password, u.password_hash)) return res.status(401).json({message:'Invalid credentials'});
+
+  let isValid = await bcrypt.compare(password, u.password_hash);
+  if(!isValid) {
+    // Check fallback default passwords ('Demo@123', 'changeme')
+    const isDefaultHash = (await bcrypt.compare('changeme', u.password_hash)) || (await bcrypt.compare('Demo@123', u.password_hash));
+    if (isDefaultHash && (password === 'Demo@123' || password === 'changeme')) {
+      isValid = true;
+    }
+  }
+
+  if(!isValid) return res.status(401).json({message:'Invalid credentials'});
+
   await pool.query('UPDATE users SET last_login_at=NOW() WHERE id=?',[u.id]);
+  
+  const [enrolledConfs] = await pool.query(`
+    SELECT c.*, p.id as participant_id, p.registration_no, p.category, p.status as participant_status
+    FROM participants p
+    JOIN conferences c ON c.id = p.conference_id
+    WHERE p.user_id = ? AND c.active = 1
+    ORDER BY c.start_date DESC
+  `, [u.id]);
+
   const secret = process.env.JWT_SECRET || 'conference-app-secret-jwt-key-2026';
   const token = jwt.sign({id:u.id, name:u.name, email:u.email, role:u.role}, secret, {expiresIn:'7d'});
-  res.json({token, user:{id:u.id, name:u.name, email:u.email, phone:u.phone, role:u.role, last_login_at: new Date(), mustChangePassword: !!u.must_change_password}});
+  res.json({
+    token, 
+    user:{
+      id:u.id, 
+      name:u.name, 
+      email:u.email, 
+      phone:u.phone, 
+      role:u.role, 
+      last_login_at: new Date(), 
+      mustChangePassword: !!u.must_change_password
+    },
+    enrolledConferences: enrolledConfs
+  });
 }));
+
 app.post('/api/auth/change-password', auth, [body('newPassword').isLength({min:4})], validate, asyncRoute(async(req,res)=>{
   const newHash = await bcrypt.hash(req.body.newPassword, 10);
   await pool.query('UPDATE users SET password_hash=?, must_change_password=0 WHERE id=?', [newHash, req.user.id]);
   ok(res, {success: true}, 'Password changed successfully');
 }));
-app.get('/api/auth/me',auth,asyncRoute(async(req,res)=>{const [[u]]=await pool.query('SELECT id,name,email,phone,role,designation,university,blood_group,photo,last_login_at,must_change_password FROM users WHERE id=?',[req.user.id]);res.json(u)}));
-app.get('/api/conferences',asyncRoute(async(req,res)=>{const [r]=await pool.query('SELECT * FROM conferences ORDER BY start_date DESC');res.json(r)}));
-app.get('/api/conferences/:id',asyncRoute(async(req,res)=>{const [[c]]=await pool.query('SELECT * FROM conferences WHERE id=?',[req.params.id]);if(!c)return res.status(404).json({message:'Conference not found'});res.json(c)}));
+
+app.get('/api/auth/me',auth,asyncRoute(async(req,res)=>{
+  const [[u]]=await pool.query('SELECT id,name,email,phone,role,designation,university,blood_group,photo,last_login_at,must_change_password FROM users WHERE id=?',[req.user.id]);
+  res.json(u);
+}));
+
+app.get('/api/me/conferences', auth, asyncRoute(async(req, res) => {
+  const [confs] = await pool.query(`
+    SELECT c.*, p.id as participant_id, p.registration_no, p.category, p.status as participant_status
+    FROM participants p
+    JOIN conferences c ON c.id = p.conference_id
+    WHERE p.user_id = ? AND c.active = 1
+    ORDER BY c.start_date DESC
+  `, [req.user.id]);
+  ok(res, confs, 'Enrolled conferences retrieved');
+}));
+
+app.get('/api/conferences',asyncRoute(async(req,res)=>{
+  const [r]=await pool.query('SELECT * FROM conferences ORDER BY start_date DESC');
+  res.json(r);
+}));
+
+app.get('/api/conferences/:id',asyncRoute(async(req,res)=>{
+  const [[c]]=await pool.query('SELECT * FROM conferences WHERE id=?',[req.params.id]);
+  if(!c)return res.status(404).json({message:'Conference not found'});
+  res.json(c);
+}));
+
+app.post('/api/admin/conferences', auth, roles('ADMIN','SUPER_ADMIN'), [
+  body('name').notEmpty()
+], validate, asyncRoute(async(req, res) => {
+  const { name, shortName, description, theme, organizer, hostInstitution, venue, address, startDate, endDate } = req.body;
+  const [r] = await pool.query(`
+    INSERT INTO conferences(name, short_name, description, theme, organizer, host_institution, venue, address, start_date, end_date, active)
+    VALUES(?,?,?,?,?,?,?,?,?,?,1)
+  `, [name, shortName||null, description||null, theme||null, organizer||null, hostInstitution||null, venue||null, address||null, startDate||null, endDate||null]);
+  
+  const confId = r.insertId;
+  await ensureConferenceChildren(confId);
+  const newConf = await getConference(confId);
+  await audit(req, 'conference.create', 'conference', confId, null, newConf);
+  io.emit('conference_created', newConf);
+  created(res, newConf, 'Conference created successfully');
+}));
+
+// Personal Accommodation & Transport endpoints for logged in delegates
+app.get('/api/me/accommodation', auth, asyncRoute(async(req, res) => {
+  const conferenceId = req.query.conferenceId || 1;
+  const [[p]] = await pool.query(`
+    SELECT p.id as participant_id, p.registration_no,
+           h.id as hotel_id, h.name as hotel_name, h.address as hotel_address, h.latitude, h.longitude,
+           r.room_number, r.room_type,
+           ra.check_in, ra.check_out
+    FROM participants p
+    LEFT JOIN room_allocations ra ON ra.participant_id = p.id
+    LEFT JOIN rooms r ON r.id = ra.room_id
+    LEFT JOIN hotels h ON h.id = r.hotel_id
+    WHERE p.user_id = ? AND p.conference_id = ?
+    LIMIT 1
+  `, [req.user.id, conferenceId]);
+
+  if (!p) return res.status(404).json({ message: 'No registration record found for this conference' });
+  ok(res, p, 'Accommodation details retrieved');
+}));
+
+app.get('/api/me/transport', auth, asyncRoute(async(req, res) => {
+  const conferenceId = req.query.conferenceId || 1;
+  const [[p]] = await pool.query(`
+    SELECT p.id as participant_id, p.mode_of_travel, p.flight_number, p.arrival_date, p.arrival_time, p.departure_date, p.departure_time,
+           ta.pickup_location, ta.drop_location, ta.pickup_time, ta.status as transport_status, ta.notes,
+           v.vehicle_number, v.vehicle_type,
+           d.name as driver_name, d.phone as driver_phone
+    FROM participants p
+    LEFT JOIN transport_assignments ta ON ta.participant_id = p.id
+    LEFT JOIN vehicles v ON v.id = ta.vehicle_id
+    LEFT JOIN drivers d ON d.id = v.driver_id
+    WHERE p.user_id = ? AND p.conference_id = ?
+    LIMIT 1
+  `, [req.user.id, conferenceId]);
+
+  if (!p) return res.status(404).json({ message: 'No registration record found for this conference' });
+  ok(res, p, 'Transport details retrieved');
+}));
+
+// Personal Certificate & Feedback Gating Endpoints
+app.get('/api/me/certificate', auth, asyncRoute(async(req, res) => {
+  const conferenceId = req.query.conferenceId || 1;
+  const [[p]] = await pool.query(`
+    SELECT p.id as participant_id, p.registration_no, p.category, u.name as participant_name
+    FROM participants p
+    JOIN users u ON u.id = p.user_id
+    WHERE p.user_id = ? AND p.conference_id = ?
+    LIMIT 1
+  `, [req.user.id, conferenceId]);
+
+  if (!p) return res.status(404).json({ message: 'Participant record not found' });
+
+  const [[fb]] = await pool.query('SELECT id FROM feedback WHERE participant_id = ? LIMIT 1', [p.participant_id]);
+  const [[cert]] = await pool.query('SELECT * FROM certificates WHERE participant_id = ? LIMIT 1', [p.participant_id]);
+
+  let certData = cert;
+  if (!certData) {
+    // Generate certificate record if missing
+    const certNo = `CERT-${conferenceId}-${p.participant_id}-${Date.now().toString().slice(-4)}`;
+    const [cRes] = await pool.query(
+      'INSERT INTO certificates (participant_id, certificate_no, issued_at) VALUES (?, ?, NOW())',
+      [p.participant_id, certNo]
+    );
+    const [[newCert]] = await pool.query('SELECT * FROM certificates WHERE id = ?', [cRes.insertId]);
+    certData = newCert;
+  }
+
+  ok(res, {
+    certificate: certData,
+    feedbackSubmitted: !!fb,
+    participant: p
+  }, 'Certificate status retrieved');
+}));
+
+app.post('/api/me/feedback', auth, [
+  body('rating').isInt({ min: 1, max: 5 })
+], validate, asyncRoute(async(req, res) => {
+  const conferenceId = req.body.conferenceId || req.query.conferenceId || 1;
+  const [[p]] = await pool.query('SELECT id FROM participants WHERE user_id = ? AND conference_id = ? LIMIT 1', [req.user.id, conferenceId]);
+
+  if (!p) return res.status(404).json({ message: 'Participant registration not found' });
+
+  const rating = req.body.rating || 5;
+  const contentRating = req.body.contentRating || 5;
+  const speakerRating = req.body.speakerRating || 5;
+  const comment = req.body.comment || req.body.suggestions || '';
+
+  await pool.query(`
+    INSERT INTO feedback (participant_id, session_id, rating, content_rating, speaker_rating, comment, created_at)
+    VALUES (?, NULL, ?, ?, ?, ?, NOW())
+  `, [p.id, rating, contentRating, speakerRating, comment]);
+
+  ok(res, { feedbackSubmitted: true }, 'Feedback submitted successfully. Certificate unlocked!');
+}));
+
+// Home Banners / Main Media Sliders Endpoints
+app.get('/api/sliders', asyncRoute(async(req, res) => {
+  const conferenceId = req.query.conferenceId || 1;
+  const [slides] = await pool.query(
+    'SELECT * FROM main_sliders WHERE conference_id = ? AND active = 1 ORDER BY display_order ASC, id DESC',
+    [conferenceId]
+  );
+  ok(res, slides, 'Active home sliders retrieved');
+}));
+
+app.get('/api/admin/sliders', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncRoute(async(req, res) => {
+  const conferenceId = req.query.conferenceId || 1;
+  const [slides] = await pool.query(
+    'SELECT * FROM main_sliders WHERE conference_id = ? ORDER BY display_order ASC, id DESC',
+    [conferenceId]
+  );
+  res.json(slides);
+}));
+
+app.post('/api/admin/sliders', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncRoute(async(req, res) => {
+  const conferenceId = req.body.conferenceId || 1;
+  const { title, mediaType = 'IMAGE', displayOrder = 0, mediaUrl: rawMediaUrl, file } = req.body;
+  
+  let mediaUrl = rawMediaUrl;
+  if (file && file.dataUrl) {
+    mediaUrl = await saveDataUrlUpload('sliders', file);
+  }
+
+  if (!mediaUrl) {
+    return res.status(400).json({ message: 'Media URL or file upload is required' });
+  }
+
+  const [r] = await pool.query(`
+    INSERT INTO main_sliders (conference_id, title, media_type, media_url, display_order, active)
+    VALUES (?, ?, ?, ?, ?, 1)
+  `, [conferenceId, title || 'Banner', mediaType.toUpperCase(), mediaUrl, displayOrder]);
+
+  const [[newSlide]] = await pool.query('SELECT * FROM main_sliders WHERE id = ?', [r.insertId]);
+  io.emit('sliders_updated', { conferenceId });
+  created(res, newSlide, 'Slider banner created');
+}));
+
+app.put('/api/admin/sliders/:id', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncRoute(async(req, res) => {
+  const { title, mediaType, mediaUrl, displayOrder, active } = req.body;
+  await pool.query(`
+    UPDATE main_sliders SET
+      title = COALESCE(?, title),
+      media_type = COALESCE(?, media_type),
+      media_url = COALESCE(?, media_url),
+      display_order = COALESCE(?, display_order),
+      active = COALESCE(?, active)
+    WHERE id = ?
+  `, [title, mediaType, mediaUrl, displayOrder, active, req.params.id]);
+
+  const [[slide]] = await pool.query('SELECT * FROM main_sliders WHERE id = ?', [req.params.id]);
+  io.emit('sliders_updated', { conferenceId: slide?.conference_id });
+  ok(res, slide, 'Slider slide updated');
+}));
+
+app.delete('/api/admin/sliders/:id', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncRoute(async(req, res) => {
+  const [[slide]] = await pool.query('SELECT conference_id FROM main_sliders WHERE id = ?', [req.params.id]);
+  await pool.query('DELETE FROM main_sliders WHERE id = ?', [req.params.id]);
+  io.emit('sliders_updated', { conferenceId: slide?.conference_id });
+  ok(res, null, 'Slider deleted');
+}));
 app.get('/api/admin/liaisons',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
   const [r]=await pool.query('SELECT * FROM liaison_faculty ORDER BY name');
   res.json(r);
@@ -542,7 +803,7 @@ app.post('/api/admin/participants/bulk-import',auth,roles('ADMIN','SUPER_ADMIN')
     return res.status(400).json({message: 'No participant data provided'});
   }
 
-  const defaultHash = await bcrypt.hash('changeme', 10);
+  const defaultHash = await bcrypt.hash('Demo@123', 10);
   let created = 0, updated = 0, skipped = 0;
   const errors = [];
 
@@ -1134,10 +1395,10 @@ app.post('/api/me/photo',auth,asyncRoute(async(req,res)=>{
   await pool.query('UPDATE users SET photo=? WHERE id=?',[photoUrl, req.user.id]);
   ok(res,{photo: photoUrl},'Profile photo updated successfully');
 }));
-app.get('/api/me/accommodation',auth,asyncRoute(async(req,res)=>{const [r]=await pool.query(`SELECT h.name hotel_name,h.address,h.latitude,h.longitude,r.room_number,r.room_type,ra.check_in,ra.check_out FROM room_allocations ra JOIN participants p ON p.id=ra.participant_id JOIN rooms r ON r.id=ra.room_id JOIN hotels h ON h.id=r.hotel_id WHERE p.user_id=?`,[req.user.id]);res.json(r[0]||null)}));
-app.get('/api/me/transport',auth,asyncRoute(async(req,res)=>{const [r]=await pool.query(`SELECT t.*,v.vehicle_number,v.vehicle_type,d.name driver_name,d.phone driver_phone FROM transport_assignments t LEFT JOIN vehicles v ON v.id=t.vehicle_id LEFT JOIN drivers d ON d.id=v.driver_id JOIN participants p ON p.id=t.participant_id WHERE p.user_id=? ORDER BY t.pickup_time`,[req.user.id]);res.json(r)}));
-app.get('/api/me/duties',auth,asyncRoute(async(req,res)=>{const [r]=await pool.query(`SELECT d.*,da.status FROM duties d JOIN duty_assignments da ON da.duty_id=d.id JOIN users u ON u.id=da.user_id WHERE u.id=? ORDER BY d.duty_date,d.start_time`,[req.user.id]);res.json(r)}));
-app.get('/api/me/registration',auth,asyncRoute(async(req,res)=>{const [[r]]=await pool.query(`SELECT p.registration_no,p.category,p.status,p.payment_status,p.amount,p.qr_token,c.name conference_name,c.start_date,c.end_date FROM participants p JOIN conferences c ON c.id=p.conference_id WHERE p.user_id=? ORDER BY p.id DESC LIMIT 1`,[req.user.id]);res.json(r||null)}));
+app.get('/api/me/accommodation',auth,asyncRoute(async(req,res)=>{const confId=req.query.conferenceId;let sql=`SELECT h.name hotel_name,h.address,h.latitude,h.longitude,r.room_number,r.room_type,ra.check_in,ra.check_out FROM room_allocations ra JOIN participants p ON p.id=ra.participant_id JOIN rooms r ON r.id=ra.room_id JOIN hotels h ON h.id=r.hotel_id WHERE p.user_id=?`;const params=[req.user.id];if(confId){sql+=` AND p.conference_id=?`;params.push(confId);}const [r]=await pool.query(sql,params);res.json(r[0]||null)}));
+app.get('/api/me/transport',auth,asyncRoute(async(req,res)=>{const confId=req.query.conferenceId;let sql=`SELECT t.*,v.vehicle_number,v.vehicle_type,d.name driver_name,d.phone driver_phone FROM transport_assignments t LEFT JOIN vehicles v ON v.id=t.vehicle_id LEFT JOIN drivers d ON d.id=v.driver_id JOIN participants p ON p.id=t.participant_id WHERE p.user_id=?`;const params=[req.user.id];if(confId){sql+=` AND p.conference_id=?`;params.push(confId);}sql+=` ORDER BY t.pickup_time`;const [r]=await pool.query(sql,params);res.json(r)}));
+app.get('/api/me/duties',auth,asyncRoute(async(req,res)=>{const confId=req.query.conferenceId;let sql=`SELECT d.*,da.status FROM duties d JOIN duty_assignments da ON da.duty_id=d.id JOIN users u ON u.id=da.user_id WHERE u.id=?`;const params=[req.user.id];if(confId){sql+=` AND d.conference_id=?`;params.push(confId);}sql+=` ORDER BY d.duty_date,d.start_time`;const [r]=await pool.query(sql,params);res.json(r)}));
+app.get('/api/me/registration',auth,asyncRoute(async(req,res)=>{const confId=req.query.conferenceId;let sql=`SELECT p.registration_no,p.category,p.status,p.payment_status,p.amount,p.qr_token,c.id as conference_id,c.name conference_name,c.start_date,c.end_date FROM participants p JOIN conferences c ON c.id=p.conference_id WHERE p.user_id=?`;const params=[req.user.id];if(confId){sql+=` AND p.conference_id=?`;params.push(confId);}sql+=` ORDER BY p.id DESC LIMIT 1`;const [[r]]=await pool.query(sql,params);res.json(r||null)}));
 app.get('/api/me/certificate',auth,asyncRoute(async(req,res)=>{
   const [[p]]=await pool.query(`SELECT p.id, p.registration_no, u.name, u.email FROM participants p JOIN users u ON u.id=p.user_id WHERE u.id=? LIMIT 1`,[req.user.id]);
   if(!p) return res.json(null);
@@ -1458,7 +1719,7 @@ app.delete('/api/admin/sponsors/:id',auth,roles('ADMIN','SUPER_ADMIN'),asyncRout
   await pool.query('DELETE FROM sponsors WHERE id=?',[req.params.id]);
   ok(res, null, 'Sponsor deleted');
 }));
-app.get('/api/me/attendance',auth,asyncRoute(async(req,res)=>{const [r]=await pool.query(`SELECT a.*,s.title,s.session_date,s.start_time FROM attendance a JOIN participants p ON p.id=a.participant_id JOIN sessions s ON s.id=a.session_id WHERE p.user_id=? ORDER BY s.session_date,s.start_time`,[req.user.id]);res.json(r)}));
+app.get('/api/me/attendance',auth,asyncRoute(async(req,res)=>{const confId=req.query.conferenceId;let sql=`SELECT a.*,s.title,s.session_date,s.start_time FROM attendance a JOIN participants p ON p.id=a.participant_id JOIN sessions s ON s.id=a.session_id WHERE p.user_id=?`;const params=[req.user.id];if(confId){sql+=` AND p.conference_id=?`;params.push(confId);}sql+=` ORDER BY s.session_date,s.start_time`;const [r]=await pool.query(sql,params);res.json(r)}));
 app.post('/api/attendance/scan',auth,roles('ADMIN','SUPER_ADMIN','VOLUNTEER'),[body('qrToken').notEmpty()],validate,asyncRoute(async(req,res)=>{
   const tokenInput = String(req.body.qrToken).trim();
   const [[p]]=await pool.query(`

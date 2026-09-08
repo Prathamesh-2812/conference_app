@@ -70,16 +70,37 @@ function App(){
   const[logged,setLogged]=useState(!!localStorage.getItem('token'));
   const[tab,setTab]=useState('Dashboard');
   const[open,setOpen]=useState({Conference:true,Participants:false,Schedule:false});
+  const[conferencesList,setConferencesList]=useState([]);
+  const[selectedConferenceId,setSelectedConferenceId]=useState(1);
   const[conference,setConference]=useState(null);
   const[toast,setToast]=useState('');
   const[mobileNavOpen,setMobileNavOpen]=useState(false);
-  const loadConference=()=>req('/conference').then(x=>setConference(normalizeConference(x))).catch(e=>setToast(e.message));
+  const[showCreateConfModal,setShowCreateConfModal]=useState(false);
+
+  const loadConferencesList = () => {
+    req('/conferences').then(list => {
+      setConferencesList(list);
+      if(list.length && !list.find(c => c.id === selectedConferenceId)){
+        setSelectedConferenceId(list[0].id);
+      }
+    }).catch(e => console.warn(e));
+  };
+
+  const loadConference = (confId) => {
+    const cid = confId || selectedConferenceId || 1;
+    req('/conference?conferenceId=' + cid).then(x=>setConference(normalizeConference(x))).catch(e=>setToast(e.message));
+  };
+
   const handleSelectTab=(t)=>{
     setTab(t);
     setMobileNavOpen(false);
   };
+
   useEffect(()=>{
-    if(logged)loadConference();
+    if(logged){
+      loadConferencesList();
+      loadConference(selectedConferenceId);
+    }
     const handleUnauth=()=>setLogged(false);
     window.addEventListener('auth:unauthorized',handleUnauth);
 
@@ -95,13 +116,13 @@ function App(){
         });
 
         socket.on('connect', () => {
-          socket.emit('join_conference', 1);
+          socket.emit('join_conference', selectedConferenceId || 1);
         });
 
         const handleRealtime = (eventName, data) => {
           window.dispatchEvent(new CustomEvent('app:realtime', { detail: { event: eventName, data } }));
           if (eventName === 'conference_updated') {
-            loadConference();
+            loadConference(selectedConferenceId);
           }
         };
 
@@ -122,9 +143,11 @@ function App(){
       window.removeEventListener('auth:unauthorized',handleUnauth);
       if(socket) socket.disconnect();
     };
-  },[logged]);
+  },[logged, selectedConferenceId]);
+
   const notify=msg=>{setToast(msg);setTimeout(()=>setToast(''),2800)};
   if(!logged)return <Login onLogin={()=>setLogged(true)}/>;
+
   return <div className="app">
     <div className={`sidebar-backdrop ${mobileNavOpen ? 'show' : ''}`} onClick={()=>setMobileNavOpen(false)} />
     <aside className={mobileNavOpen ? 'mobile-open' : ''}>
@@ -147,51 +170,296 @@ function App(){
             <p>{conference?.name||'Conference Management System'}</p>
           </div>
         </div>
-        <div className="header-actions">
-          <button className="icon" onClick={loadConference} title="Refresh conference"><RefreshCw size={18}/></button>
+        <div className="header-actions" style={{display:'flex',alignItems:'center',gap:'10px'}}>
+          <div style={{display:'flex',alignItems:'center',gap:'6px',background:'#f1f5f9',padding:'4px 10px',borderRadius:'8px',border:'1px solid #cbd5e1'}}>
+            <Building2 size={16} color="#8C1119" />
+            <select
+              value={selectedConferenceId}
+              onChange={e => {
+                if(e.target.value === 'NEW') {
+                  setShowCreateConfModal(true);
+                } else {
+                  setSelectedConferenceId(Number(e.target.value));
+                }
+              }}
+              style={{border:'none',background:'transparent',fontWeight:700,fontSize:'13px',color:'#1e293b',cursor:'pointer',outline:'none'}}
+            >
+              {conferencesList.map(c => (
+                <option key={c.id} value={c.id}>{c.short_name || c.name} (ID: {c.id})</option>
+              ))}
+              <option value="NEW">➕ Host New Conference...</option>
+            </select>
+          </div>
+          <button className="icon" onClick={() => loadConference(selectedConferenceId)} title="Refresh conference"><RefreshCw size={18}/></button>
         </div>
       </header>
-      {renderPage(tab,conference,setConference,notify)}
+      {renderPage(tab,conference,setConference,notify,selectedConferenceId)}
       {toast&&<div className="toast">{toast}</div>}
+      {showCreateConfModal && (
+        <CreateConferenceModal
+          onClose={() => setShowCreateConfModal(false)}
+          onCreated={(newConf) => {
+            loadConferencesList();
+            setSelectedConferenceId(newConf.id);
+          }}
+          notify={notify}
+        />
+      )}
     </main>
   </div>;
 }
 
 function NavItem({item,active,open,onToggle,onSelect}){const I=item.icon;const parentActive=active===item.title||item.children?.includes(active);return <div className="navgroup"><button className={parentActive?'active':''} onClick={()=>item.children?onToggle():onSelect(item.title)}><I size={18}/><span>{item.title}</span>{item.children&&<ChevronDown className={open?'rotated':''} size={15}/>}</button>{item.children&&open&&<div className="subnav">{item.children.map(child=><button key={child} className={active===child?'active child':'child'} onClick={()=>onSelect(child)}>{child}</button>)}</div>}</div>}
 
-function renderPage(tab,conference,setConference,notify){
-  if(tab==='Dashboard')return <Dashboard/>;
-  if(['Conference','Conference Details','Venue & Location','Branding','Conference Settings','Main Screen Slider'].includes(tab))return <ConferenceModule tab={tab} conference={conference} setConference={setConference} notify={notify}/>;
-  if(['Participants','All Participants','Add Participant','Import Participants','Registration & Passes','QR Codes'].includes(tab))return <Participants tab={tab} notify={notify}/>;
-  if(['Speakers','All Speakers','Add Speaker'].includes(tab))return <Speakers tab={tab} notify={notify}/>;
-  if(['Schedule','Sessions Timeline','Tracks & Halls','Add Session','Sessions','Tracks','Halls'].includes(tab))return <Schedule tab={tab} notify={notify}/>;
-  if(['Accommodation','Hotels','Rooms'].includes(tab))return <Hotels tab={tab} notify={notify}/>;
-  if(tab==='Room Allocation')return <RoomAllocation notify={notify}/>;
-  if(['Transport','Vehicles','Drivers'].includes(tab))return <Transport tab={tab} notify={notify}/>;
-  if(tab==='Transport Assignments')return <TransportAssignments notify={notify}/>;
-  if(['Attendance','Live Attendance','QR Scanner Simulator'].includes(tab))return <Attendance tab={tab} notify={notify}/>;
-  if(['Notices','Notices & Announcements','Send Push Notification'].includes(tab))return <Notices tab={tab} notify={notify}/>;
-  if(['Gallery','Photo Gallery','Upload Photo'].includes(tab))return <Gallery tab={tab} notify={notify}/>;
-  if(['Meals','Meal Schedule','Schedule Meal'].includes(tab))return <Meals tab={tab} notify={notify}/>;
-  if(['Duties','Duty Roster','Assign Staff'].includes(tab))return <Duties tab={tab} notify={notify}/>;
-  if(['Certificates','Issued Certificates','Issue Certificate'].includes(tab))return <Certificates tab={tab} notify={notify}/>;
-  if(['Feedback','CME Feedback & Ratings','Feedback Analytics'].includes(tab))return <FeedbackView tab={tab} notify={notify}/>;
-  if(['Chat','Live Chat','Broadcast Message'].includes(tab))return <Chat tab={tab} notify={notify}/>;
-  if(['Reports','Participant Reports','Attendance Reports','Accommodation Reports','Transport Reports','Meal Reports','Certificate Reports','CME Feedback Reports'].includes(tab))return <Reports tab={tab} notify={notify}/>;
+function renderPage(tab,conference,setConference,notify,selectedConferenceId){
+  if(tab==='Dashboard')return <Dashboard selectedConferenceId={selectedConferenceId}/>;
+  if(['Conference','Conference Details','Venue & Location','Branding','Conference Settings','Main Screen Slider'].includes(tab))return <ConferenceModule tab={tab} conference={conference} setConference={setConference} notify={notify} selectedConferenceId={selectedConferenceId}/>;
+  if(['Participants','All Participants','Add Participant','Import Participants','Registration & Passes','QR Codes'].includes(tab))return <Participants tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
+  if(['Speakers','All Speakers','Add Speaker'].includes(tab))return <Speakers tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
+  if(['Schedule','Sessions Timeline','Tracks & Halls','Add Session','Sessions','Tracks','Halls'].includes(tab))return <Schedule tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
+  if(['Accommodation','Hotels','Rooms'].includes(tab))return <Hotels tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
+  if(tab==='Room Allocation')return <RoomAllocation notify={notify} selectedConferenceId={selectedConferenceId}/>;
+  if(['Transport','Vehicles','Drivers'].includes(tab))return <Transport tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
+  if(tab==='Transport Assignments')return <TransportAssignments notify={notify} selectedConferenceId={selectedConferenceId}/>;
+  if(['Attendance','Live Attendance','QR Scanner Simulator'].includes(tab))return <Attendance tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
+  if(['Notices','Notices & Announcements','Send Push Notification'].includes(tab))return <Notices tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
+  if(['Gallery','Photo Gallery','Upload Photo'].includes(tab))return <Gallery tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
+  if(['Meals','Meal Schedule','Schedule Meal'].includes(tab))return <Meals tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
+  if(['Duties','Duty Roster','Assign Staff'].includes(tab))return <Duties tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
+  if(['Certificates','Issued Certificates','Issue Certificate'].includes(tab))return <Certificates tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
+  if(['Feedback','CME Feedback & Ratings','Feedback Analytics'].includes(tab))return <FeedbackView tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
+  if(['Chat','Live Chat','Broadcast Message'].includes(tab))return <Chat tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
+  if(['Reports','Participant Reports','Attendance Reports','Accommodation Reports','Transport Reports','Meal Reports','Certificate Reports','CME Feedback Reports'].includes(tab))return <Reports tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
   if(['Admin Users','Admin Users List','Audit Logs'].includes(tab))return <AdminUsers tab={tab} notify={notify}/>;
   if(tab==='System Settings')return <SystemSettings notify={notify}/>;
   return <Placeholder title={tab}/>;
 }
 
-function Dashboard(){const[s,setS]=useState(null);useEffect(()=>{req('/admin/stats').then(setS).catch(e=>alert(e.message))},[]);if(!s)return <div className="loading">Loading dashboard...</div>;const cards=[['Participants',s.participants,Users],['Checked In',s.checkedIn,CheckCircle],['Speakers',s.speakers,Users],['Sessions',s.sessions,CalendarDays],['Hotels',s.hotels,Hotel],['Rooms',s.rooms,Hotel],['Gallery Photos',s.photos,Image],['Certificates',s.certificates,FileCheck]];return <><section className="hero"><div><span>LIVE CONTROL ROOM</span><h1>Conference Operations</h1><p>Monitor registrations, logistics, content, and attendance from one dashboard.</p></div><div className="heroStat">2026</div></section><div className="grid">{cards.map(([n,v,I])=><div className="stat" key={n}><I/><span>{n}</span><strong>{v}</strong></div>)}</div><div className="split"><div className="panel"><h3>Operational Checklist</h3><div className="checkgrid"><div>Registration enabled</div><div>Venue published</div><div>Branding synced</div><div>Schedule online</div><div>Notifications ready</div><div>Certificates enabled</div></div></div><div className="panel"><h3>Phase 1 Status</h3><p className="muted">Conference details, venue, branding, and mobile configuration now load from the API.</p></div></div></>}
+function Dashboard({selectedConferenceId}){
+  const[s,setS]=useState(null);
+  useEffect(()=>{
+    req('/admin/stats?conferenceId=' + (selectedConferenceId || 1)).then(setS).catch(e=>console.warn(e.message));
+  },[selectedConferenceId]);
+  if(!s)return <div className="loading">Loading dashboard...</div>;
+  const cards=[['Participants',s.participants,Users],['Checked In',s.checkedIn,CheckCircle],['Speakers',s.speakers,Users],['Sessions',s.sessions,CalendarDays],['Hotels',s.hotels,Hotel],['Rooms',s.rooms,Hotel],['Gallery Photos',s.photos,Image],['Certificates',s.certificates,FileCheck]];
+  return <><section className="hero"><div><span>LIVE CONTROL ROOM</span><h1>Conference Operations</h1><p>Monitor registrations, logistics, content, and attendance from one dashboard.</p></div><div className="heroStat">2026</div></section><div className="grid">{cards.map(([n,v,I])=><div className="stat" key={n}><I/><span>{n}</span><strong>{v}</strong></div>)}</div><div className="split"><div className="panel"><h3>Operational Checklist</h3><div className="checkgrid"><div>Registration enabled</div><div>Venue published</div><div>Branding synced</div><div>Schedule online</div><div>Notifications ready</div><div>Certificates enabled</div></div></div><div className="panel"><h3>Phase 1 Status</h3><p className="muted">Conference details, venue, branding, and mobile configuration now load from the API.</p></div></div></>
+}
 
-function ConferenceModule({tab,conference,setConference,notify}){
+function ConferenceModule({tab,conference,setConference,notify,selectedConferenceId}){
+  if(tab==='Main Screen Slider') return <MainScreenSliderManager conferenceId={selectedConferenceId || 1} notify={notify} />;
   if(!conference)return <div className="loading">Loading conference...</div>;
-  const save=async(path,payload,msg)=>{const data=await req(path,{method:'PUT',body:JSON.stringify(payload)});setConference(normalizeConference(data));notify(msg)};
+  const save=async(path,payload,msg)=>{
+    const data=await req(path,{method:'PUT',body:JSON.stringify({...payload, conferenceId: selectedConferenceId || 1})});
+    setConference(normalizeConference(data));
+    notify(msg);
+  };
   if(tab==='Venue & Location')return <VenueForm value={conference.venue} onSave={v=>save('/admin/conference/venue',v,'Venue updated')}/>;
   if(tab==='Branding')return <BrandingForm value={conference.branding} onSave={v=>save('/admin/conference/branding',v,'Branding updated')} notify={notify}/>;
   if(tab==='Conference Settings')return <SettingsForm value={conference.settings} onSave={v=>save('/admin/conference/settings',v,'Settings updated')}/>;
   return <ConferenceForm value={conference} onSave={v=>save('/admin/conference',v,'Conference details updated')}/>;
+}
+
+function CreateConferenceModal({ onClose, onCreated, notify }) {
+  const [v, setV] = useState({
+    name: '', shortName: '', theme: '', organizer: '', hostInstitution: '', venue: '', address: '', startDate: '', endDate: ''
+  });
+  const [busy, setBusy] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!v.name) { alert('Conference name is required'); return; }
+    setBusy(true);
+    try {
+      const res = await req('/admin/conferences', {
+        method: 'POST',
+        body: JSON.stringify(v)
+      });
+      notify('New Conference created successfully!');
+      onCreated(res.data);
+      onClose();
+    } catch(err) {
+      alert(err.message || 'Failed to create conference');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal" style={{maxWidth:'600px'}}>
+        <div className="modal-header" style={{background:'#8C1119', color:'#fff'}}>
+          <h3>➕ Host New Conference</h3>
+          <button className="close" onClick={onClose} style={{color:'#fff'}}>&times;</button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body" style={{display:'flex', flexDirection:'column', gap:'12px'}}>
+            <Field label="Conference Full Title *" value={v.name} onChange={x => setV(s => ({...s, name: x}))} />
+            <Field label="Short Name / Acronym" value={v.shortName} onChange={x => setV(s => ({...s, shortName: x}))} />
+            <Field label="Theme / Topic" value={v.theme} onChange={x => setV(s => ({...s, theme: x}))} />
+            <Field label="Organizer Body" value={v.organizer} onChange={x => setV(s => ({...s, organizer: x}))} />
+            <Field label="Host Institution" value={v.hostInstitution} onChange={x => setV(s => ({...s, hostInstitution: x}))} />
+            <Field label="Venue Name" value={v.venue} onChange={x => setV(s => ({...s, venue: x}))} />
+            <Field textarea label="Venue Address" value={v.address} onChange={x => setV(s => ({...s, address: x}))} />
+            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px'}}>
+              <Field type="date" label="Start Date" value={v.startDate} onChange={x => setV(s => ({...s, startDate: x}))} />
+              <Field type="date" label="End Date" value={v.endDate} onChange={x => setV(s => ({...s, endDate: x}))} />
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button type="button" onClick={onClose}>Cancel</button>
+            <button type="submit" className="primary" disabled={busy}>{busy ? 'Creating...' : 'Create Conference'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function MainScreenSliderManager({ conferenceId, notify }) {
+  const [slides, setSlides] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newSlide, setNewSlide] = useState({ title: '', mediaType: 'IMAGE', mediaUrl: '', displayOrder: 0, file: null });
+
+  const loadSlides = async () => {
+    setBusy(true);
+    try {
+      const data = await req('/admin/sliders?conferenceId=' + (conferenceId || 1));
+      setSlides(data);
+    } catch(e) {
+      notify(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  useEffect(() => { loadSlides(); }, [conferenceId]);
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setNewSlide(s => ({
+        ...s,
+        file: { name: file.name, dataUrl: reader.result },
+        mediaType: file.type.startsWith('video/') ? 'VIDEO' : 'IMAGE'
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    try {
+      await req('/admin/sliders', {
+        method: 'POST',
+        body: JSON.stringify({ ...newSlide, conferenceId: conferenceId || 1 })
+      });
+      notify('Main screen slide added!');
+      setShowAddModal(false);
+      setNewSlide({ title: '', mediaType: 'IMAGE', mediaUrl: '', displayOrder: 0, file: null });
+      loadSlides();
+    } catch(err) {
+      alert(err.message);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if(!confirm('Delete this banner slide?')) return;
+    await req('/admin/sliders/' + id, { method: 'DELETE' });
+    notify('Slide deleted');
+    loadSlides();
+  };
+
+  const handleToggleActive = async (slide) => {
+    await req('/admin/sliders/' + slide.id, {
+      method: 'PUT',
+      body: JSON.stringify({ active: slide.active ? 0 : 1 })
+    });
+    loadSlides();
+  };
+
+  return (
+    <div className="panel">
+      <div className="pagehead">
+        <div>
+          <h3>Main Screen Slider Banners</h3>
+          <p>Manage image and video carousel slides displayed at top of mobile home screen.</p>
+        </div>
+        <div className="actions">
+          <button className="secondary" onClick={loadSlides}>{busy ? 'Refreshing...' : 'Refresh'}</button>
+          <button onClick={() => setShowAddModal(true)}>+ Add Media Banner Slide</button>
+        </div>
+      </div>
+
+      <div className="grid" style={{gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:'16px', marginTop:'16px'}}>
+        {slides.map(s => (
+          <div key={s.id} className="stat" style={{display:'flex', flexDirection:'column', alignItems:'stretch', gap:'10px', padding:'14px', position:'relative', border:'1px solid #e2e8f0', borderRadius:'12px', background:'#fff'}}>
+            <div style={{height:'140px', width:'100%', borderRadius:'8px', overflow:'hidden', background:'#000', display:'flex', alignItems:'center', justifyContent:'center'}}>
+              {s.media_type === 'VIDEO' ? (
+                <video src={resolveMediaUrl(s.media_url)} controls style={{width:'100%', height:'100%', objectFit:'cover'}} />
+              ) : (
+                <img src={resolveMediaUrl(s.media_url)} alt={s.title} style={{width:'100%', height:'100%', objectFit:'cover'}} />
+              )}
+            </div>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+              <strong>{s.title || 'Untitled Banner'}</strong>
+              <span className="pill" style={{background: s.media_type === 'VIDEO' ? '#2563eb' : '#059669', color:'#fff', fontSize:'11px'}}>
+                {s.media_type}
+              </span>
+            </div>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', fontSize:'12.5px', color:'#64748b'}}>
+              <span>Order: {s.display_order}</span>
+              <label style={{cursor:'pointer', display:'flex', alignItems:'center', gap:'4px'}}>
+                <input type="checkbox" checked={!!s.active} onChange={() => handleToggleActive(s)} />
+                Active
+              </label>
+            </div>
+            <button className="pill small" style={{background:'#ef4444', color:'#fff', cursor:'pointer', border:'none', marginTop:'4px'}} onClick={() => handleDelete(s.id)}>
+              Delete Slide
+            </button>
+          </div>
+        ))}
+        {!slides.length && !busy && (
+          <div style={{gridColumn:'1 / -1', padding:'30px', textAlign:'center', color:'#888'}}>
+            No main screen slider banners uploaded for this conference yet.
+          </div>
+        )}
+      </div>
+
+      {showAddModal && (
+        <div className="modal-overlay">
+          <div className="modal" style={{maxWidth:'500px'}}>
+            <div className="modal-header">
+              <h3>Add Home Screen Media Banner</h3>
+              <button className="close" onClick={() => setShowAddModal(false)}>&times;</button>
+            </div>
+            <form onSubmit={handleCreate}>
+              <div className="modal-body" style={{display:'flex', flexDirection:'column', gap:'12px'}}>
+                <Field label="Banner Title" value={newSlide.title} onChange={x => setNewSlide(s => ({...s, title: x}))} />
+                <SelectField label="Media Type" value={newSlide.mediaType} onChange={x => setNewSlide(s => ({...s, mediaType: x}))} options={['IMAGE', 'VIDEO']} />
+                
+                <label className="field uploadfield">
+                  <span>Upload Image / Video File</span>
+                  <div>
+                    <input type="file" accept="image/*,video/*" onChange={handleFileUpload} />
+                  </div>
+                </label>
+
+                <Field label="Or Direct Media URL" value={newSlide.mediaUrl} onChange={x => setNewSlide(s => ({...s, mediaUrl: x}))} />
+                <Field type="number" label="Display Order (0 = first)" value={newSlide.displayOrder} onChange={x => setNewSlide(s => ({...s, displayOrder: Number(x)}))} />
+              </div>
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowAddModal(false)}>Cancel</button>
+                <button type="submit" className="primary">Upload & Publish</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function Field({label,value,onChange,type='text',textarea=false}){return <label className={textarea?'field wide':'field'}><span>{label}</span>{textarea?<textarea value={value||''} onChange={e=>onChange(e.target.value)}/>:<input type={type} value={value||''} onChange={e=>onChange(e.target.value)}/>}</label>}
@@ -231,14 +499,14 @@ function SettingsForm({value,onSave}){const[v,set,setV]=formState(value);return 
 function FormShell({icon:Icon,title,description,children,onSave,onReset,preview}){const[busy,setBusy]=useState(false);const submit=async()=>{setBusy(true);try{await onSave()}finally{setBusy(false)}};return <div className="panel"><div className="pagehead"><div className="titleline"><Icon/><div><h3>{title}</h3><p>{description}</p></div></div><div className="actions"><button onClick={onReset}>Reset</button><button onClick={submit} disabled={busy}>{busy?'Saving...':'Save'}</button></div></div>{preview}<div className="formgrid">{children}</div></div>}
 function BrandPreview({branding}){return <div className="brandpreview" style={{background:branding.backgroundColor||'#FCFAF5',borderColor:branding.primaryColor||'#8C1119'}}>{branding.bannerUrl&&<img src={branding.bannerUrl.startsWith('/uploads')?API.replace('/api','')+branding.bannerUrl:branding.bannerUrl} alt="Conference banner"/>}<div><span style={{color:branding.accentColor}}>Live Preview</span><strong style={{color:branding.primaryColor}}>Mobile conference branding</strong><small style={{color:branding.secondaryColor}}>Logo, banner, and colors are API driven.</small></div></div>}
 
-function Participants({tab, notify}){
+function Participants({tab, notify, selectedConferenceId}){
   const[d,setD]=useState([]),[q,setQ]=useState(''),[statusFilter,setStatusFilter]=useState('ALL'),[catFilter,setCatFilter]=useState('ALL'),[appFilter,setAppFilter]=useState('ALL'),[hotelFilter,setHotelFilter]=useState('ALL'),[payFilter,setPayFilter]=useState('ALL'),[busy,setBusy]=useState(false),[edit,setEdit]=useState(null),[importModal,setImportModal]=useState(false),[qrModal,setQrModal]=useState(null),[liaisons,setLiaisons]=useState([]),[whatsappModal,setWhatsappModal]=useState(false);
   
   const load=async()=>{
     setBusy(true);
     try{
       const[r,l]=await Promise.all([
-        req('/admin/participants?conferenceId=1'),
+        req('/admin/participants?conferenceId=' + (selectedConferenceId || 1)),
         req('/admin/liaisons').catch(()=>[])
       ]);
       setD(r);
@@ -248,7 +516,7 @@ function Participants({tab, notify}){
     }
   };
   
-  useEffect(()=>{load()},[]);
+  useEffect(()=>{load()},[selectedConferenceId]);
   useEffect(()=>{
     if(tab==='Add Participant') setEdit({});
     if(tab==='Import Participants') setImportModal(true);
@@ -460,7 +728,7 @@ function Participants({tab, notify}){
     </div>
 
     {edit && <ParticipantModal value={edit} liaisons={liaisons} onSave={save} onClose={()=>setEdit(null)} notify={notify}/>}
-    {importModal && <BulkImportModal onClose={()=>setImportModal(false)} onImportSuccess={()=>{setImportModal(false);load();notify('Participants imported successfully!')}}/>}
+    {importModal && <BulkImportModal conferenceId={selectedConferenceId || 1} onClose={()=>setImportModal(false)} onImportSuccess={()=>{setImportModal(false);load();notify('Participants imported successfully!')}}/>}
     {whatsappModal && <WhatsAppBroadcasterModal participants={d} onClose={()=>setWhatsappModal(false)} notify={notify}/>}
   </div>
 }
@@ -578,7 +846,7 @@ function WhatsAppBroadcasterModal({participants, onClose, notify}){
   );
 }
 
-function BulkImportModal({onClose, onImportSuccess}){
+function BulkImportModal({conferenceId, onClose, onImportSuccess}){
   const [csvText, setCsvText] = useState('');
   const [parsedData, setParsedData] = useState(null);
   const [fileName, setFileName] = useState('');
@@ -706,7 +974,7 @@ function BulkImportModal({onClose, onImportSuccess}){
     try {
       const res = await req('/admin/participants/bulk-import', {
         method: 'POST',
-        body: JSON.stringify({ participants: rowsToImport })
+        body: JSON.stringify({ participants: rowsToImport, conferenceId: conferenceId || 1 })
       });
       alert(res.message || 'Import completed successfully');
       onImportSuccess();

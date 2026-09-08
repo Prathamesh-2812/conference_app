@@ -58,11 +58,12 @@ CREATE TABLE speakers (id INT AUTO_INCREMENT PRIMARY KEY, conference_id INT NOT 
 CREATE TABLE sessions (id INT AUTO_INCREMENT PRIMARY KEY, conference_id INT NOT NULL, hall_id INT NULL, speaker_id INT NULL, title VARCHAR(255), description TEXT, session_date DATE, start_time TIME, end_time TIME, category VARCHAR(100), FOREIGN KEY(conference_id) REFERENCES conferences(id) ON DELETE CASCADE, FOREIGN KEY(hall_id) REFERENCES halls(id) ON DELETE SET NULL, FOREIGN KEY(speaker_id) REFERENCES speakers(id) ON DELETE SET NULL);
 CREATE TABLE liaison_faculty (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(150), phone VARCHAR(30), email VARCHAR(190));
 CREATE TABLE participants (
- id INT AUTO_INCREMENT PRIMARY KEY, user_id INT UNIQUE NOT NULL, conference_id INT NOT NULL, registration_no VARCHAR(60) UNIQUE, category VARCHAR(100),
- status ENUM('PENDING','APPROVED','CHECKED_IN','CANCELLED') DEFAULT 'PENDING', payment_status ENUM('PENDING','PAID','REFUNDED') DEFAULT 'PENDING', amount DECIMAL(12,2) DEFAULT 0,
- mode_of_travel VARCHAR(50), flight_number VARCHAR(50), arrival_date DATE, arrival_time TIME, departure_date DATE, departure_time TIME,
- emergency_contact VARCHAR(100), liaison_id INT NULL, qr_token VARCHAR(120) UNIQUE,
- FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY(conference_id) REFERENCES conferences(id) ON DELETE CASCADE, FOREIGN KEY(liaison_id) REFERENCES liaison_faculty(id) ON DELETE SET NULL
+  id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, conference_id INT NOT NULL, registration_no VARCHAR(60) UNIQUE, category VARCHAR(100),
+  status ENUM('PENDING','APPROVED','CHECKED_IN','CANCELLED') DEFAULT 'PENDING', payment_status ENUM('PENDING','PAID','REFUNDED') DEFAULT 'PENDING', amount DECIMAL(12,2) DEFAULT 0,
+  mode_of_travel VARCHAR(50), flight_number VARCHAR(50), arrival_date DATE, arrival_time TIME, departure_date DATE, departure_time TIME,
+  emergency_contact VARCHAR(100), liaison_id INT NULL, qr_token VARCHAR(120) UNIQUE,
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY(conference_id) REFERENCES conferences(id) ON DELETE CASCADE, FOREIGN KEY(liaison_id) REFERENCES liaison_faculty(id) ON DELETE SET NULL,
+  UNIQUE KEY user_conf_unique (user_id, conference_id)
 );
 CREATE TABLE hotels (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(200), address TEXT, latitude DECIMAL(10,7), longitude DECIMAL(10,7));
 CREATE TABLE rooms (id INT AUTO_INCREMENT PRIMARY KEY, hotel_id INT NOT NULL, room_number VARCHAR(30), room_type VARCHAR(50), capacity INT DEFAULT 1, status ENUM('AVAILABLE','FULL','MAINTENANCE') DEFAULT 'AVAILABLE', FOREIGN KEY(hotel_id) REFERENCES hotels(id) ON DELETE CASCADE, UNIQUE(hotel_id,room_number));

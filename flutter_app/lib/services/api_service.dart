@@ -5,6 +5,59 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config.dart';
 
+class ConferenceService {
+  static int activeConferenceId = 1;
+  static List<dynamic> enrolledConferences = [];
+
+  static Future<void> saveEnrolledConferences(List<dynamic> confs) async {
+    enrolledConferences = confs;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('enrolledConferences', jsonEncode(confs));
+    if (confs.isNotEmpty) {
+      final exists = confs.any((item) => (item['id'] is int ? item['id'] : int.tryParse(item['id'].toString())) == activeConferenceId);
+      if (!exists) {
+        activeConferenceId = confs[0]['id'] is int ? confs[0]['id'] : (int.tryParse(confs[0]['id'].toString()) ?? 1);
+        await prefs.setInt('activeConferenceId', activeConferenceId);
+      }
+    }
+  }
+
+  static Future<void> loadSavedConferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    activeConferenceId = prefs.getInt('activeConferenceId') ?? 1;
+    final raw = prefs.getString('enrolledConferences');
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        enrolledConferences = jsonDecode(raw) as List<dynamic>;
+      } catch (_) {}
+    }
+  }
+
+  static Future<List<dynamic>> refreshEnrolledConferences() async {
+    try {
+      final res = await ApiService.get('/me/conferences');
+      List<dynamic> confs = [];
+      if (res is Map && res['data'] is List) {
+        confs = res['data'] as List<dynamic>;
+      } else if (res is List) {
+        confs = res;
+      }
+      if (confs.isNotEmpty) {
+        await saveEnrolledConferences(confs);
+      }
+      return enrolledConferences;
+    } catch (_) {
+      return enrolledConferences;
+    }
+  }
+
+  static Future<void> switchConference(int conferenceId) async {
+    activeConferenceId = conferenceId;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('activeConferenceId', conferenceId);
+  }
+}
+
 class ApiService {
   static Future<Map<String, String>> _headers() async {
     final prefs = await SharedPreferences.getInstance();
@@ -39,7 +92,14 @@ class ApiService {
   }
 
   static Future<dynamic> get(String path) async {
-    final url = Uri.parse('$apiBaseUrl$path');
+    await ConferenceService.loadSavedConferences();
+    String formattedPath = path;
+    if (!formattedPath.contains('conferenceId=')) {
+      final connector = formattedPath.contains('?') ? '&' : '?';
+      formattedPath = '$formattedPath${connector}conferenceId=${ConferenceService.activeConferenceId}';
+    }
+
+    final url = Uri.parse('$apiBaseUrl$formattedPath');
 
     print('GET $url');
 
@@ -187,6 +247,10 @@ class ApiService {
 
     if (data is! Map) {
       throw Exception('Invalid login response from server');
+    }
+
+    if (data['enrolledConferences'] is List) {
+      await ConferenceService.saveEnrolledConferences(data['enrolledConferences'] as List);
     }
 
     return Map<String, dynamic>.from(data);
