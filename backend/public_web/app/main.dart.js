@@ -8728,7 +8728,7 @@ a8T(a,b){var s,r
 if(a==null||!B.c.b7(a,"#"))return b
 try{s=A.bB(A.fW(B.c.qm(a,"#","0xFF"),null))
 return s}catch(r){return b}},
-b0z(a6){var s,r,q,p,o,n,m,l,k,j,i,h,g,f,e,d,c,b,a,a0,a1="branding",a2="settings",a3="MAPCON 2026",a4=J.ad(a6),a5=t.f
+b0z(a6){var s,r,q,p,o,n,m,l,k,j,i,h,g,f,e,d,c,b,a,a0,a1="branding",a2="settings",a3="DYPESCONF 2026",a4=J.ad(a6),a5=t.f
 if(a5.b(a4.h(a6,"venue")))s=a5.a(a4.h(a6,"venue"))
 else{r=t.z
 s=A.p(r,r)}if(a5.b(a4.h(a6,a1)))q=a5.a(a4.h(a6,a1))
@@ -107880,7 +107880,7 @@ B.Vq=s([B.lk,B.a6,B.abB],t.p)
 B.Jf=new A.fa(B.F,B.bG,B.l,B.p,null,B.ap,null,0,B.Vq,null)
 B.Ji=new A.B_(null)
 B.Yh=new A.b_(B.bH,[],A.aN("b_<n,M>"))
-B.qt=new A.Ok("MAPCON 2026","MAPCON 2026","Welcome to MAPCON 2026","47th Annual Conference of Maharashtra Chapter (MAPCON 2026)","Hotel Sayaji, Kolhapur","Old Pune-Bangalore Highway, Kawala Naka, Kolhapur","Kolhapur","Maharashtra","416001","Dedicated valet and delegate parking available at Hotel Sayaji premises.","Located at Kawala Naka on Old Pune-Bangalore Highway, Kolhapur. 5 mins from CBS, 10 mins from Railway Station, 15 mins from Kolhapur Airport (KLH).","0231 2555555",u.v,B.e,B.v,B.fX,B.Yh)
+B.qt=new A.Ok("DYPESCONF 2026","DYPESCONF 2026","Welcome to MAPCON 2026","47th Annual Conference of Maharashtra Chapter (MAPCON 2026)","Hotel Sayaji, Kolhapur","Old Pune-Bangalore Highway, Kawala Naka, Kolhapur","Kolhapur","Maharashtra","416001","Dedicated valet and delegate parking available at Hotel Sayaji premises.","Located at Kawala Naka on Old Pune-Bangalore Highway, Kolhapur. 5 mins from CBS, 10 mins from Railway Station, 15 mins from Kolhapur Airport (KLH).","0231 2555555",u.v,B.e,B.v,B.fX,B.Yh)
 B.qu=new A.B2(0,"none")
 B.c_=new A.B2(1,"waiting")
 B.lJ=new A.B2(3,"done")

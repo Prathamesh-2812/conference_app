@@ -16,7 +16,7 @@ String get apiBaseUrl {
   return 'http://localhost:5000/api';
 }
 
-const String conferenceName = 'MAPCON 2026';
-const String conferenceShort = 'MAPCON 2026';
+const String conferenceName = 'DYPESCONF 2026';
+const String conferenceShort = 'DYPESCONF 2026';
 const String defaultBanner = 'assets/images/banner.jpg';
 const String defaultMapUrl = 'https://www.google.com/maps/search/?api=1&query=Hotel+Sayaji+Kolhapur';

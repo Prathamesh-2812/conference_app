@@ -67,9 +67,9 @@ app.get('/', (req, res) => {
     </head>
     <body>
       <div class="card">
-        <div class="logo-badge">M</div>
-        <h1>MAPCON 2026</h1>
-        <p class="sub">46th Annual State Conference • Kolhapur, Maharashtra<br>Choose an interface below to continue:</p>
+        <div class="logo-badge">D</div>
+        <h1>DYPESCONF 2026</h1>
+        <p class="sub">D.Y. Patil Education Society Conference • Kolhapur, Maharashtra<br>Choose an interface below to continue:</p>
         
         <div class="btn-group">
           <a href="/app/" class="btn btn-primary">
@@ -313,6 +313,25 @@ async function runMigrations(){
       }
     } catch(migErr) {
       console.warn("Participants composite key migration notice:", migErr.message);
+    }
+
+    try {
+      await pool.query(`
+        UPDATE conferences SET 
+          name = 'DYPESCONF 2026',
+          short_name = 'DYPESCONF 2026',
+          description = 'Annual State Conference of DYPESCONF 2026 (MAPCON 2026) organized by D.Y. Patil Education Society (Deemed to be University), Kolhapur.',
+          welcome_message = 'D.Y. Patil Education Society welcomes you to DYPESCONF 2026 at Hotel Sayaji, Kolhapur.',
+          about_conference = 'Annual State Conference of Maharashtra Chapter of IAPM hosted by D.Y. Patil Education Society (Deemed to be University), Kolhapur.',
+          organizer = 'D.Y. Patil Education Society (Deemed to be University), Kolhapur',
+          host_institution = 'D.Y. Patil Education Society, Kolhapur',
+          theme = 'Recent Advances in Pathology & Modern Healthcare',
+          venue = 'Hotel Sayaji, Kolhapur',
+          address = 'Old Pune-Bangalore Highway, Kawala Naka, Kolhapur, Maharashtra 416001'
+        WHERE id = 1 AND (name LIKE '%100th%' OR name LIKE '%AIU%' OR short_name LIKE '%DPU%' OR short_name LIKE '%MAPCON%' OR name LIKE '%MAPCON%');
+      `);
+    } catch(confErr) {
+      console.warn("Conference auto-update notice:", confErr.message);
     }
   }catch(err){
     console.log('Migration check:', err.message);
