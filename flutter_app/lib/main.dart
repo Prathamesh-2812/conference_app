@@ -434,8 +434,8 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final e = TextEditingController(text: 'participant@conference.local');
-  final p = TextEditingController(text: 'Demo@123');
+  final e = TextEditingController();
+  final p = TextEditingController();
   bool busy = false, obscure = true;
 
   Future<void> login() async {
@@ -588,28 +588,6 @@ class _LoginScreenState extends State<LoginScreen> {
                               'Sign In to Conference',
                               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                             ),
-                    ),
-                    const SizedBox(height: 20),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Column(
-                        children: [
-                          Text(
-                            'Demo Credentials',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: slate),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'participant@conference.local / Demo@123',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: muted, fontSize: 12),
-                          ),
-                        ],
-                      ),
                     ),
                   ],
                 ),
