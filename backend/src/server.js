@@ -136,13 +136,20 @@ async function createAndSendNotification({ user_id = null, conference_id = 1, ti
     };
     if (user_id) {
       io.to(`user_${user_id}`).emit('new_notification', notif);
+      io.to(`user_${user_id}`).emit('notification_received', notif);
     } else if (target_role) {
       io.to(`role_${target_role}`).emit('new_notification', notif);
+      io.to(`role_${target_role}`).emit('notification_received', notif);
       io.to(`conference_${conference_id}`).emit('new_notification', notif);
+      io.to(`conference_${conference_id}`).emit('notification_received', notif);
     } else {
       io.to(`conference_${conference_id}`).emit('new_notification', notif);
+      io.to(`conference_${conference_id}`).emit('notification_received', notif);
       io.emit('new_notification', notif);
+      io.emit('notification_received', notif);
     }
+    io.emit('new_notice', notif);
+    io.emit('notices_updated');
     return notif;
   } catch (err) {
     console.error('Error creating notification:', err);
@@ -464,47 +471,6 @@ async function generateDelegateCertificate(pName, regNo, certNo, confName = 'MAP
   return `/uploads/certificates/${filename}`;
 }
 
-async function createAndSendNotification({ user_id = null, conference_id = 1, title, message, type = 'GENERAL' }) {
-  try {
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS notifications (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        user_id INT NULL,
-        conference_id INT NOT NULL DEFAULT 1,
-        title VARCHAR(255) NOT NULL,
-        message TEXT NOT NULL,
-        type VARCHAR(50) DEFAULT 'GENERAL',
-        is_read TINYINT(1) DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    const [r] = await pool.query(
-      'INSERT INTO notifications(user_id, conference_id, title, message, type) VALUES(?,?,?,?,?)',
-      [user_id || null, conference_id, title, message, type]
-    );
-    const notifObj = {
-      id: r.insertId,
-      user_id,
-      conference_id,
-      title,
-      message,
-      type,
-      created_at: new Date().toISOString()
-    };
-    if (user_id) {
-      io.to(`user_${user_id}`).emit('notification_received', notifObj);
-    } else {
-      io.emit('notification_received', notifObj);
-    }
-    io.emit('new_notice', notifObj);
-    io.emit('notices_updated');
-    return notifObj;
-  } catch (err) {
-    console.error('Failed to create/send notification:', err.message);
-  }
-}
-
-app.get('/api/health',(req,res)=>res.json({ok:true,service:'conference-management-api',time:new Date().toISOString()}));
 app.get('/api/conference',asyncRoute(async(req,res)=>{const data=await getConference(req.query.conferenceId||1);if(!data)return res.status(404).json({success:false,message:'Conference not found'});ok(res,data)}));
 app.put('/api/admin/conference',auth,roles('ADMIN','SUPER_ADMIN'),[
  body('name').optional().notEmpty(),
