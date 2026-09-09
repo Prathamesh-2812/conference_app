@@ -187,6 +187,17 @@ async function runMigrations(){
         FOREIGN KEY(conference_id) REFERENCES conferences(id) ON DELETE CASCADE
       )
     `);
+
+    const [sliderRows] = await pool.query('SELECT id FROM main_sliders WHERE conference_id=1 LIMIT 1');
+    if (!sliderRows.length) {
+      await pool.query(`
+        INSERT INTO main_sliders (conference_id, title, media_type, media_url, display_order, active) VALUES
+        (1, 'D. Y. Patil Education Society (Deemed to be University) - Kolhapur Campus', 'IMAGE', 'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=1200&auto=format&fit=crop&q=80', 1, 1),
+        (1, 'MAPCON 2026 • 46th Annual State Conference at Hotel Sayaji, Kolhapur', 'IMAGE', 'https://images.unsplash.com/photo-1511578314322-379afb476865?w=1200&auto=format&fit=crop&q=80', 2, 1),
+        (1, 'University Campus Video • DYPES Institutional Highlights', 'VIDEO', 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', 3, 1),
+        (1, 'Our Esteemed Industrial Partners, Diagnostic Leaders & Sponsors', 'IMAGE', 'https://images.unsplash.com/photo-1587825140708-dfaf72ae4b04?w=1200&auto=format&fit=crop&q=80', 4, 1)
+      `);
+    }
     await pool.query(`
       CREATE TABLE IF NOT EXISTS photo_faces (
         id INT AUTO_INCREMENT PRIMARY KEY,

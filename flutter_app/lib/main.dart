@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:convert';
+import 'dart:async';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'config.dart';
@@ -1108,7 +1109,6 @@ class CardButton extends StatelessWidget {
     );
   }
 }
-
 class MainMediaSlider extends StatefulWidget {
   const MainMediaSlider({super.key});
 
@@ -1121,6 +1121,38 @@ class _MainMediaSliderState extends State<MainMediaSlider> {
   bool _loading = true;
   int _currentIndex = 0;
   final PageController _pageController = PageController();
+  Timer? _autoPlayTimer;
+
+  static final List<Map<String, dynamic>> _defaultShowcaseSlides = [
+    {
+      'title': 'D. Y. Patil Education Society (Deemed to be University) • Kolhapur Campus',
+      'media_type': 'IMAGE',
+      'media_url': 'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=1200&auto=format&fit=crop&q=80',
+      'badge': 'UNIVERSITY HIGHLIGHT',
+      'icon': Icons.school,
+    },
+    {
+      'title': 'MAPCON 2026 • 46th Annual State Conference at Hotel Sayaji, Kolhapur',
+      'media_type': 'IMAGE',
+      'media_url': 'https://images.unsplash.com/photo-1511578314322-379afb476865?w=1200&auto=format&fit=crop&q=80',
+      'badge': 'CONFERENCE BANNER',
+      'icon': Icons.event,
+    },
+    {
+      'title': 'University Campus Tour & Institutional Excellence Clip',
+      'media_type': 'VIDEO',
+      'media_url': 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+      'badge': 'UNIVERSITY VIDEO',
+      'icon': Icons.play_circle_fill,
+    },
+    {
+      'title': 'Our Esteemed Industrial Partners, Diagnostic Leaders & Sponsors',
+      'media_type': 'IMAGE',
+      'media_url': 'https://images.unsplash.com/photo-1587825140708-dfaf72ae4b04?w=1200&auto=format&fit=crop&q=80',
+      'badge': 'OFFICIAL SPONSORS',
+      'icon': Icons.handshake,
+    },
+  ];
 
   @override
   void initState() {
@@ -1131,48 +1163,93 @@ class _MainMediaSliderState extends State<MainMediaSlider> {
 
   @override
   void dispose() {
+    _autoPlayTimer?.cancel();
     RealtimeSyncService.instance.syncNotifier.removeListener(_fetchSliders);
     _pageController.dispose();
     super.dispose();
   }
 
+  void _startAutoPlay(int count) {
+    _autoPlayTimer?.cancel();
+    if (count <= 1) return;
+    _autoPlayTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (_pageController.hasClients) {
+        final next = (_currentIndex + 1) % count;
+        _pageController.animateToPage(
+          next,
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
+  }
+
   Future<void> _fetchSliders() async {
     try {
       final res = await ApiService.get('/sliders');
-      if (res is List) {
+      if (res is List && res.isNotEmpty) {
         if (mounted) {
           setState(() {
             _slides = res;
             _loading = false;
           });
+          _startAutoPlay(res.length);
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _slides = _defaultShowcaseSlides;
+            _loading = false;
+          });
+          _startAutoPlay(_defaultShowcaseSlides.length);
         }
       }
     } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() {
+          _slides = _defaultShowcaseSlides;
+          _loading = false;
+        });
+        _startAutoPlay(_defaultShowcaseSlides.length);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_loading || _slides.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
+    final slidesList = _slides.isNotEmpty ? _slides : _defaultShowcaseSlides;
     final String imageBaseUrl = apiBaseUrl.replaceAll('/api', '');
 
     return Column(
       children: [
         SizedBox(
-          height: 190,
+          height: 195,
           child: PageView.builder(
             controller: _pageController,
             onPageChanged: (idx) => setState(() => _currentIndex = idx),
-            itemCount: _slides.length,
+            itemCount: slidesList.length,
             itemBuilder: (context, index) {
-              final item = _slides[index];
+              final item = slidesList[index];
               final String mediaType = item['media_type']?.toString().toUpperCase() ?? 'IMAGE';
               final String rawUrl = item['media_url']?.toString() ?? '';
               final String title = item['title']?.toString() ?? '';
+
+              String badgeText = item['badge']?.toString() ?? '';
+              IconData badgeIcon = Icons.campaign;
+
+              if (mediaType == 'VIDEO') {
+                badgeText = 'UNIVERSITY VIDEO';
+                badgeIcon = Icons.videocam;
+              } else if (title.toLowerCase().contains('sponsor') || title.toLowerCase().contains('partner')) {
+                badgeText = 'OFFICIAL SPONSORS';
+                badgeIcon = Icons.handshake;
+              } else if (title.toLowerCase().contains('campus') || title.toLowerCase().contains('patil') || title.toLowerCase().contains('university')) {
+                badgeText = 'UNIVERSITY HIGHLIGHT';
+                badgeIcon = Icons.school;
+              } else {
+                badgeText = 'CONFERENCE BANNER';
+                badgeIcon = Icons.event;
+              }
 
               final String fullUrl = (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))
                   ? rawUrl
@@ -1182,7 +1259,7 @@ class _MainMediaSliderState extends State<MainMediaSlider> {
                 margin: const EdgeInsets.symmetric(horizontal: 4),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(18),
-                  color: Colors.black,
+                  color: const Color(0xFF0F172A),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withOpacity(0.12),
@@ -1203,36 +1280,25 @@ class _MainMediaSliderState extends State<MainMediaSlider> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Container(
-                                padding: const EdgeInsets.all(12),
+                                padding: const EdgeInsets.all(14),
                                 decoration: BoxDecoration(
-                                  color: maroon.withOpacity(0.85),
+                                  gradient: const LinearGradient(colors: [maroon, Color(0xFFA91D22)]),
                                   shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: maroon.withOpacity(0.4),
+                                      blurRadius: 12,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
                                 ),
                                 child: const Icon(Icons.play_arrow, color: Colors.white, size: 38),
                               ),
                               const SizedBox(height: 8),
                               const Text(
-                                'Tap to Watch Video',
+                                'Tap to Play Video Clip',
                                 style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                               ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        top: 10,
-                        left: 10,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: maroon,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            children: const [
-                              Icon(Icons.videocam, color: Colors.white, size: 12),
-                              SizedBox(width: 4),
-                              Text('VIDEO BANNER', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
                             ],
                           ),
                         ),
@@ -1250,11 +1316,49 @@ class _MainMediaSliderState extends State<MainMediaSlider> {
                         fullUrl,
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) => Container(
-                          color: Colors.grey.shade200,
-                          child: const Icon(Icons.image_not_supported, color: muted, size: 40),
+                          color: const Color(0xFF1E293B),
+                          child: const Center(
+                            child: Icon(Icons.image_outlined, color: Colors.white54, size: 40),
+                          ),
                         ),
                       ),
                     ],
+
+                    Positioned(
+                      top: 10,
+                      left: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
+                        decoration: BoxDecoration(
+                          color: mediaType == 'VIDEO' ? const Color(0xFFDC2626) : maroon.withOpacity(0.92),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.white.withOpacity(0.3), width: 0.8),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.3),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(badgeIcon, color: gold, size: 12),
+                            const SizedBox(width: 5),
+                            Text(
+                              badgeText,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.6,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
 
                     if (title.isNotEmpty)
                       Positioned(
@@ -1262,10 +1366,10 @@ class _MainMediaSliderState extends State<MainMediaSlider> {
                         left: 0,
                         right: 0,
                         child: Container(
-                          padding: const EdgeInsets.all(12),
+                          padding: const EdgeInsets.fromLTRB(14, 24, 14, 12),
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
-                              colors: [Colors.transparent, Colors.black.withOpacity(0.85)],
+                              colors: [Colors.transparent, Colors.black.withOpacity(0.88)],
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
                             ),
@@ -1274,8 +1378,12 @@ class _MainMediaSliderState extends State<MainMediaSlider> {
                             title,
                             style: const TextStyle(
                               color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13.5,
+                              height: 1.25,
+                              shadows: [
+                                Shadow(color: Colors.black, blurRadius: 4),
+                              ],
                             ),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
@@ -1291,10 +1399,11 @@ class _MainMediaSliderState extends State<MainMediaSlider> {
         const SizedBox(height: 8),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(_slides.length, (idx) {
-            return Container(
+          children: List.generate(slidesList.length, (idx) {
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
               margin: const EdgeInsets.symmetric(horizontal: 3),
-              width: _currentIndex == idx ? 18 : 6,
+              width: _currentIndex == idx ? 20 : 6,
               height: 6,
               decoration: BoxDecoration(
                 color: _currentIndex == idx ? maroon : Colors.grey.shade300,
@@ -1303,15 +1412,20 @@ class _MainMediaSliderState extends State<MainMediaSlider> {
             );
           }),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
       ],
     );
   }
 }
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
   void go(BuildContext context, Widget page) {
     Navigator.push(
       context,
