@@ -23,10 +23,91 @@ app.set('trust proxy', 1);
 const io=new Server(server,{cors:{origin:true,credentials:true}});
 const __dirname=path.dirname(fileURLToPath(import.meta.url));
 const uploadRoot=path.resolve(__dirname,'..','uploads');
-app.use(helmet({crossOriginResourcePolicy:{policy:'cross-origin'}})); app.use(cors({origin:true,credentials:true})); app.use(express.json({limit:'12mb'})); app.use(morgan('dev'));
-app.use('/uploads',express.static(uploadRoot));
-app.use(rateLimit({windowMs:15*60*1000,max:500,standardHeaders:true,legacyHeaders:false}));
-app.get('/', (req, res) => res.json({ success: true, message: 'DY Patil Conference Management API Live' }));
+const flutterWebRoot=path.resolve(__dirname,'..','..','flutter_app','build','web');
+const adminWebDist=path.resolve(__dirname,'..','..','admin_web','dist');
+
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  contentSecurityPolicy: false
+}));
+app.use(cors({ origin: true, credentials: true }));
+app.use(express.json({ limit: '12mb' }));
+app.use(morgan('dev'));
+app.use('/uploads', express.static(uploadRoot));
+app.use('/app', express.static(flutterWebRoot));
+app.use('/admin', express.static(adminWebDist));
+
+app.use('/api', rateLimit({ windowMs: 15 * 60 * 1000, max: 1000, standardHeaders: true, legacyHeaders: false }));
+
+app.get('/', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>MAPCON 2026 - Conference Portal</title>
+      <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+        body { background: #FCFAF5; color: #1e293b; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+        .card { background: #ffffff; max-width: 520px; width: 100%; border-radius: 20px; box-shadow: 0 20px 40px -15px rgba(140, 17, 25, 0.12), 0 0 1px 1px rgba(200, 164, 90, 0.2); border-top: 6px solid #8C1119; overflow: hidden; text-align: center; padding: 36px 28px; }
+        .logo-badge { width: 70px; height: 70px; background: linear-gradient(135deg, #8C1119, #5C0008); color: #C8A45A; border-radius: 18px; display: inline-flex; align-items: center; justify-content: center; font-size: 32px; font-weight: 800; margin-bottom: 16px; box-shadow: 0 10px 20px rgba(140, 17, 25, 0.25); }
+        h1 { font-size: 26px; color: #8C1119; font-weight: 800; margin-bottom: 6px; letter-spacing: -0.5px; }
+        p.sub { font-size: 14px; color: #64748b; margin-bottom: 28px; line-height: 1.5; }
+        .btn-group { display: flex; flex-direction: column; gap: 14px; }
+        .btn { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 16px 20px; border-radius: 14px; text-decoration: none; font-weight: 700; font-size: 15px; transition: all 0.2s ease; border: none; cursor: pointer; }
+        .btn-primary { background: linear-gradient(135deg, #8C1119, #A91D22); color: #ffffff; box-shadow: 0 8px 18px rgba(140, 17, 25, 0.25); }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 24px rgba(140, 17, 25, 0.35); }
+        .btn-secondary { background: #F8FAFC; color: #1E293B; border: 1.5px solid #E2E8F0; }
+        .btn-secondary:hover { background: #F1F5F9; border-color: #CBD5E1; transform: translateY(-1px); }
+        .footer-info { margin-top: 30px; padding-top: 20px; border-top: 1px dashed #E2E8F0; font-size: 12px; color: #94a3b8; display: flex; justify-content: space-around; }
+        .status-dot { width: 8px; height: 8px; background: #10B981; border-radius: 50%; display: inline-block; margin-right: 5px; animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="logo-badge">M</div>
+        <h1>MAPCON 2026</h1>
+        <p class="sub">46th Annual State Conference • Kolhapur, Maharashtra<br>Choose an interface below to continue:</p>
+        
+        <div class="btn-group">
+          <a href="/app/" class="btn btn-primary">
+            <span>📱 Launch Delegate Web App</span>
+          </a>
+          <a href="/admin/" class="btn btn-secondary">
+            <span>🛡️ Admin & Organizer Portal</span>
+          </a>
+          <a href="/api/health" class="btn btn-secondary" style="font-size: 13px; padding: 12px;">
+            <span><span class="status-dot"></span> Backend API Status: Live</span>
+          </a>
+        </div>
+        
+        <div class="footer-info">
+          <span>Hotel Sayaji, Kolhapur</span>
+          <span>•</span>
+          <span>Single-Server Live Hosting</span>
+        </div>
+      </div>
+    </body>
+    </html>
+  `);
+});
+
+app.get(/^\/app(\/.*)?$/, (req, res, next) => {
+  if (req.url.startsWith('/api') || req.url.startsWith('/uploads')) return next();
+  res.sendFile(path.join(flutterWebRoot, 'index.html'), err => {
+    if (err) next();
+  });
+});
+
+app.get(/^\/admin(\/.*)?$/, (req, res, next) => {
+  if (req.url.startsWith('/api') || req.url.startsWith('/uploads')) return next();
+  res.sendFile(path.join(adminWebDist, 'index.html'), err => {
+    if (err) next();
+  });
+});
+
 app.get('/api/health', (req, res) => res.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() }));
 const validate=(req,res,next)=>{const e=validationResult(req);if(!e.isEmpty())return res.status(400).json({message:'Validation failed',errors:e.array()});next()};
 const asyncRoute=fn=>(req,res,next)=>Promise.resolve(fn(req,res,next)).catch(next);
@@ -186,6 +267,40 @@ async function runMigrations(){
       UPDATE photos SET url='https://images.unsplash.com/photo-1587825140708-dfaf72ae4b04?w=1200&auto=format&fit=crop&q=80', caption='Keynote address on Advances in Molecular Pathology'
       WHERE url LIKE '%rakesh-sharma%' OR url LIKE '%gold-modern-appreciation%'
     `);
+
+    const partCols = [
+      "food_preference VARCHAR(20) DEFAULT 'VEG'",
+      "kit_issued TINYINT(1) DEFAULT 0",
+      "certificate_issued TINYINT(1) DEFAULT 0",
+      "emergency_contact VARCHAR(50) NULL",
+      "mode_of_travel VARCHAR(50) NULL",
+      "flight_number VARCHAR(50) NULL",
+      "arrival_date DATE NULL",
+      "arrival_time TIME NULL",
+      "departure_date DATE NULL",
+      "departure_time TIME NULL",
+      "liaison_id INT NULL"
+    ];
+    for(const colDef of partCols){
+      const colName = colDef.split(' ')[0];
+      const [exists] = await pool.query(`SHOW COLUMNS FROM participants LIKE '${colName}'`);
+      if(!exists.length){
+        await pool.query(`ALTER TABLE participants ADD COLUMN ${colDef}`);
+      }
+    }
+
+    const userCols = [
+      "designation VARCHAR(100) NULL",
+      "university VARCHAR(255) NULL",
+      "blood_group VARCHAR(10) NULL"
+    ];
+    for(const colDef of userCols){
+      const colName = colDef.split(' ')[0];
+      const [exists] = await pool.query(`SHOW COLUMNS FROM users LIKE '${colName}'`);
+      if(!exists.length){
+        await pool.query(`ALTER TABLE users ADD COLUMN ${colDef}`);
+      }
+    }
 
     try {
       const [idxRows] = await pool.query("SHOW INDEX FROM participants WHERE Key_name = 'user_id'");
@@ -662,13 +777,17 @@ app.get('/api/admin/liaisons',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async
 
 app.get('/api/admin/participants',auth,roles('ADMIN','SUPER_ADMIN','VOLUNTEER'),asyncRoute(async(req,res)=>{
   const conferenceId=req.query.conferenceId||1;
-  const [r]=await pool.query(`
+  const { q, category, status, kit_issued, certificate_issued, hotel_allocated, payment_status } = req.query;
+
+  let query = `
     SELECT p.*, u.name, u.email, u.phone, u.designation, u.university, u.blood_group, u.photo, u.last_login_at,
            l.name as liaison_name, l.phone as liaison_phone,
            h.id as hotel_id, h.name as hotel_name, r.room_number, r.room_type,
            ra.check_in, ra.check_out,
            (SELECT COUNT(*) FROM certificates WHERE participant_id=p.id) as has_certificate,
-           (SELECT COUNT(*) FROM feedback WHERE participant_id=p.id) as has_feedback
+           (SELECT COUNT(*) FROM feedback WHERE participant_id=p.id) as has_feedback,
+           (SELECT COUNT(*) FROM attendance WHERE participant_id=p.id) as attendance_count,
+           (SELECT COUNT(*) FROM meal_scans WHERE participant_id=p.id) as meal_scan_count
     FROM participants p
     JOIN users u ON u.id = p.user_id
     LEFT JOIN liaison_faculty l ON l.id = p.liaison_id
@@ -676,8 +795,43 @@ app.get('/api/admin/participants',auth,roles('ADMIN','SUPER_ADMIN','VOLUNTEER'),
     LEFT JOIN rooms r ON r.id = ra.room_id
     LEFT JOIN hotels h ON h.id = r.hotel_id
     WHERE p.conference_id = ?
-    ORDER BY p.id DESC
-  `,[conferenceId]);
+  `;
+  const params = [conferenceId];
+
+  if(category && category !== 'ALL'){
+    query += ` AND p.category = ?`;
+    params.push(category);
+  }
+  if(status && status !== 'ALL'){
+    query += ` AND p.status = ?`;
+    params.push(status);
+  }
+  if(payment_status && payment_status !== 'ALL'){
+    query += ` AND p.payment_status = ?`;
+    params.push(payment_status);
+  }
+  if(kit_issued !== undefined && kit_issued !== 'ALL'){
+    query += ` AND p.kit_issued = ?`;
+    params.push(kit_issued === '1' || kit_issued === true ? 1 : 0);
+  }
+  if(certificate_issued !== undefined && certificate_issued !== 'ALL'){
+    query += ` AND p.certificate_issued = ?`;
+    params.push(certificate_issued === '1' || certificate_issued === true ? 1 : 0);
+  }
+  if(hotel_allocated === '1' || hotel_allocated === 'true'){
+    query += ` AND r.room_number IS NOT NULL`;
+  } else if(hotel_allocated === '0' || hotel_allocated === 'false'){
+    query += ` AND r.room_number IS NULL`;
+  }
+  if(q && String(q).trim()){
+    const term = `%${String(q).trim()}%`;
+    query += ` AND (u.name LIKE ? OR u.email LIKE ? OR u.phone LIKE ? OR p.registration_no LIKE ? OR u.university LIKE ? OR u.designation LIKE ?)`;
+    params.push(term, term, term, term, term, term);
+  }
+
+  query += ` ORDER BY p.id DESC`;
+
+  const [r]=await pool.query(query, params);
   res.json(r);
 }));
 
@@ -705,26 +859,30 @@ app.post('/api/admin/participants',auth,roles('ADMIN','SUPER_ADMIN'),[
 
   const regNo=req.body.registration_no||`CONF-${Date.now().toString().slice(-6)}`;
   const qrToken=req.body.qr_token||`QR-${Date.now()}-${Math.random().toString(36).substring(2,7).toUpperCase()}`;
+  const foodPref = req.body.food_preference || req.body.foodPreference || 'VEG';
+  const kitIssued = req.body.kit_issued || req.body.kitIssued ? 1 : 0;
+  const certIssued = req.body.certificate_issued || req.body.certificateIssued ? 1 : 0;
 
   const [pRes]=await pool.query(`
     INSERT INTO participants(
       user_id, conference_id, registration_no, category, status, payment_status, amount,
       mode_of_travel, flight_number, arrival_date, arrival_time, departure_date, departure_time,
-      emergency_contact, liaison_id, qr_token
-    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      emergency_contact, liaison_id, qr_token, food_preference, kit_issued, certificate_issued
+    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     ON DUPLICATE KEY UPDATE
       registration_no=VALUES(registration_no), category=VALUES(category), status=VALUES(status),
       payment_status=VALUES(payment_status), amount=VALUES(amount), mode_of_travel=VALUES(mode_of_travel),
       flight_number=VALUES(flight_number), arrival_date=VALUES(arrival_date), arrival_time=VALUES(arrival_time),
       departure_date=VALUES(departure_date), departure_time=VALUES(departure_time),
-      emergency_contact=VALUES(emergency_contact), liaison_id=VALUES(liaison_id)
+      emergency_contact=VALUES(emergency_contact), liaison_id=VALUES(liaison_id),
+      food_preference=VALUES(food_preference), kit_issued=VALUES(kit_issued), certificate_issued=VALUES(certificate_issued)
   `, [
     userId, conferenceId, regNo, req.body.category||'Delegate', req.body.status||'PENDING',
     req.body.payment_status||'PENDING', req.body.amount||0, req.body.mode_of_travel||null,
     req.body.flight_number||null, req.body.arrivalDate||req.body.arrival_date||null,
     req.body.arrivalTime||req.body.arrival_time||null, req.body.departureDate||req.body.departure_date||null,
     req.body.departureTime||req.body.departure_time||null, req.body.emergency_contact||null,
-    req.body.liaison_id||null, qrToken
+    req.body.liaison_id||null, qrToken, foodPref, kitIssued, certIssued
   ]);
 
   const createdPart = { id: pRes.insertId, userId, registrationNo: regNo, qrToken, name: req.body.name, status: req.body.status || 'PENDING' };
@@ -736,24 +894,31 @@ app.put('/api/admin/participants/:id',auth,roles('ADMIN','SUPER_ADMIN'),validate
   const [[p]]=await pool.query('SELECT p.*, u.id as user_id, u.name, u.email, u.phone FROM participants p JOIN users u ON u.id=p.user_id WHERE p.id=?',[req.params.id]);
   if(!p) return res.status(404).json({message:'Participant not found'});
 
-  if(req.body.name || req.body.phone || req.body.designation || req.body.university || req.body.email){
+  if(req.body.name || req.body.phone || req.body.designation || req.body.university || req.body.email || req.body.bloodGroup || req.body.blood_group){
     await pool.query('UPDATE users SET name=COALESCE(?,name), email=COALESCE(?,email), phone=COALESCE(?,phone), designation=COALESCE(?,designation), university=COALESCE(?,university), blood_group=COALESCE(?,blood_group), photo=COALESCE(?,photo) WHERE id=?',
       [req.body.name, req.body.email, req.body.phone, req.body.designation, req.body.university, req.body.bloodGroup||req.body.blood_group, req.body.photo, p.user_id]);
   }
+
+  const foodPref = req.body.food_preference !== undefined ? req.body.food_preference : req.body.foodPreference;
+  const kitIssued = req.body.kit_issued !== undefined ? (req.body.kit_issued ? 1 : 0) : (req.body.kitIssued !== undefined ? (req.body.kitIssued ? 1 : 0) : undefined);
+  const certIssued = req.body.certificate_issued !== undefined ? (req.body.certificate_issued ? 1 : 0) : (req.body.certificateIssued !== undefined ? (req.body.certificateIssued ? 1 : 0) : undefined);
 
   await pool.query(`
     UPDATE participants SET
       registration_no=COALESCE(?,registration_no), category=COALESCE(?,category), status=COALESCE(?,status),
       payment_status=COALESCE(?,payment_status), amount=COALESCE(?,amount), mode_of_travel=COALESCE(?,mode_of_travel),
       flight_number=COALESCE(?,flight_number), arrival_date=?, arrival_time=?, departure_date=?, departure_time=?,
-      emergency_contact=COALESCE(?,emergency_contact), liaison_id=?
+      emergency_contact=COALESCE(?,emergency_contact), liaison_id=?,
+      food_preference=COALESCE(?,food_preference),
+      kit_issued=COALESCE(?,kit_issued),
+      certificate_issued=COALESCE(?,certificate_issued)
     WHERE id=?
   `, [
     req.body.registration_no, req.body.category, req.body.status, req.body.payment_status, req.body.amount,
     req.body.mode_of_travel, req.body.flight_number, req.body.arrivalDate||req.body.arrival_date||null,
     req.body.arrivalTime||req.body.arrival_time||null, req.body.departureDate||req.body.departure_date||null,
     req.body.departureTime||req.body.departure_time||null, req.body.emergency_contact,
-    req.body.liaison_id||null, req.params.id
+    req.body.liaison_id||null, foodPref||null, kitIssued, certIssued, req.params.id
   ]);
 
   const [[updatedP]]=await pool.query(`
@@ -762,7 +927,9 @@ app.put('/api/admin/participants/:id',auth,roles('ADMIN','SUPER_ADMIN'),validate
            h.id as hotel_id, h.name as hotel_name, r.room_number, r.room_type,
            ra.check_in, ra.check_out,
            (SELECT COUNT(*) FROM certificates WHERE participant_id=p.id) as has_certificate,
-           (SELECT COUNT(*) FROM feedback WHERE participant_id=p.id) as has_feedback
+           (SELECT COUNT(*) FROM feedback WHERE participant_id=p.id) as has_feedback,
+           (SELECT COUNT(*) FROM attendance WHERE participant_id=p.id) as attendance_count,
+           (SELECT COUNT(*) FROM meal_scans WHERE participant_id=p.id) as meal_scan_count
     FROM participants p
     JOIN users u ON u.id = p.user_id
     LEFT JOIN liaison_faculty l ON l.id = p.liaison_id
@@ -785,6 +952,32 @@ app.put('/api/admin/participants/:id',auth,roles('ADMIN','SUPER_ADMIN'),validate
   }
 
   ok(res, updatedP, 'Participant updated');
+}));
+
+app.put('/api/admin/participants/:id/toggle-kit',auth,roles('ADMIN','SUPER_ADMIN','VOLUNTEER'),asyncRoute(async(req,res)=>{
+  const [[p]]=await pool.query('SELECT * FROM participants WHERE id=?',[req.params.id]);
+  if(!p) return res.status(404).json({message:'Participant not found'});
+  const newStatus = p.kit_issued ? 0 : 1;
+  await pool.query('UPDATE participants SET kit_issued=? WHERE id=?',[newStatus, req.params.id]);
+  io.emit('participant_status_updated', { id: req.params.id, kit_issued: newStatus });
+  ok(res, { id: p.id, kit_issued: newStatus }, `Kit marked as ${newStatus ? 'Issued' : 'Pending'}`);
+}));
+
+app.put('/api/admin/participants/:id/toggle-certificate',auth,roles('ADMIN','SUPER_ADMIN','VOLUNTEER'),asyncRoute(async(req,res)=>{
+  const [[p]]=await pool.query('SELECT p.*, u.name FROM participants p JOIN users u ON u.id=p.user_id WHERE p.id=?',[req.params.id]);
+  if(!p) return res.status(404).json({message:'Participant not found'});
+  const newStatus = p.certificate_issued ? 0 : 1;
+  await pool.query('UPDATE participants SET certificate_issued=? WHERE id=?',[newStatus, req.params.id]);
+  
+  if(newStatus === 1){
+    const [[cert]] = await pool.query('SELECT id FROM certificates WHERE participant_id=?',[p.id]);
+    if(!cert){
+      const certNo = `CERT-2026-${p.id}-${Date.now().toString().slice(-4)}`;
+      await pool.query('INSERT INTO certificates(participant_id, certificate_no, issued_at) VALUES(?,?,NOW())',[p.id, certNo]);
+    }
+  }
+  io.emit('participant_status_updated', { id: req.params.id, certificate_issued: newStatus });
+  ok(res, { id: p.id, certificate_issued: newStatus }, `Certificate marked as ${newStatus ? 'Issued' : 'Pending'}`);
 }));
 
 app.delete('/api/admin/participants/:id',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
@@ -880,6 +1073,9 @@ app.post('/api/admin/participants/bulk-import',auth,roles('ADMIN','SUPER_ADMIN')
       const regNo = regNoInput ? String(regNoInput).trim() : `MAPCON-${Date.now().toString().slice(-4)}${Math.floor(Math.random()*1000)}`;
       const qrToken = `QR-${uid}-${Date.now().toString(36)}`;
       const category = row.category || row.Category || row['Delegate Category'] || 'Delegate';
+      const foodPref = row.food_preference || row.FoodPreference || row['Food Preference'] || row['Meal Preference'] || row['Diet'] || null;
+      const kitIssued = row.kit_issued !== undefined ? (row.kit_issued ? 1 : 0) : (row['Kit Issued'] === 'Yes' || row['Kit Issued'] === '1' || row['Kit Issued'] === true ? 1 : null);
+      const certIssued = row.certificate_issued !== undefined ? (row.certificate_issued ? 1 : 0) : (row['Certificate Issued'] === 'Yes' || row['Certificate Issued'] === '1' || row['Certificate Issued'] === true ? 1 : null);
       const modeOfTravel = row.mode_of_travel || row.ModeOfTravel || row['Travel Mode'] || row['Mode of Travel'] || null;
       const flightNumber = row.flight_number || row.FlightNumber || row['Flight/Train No'] || row['Flight Number'] || row['Train Number'] || null;
       const arrivalDate = row.arrival_date || row.ArrivalDate || row['Arrival Date'] || null;
@@ -913,6 +1109,9 @@ app.post('/api/admin/participants/bulk-import',auth,roles('ADMIN','SUPER_ADMIN')
         await pool.query(`
           UPDATE participants SET 
             category = COALESCE(?, category),
+            food_preference = COALESCE(?, food_preference),
+            kit_issued = COALESCE(?, kit_issued),
+            certificate_issued = COALESCE(?, certificate_issued),
             mode_of_travel = COALESCE(?, mode_of_travel),
             flight_number = COALESCE(?, flight_number),
             arrival_date = COALESCE(?, arrival_date),
@@ -922,13 +1121,13 @@ app.post('/api/admin/participants/bulk-import',auth,roles('ADMIN','SUPER_ADMIN')
             emergency_contact = COALESCE(?, emergency_contact),
             liaison_id = COALESCE(?, liaison_id)
           WHERE id = ?
-        `, [category, modeOfTravel, flightNumber, arrivalDate||null, arrivalTime||null, departureDate||null, departureTime||null, emergencyContact, liaisonId, participantId]);
+        `, [category, foodPref, kitIssued, certIssued, modeOfTravel, flightNumber, arrivalDate||null, arrivalTime||null, departureDate||null, departureTime||null, emergencyContact, liaisonId, participantId]);
         updated++;
       } else {
         const [pRes] = await pool.query(`
-          INSERT INTO participants(user_id, conference_id, registration_no, category, status, payment_status, mode_of_travel, flight_number, arrival_date, arrival_time, departure_date, departure_time, emergency_contact, liaison_id, qr_token)
-          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-        `, [uid, conferenceId, regNo, category, 'APPROVED', 'PAID', modeOfTravel, flightNumber, arrivalDate||null, arrivalTime||null, departureDate||null, departureTime||null, emergencyContact, liaisonId, qrToken]);
+          INSERT INTO participants(user_id, conference_id, registration_no, category, food_preference, kit_issued, certificate_issued, status, payment_status, mode_of_travel, flight_number, arrival_date, arrival_time, departure_date, departure_time, emergency_contact, liaison_id, qr_token)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        `, [uid, conferenceId, regNo, category, foodPref||'VEG', kitIssued||0, certIssued||0, 'APPROVED', 'PAID', modeOfTravel, flightNumber, arrivalDate||null, arrivalTime||null, departureDate||null, departureTime||null, emergencyContact, liaisonId, qrToken]);
         participantId = pRes.insertId;
         created++;
       }
@@ -1845,6 +2044,66 @@ app.get('/api/admin/meals/live',auth,roles('ADMIN','SUPER_ADMIN','VOLUNTEER'),as
   res.json(scans);
 }));
 
+app.get('/api/admin/meals/report',auth,roles('ADMIN','SUPER_ADMIN','VOLUNTEER'),asyncRoute(async(req,res)=>{
+  const conferenceId = req.query.conferenceId || 1;
+  const mealId = req.query.mealId;
+
+  const [[totalEligible]] = await pool.query('SELECT COUNT(*) as count FROM participants WHERE conference_id=?',[conferenceId]);
+  
+  let mealsQuery = `
+    SELECT m.*, DATE_FORMAT(m.meal_date, '%Y-%m-%d') as meal_date,
+           (SELECT COUNT(*) FROM meal_scans WHERE meal_id=m.id) as redeemed_count
+    FROM meals m 
+    WHERE m.conference_id=?
+    ORDER BY m.meal_date, m.start_time
+  `;
+  const [meals] = await pool.query(mealsQuery, [conferenceId]);
+
+  let scansQuery = `
+    SELECT ms.id, ms.scanned_at, m.id as meal_id, m.meal_type, m.location, DATE_FORMAT(m.meal_date, '%Y-%m-%d') as meal_date,
+           p.registration_no, p.category, p.food_preference, u.name as participant_name, u.email, u.phone, u.university,
+           su.name as scanned_by_name
+    FROM meal_scans ms
+    JOIN meals m ON m.id=ms.meal_id
+    JOIN participants p ON p.id=ms.participant_id
+    JOIN users u ON u.id=p.user_id
+    LEFT JOIN users su ON su.id=ms.scanned_by
+    WHERE m.conference_id=?
+  `;
+  const scanParams = [conferenceId];
+  if(mealId && mealId !== 'ALL'){
+    scansQuery += ` AND m.id=?`;
+    scanParams.push(mealId);
+  }
+  scansQuery += ` ORDER BY ms.scanned_at DESC`;
+
+  const [scans] = await pool.query(scansQuery, scanParams);
+
+  // Category & Diet Breakdown
+  const categoryMap = {};
+  let vegCount = 0, nonVegCount = 0;
+  scans.forEach(s => {
+    categoryMap[s.category] = (categoryMap[s.category] || 0) + 1;
+    if(s.food_preference === 'NON_VEG') nonVegCount++;
+    else vegCount++;
+  });
+
+  const totalRedeemed = scans.length;
+  const eligibleCount = Number(totalEligible?.count || 0);
+
+  res.json({
+    totalEligible: eligibleCount,
+    totalRedeemed,
+    remainingCount: Math.max(0, eligibleCount - totalRedeemed),
+    redemptionRate: eligibleCount ? Math.round((totalRedeemed / (eligibleCount * (meals.length || 1))) * 100) : 0,
+    vegCount,
+    nonVegCount,
+    categoryBreakdown: categoryMap,
+    meals,
+    scans
+  });
+}));
+
 app.get('/api/admin/meals/:id/report',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
   const mealId = req.params.id;
   const [[meal]] = await pool.query("SELECT *, DATE_FORMAT(meal_date, '%Y-%m-%d') as meal_date FROM meals WHERE id=?",[mealId]);
@@ -1852,7 +2111,7 @@ app.get('/api/admin/meals/:id/report',auth,roles('ADMIN','SUPER_ADMIN'),asyncRou
 
   const [[totalEligible]] = await pool.query('SELECT COUNT(*) as count FROM participants WHERE conference_id=?',[meal.conference_id]);
   const [attendees] = await pool.query(`
-    SELECT ms.id, ms.scanned_at, p.registration_no, p.category, u.name as participant_name, u.email, u.phone, u.university,
+    SELECT ms.id, ms.scanned_at, p.registration_no, p.category, p.food_preference, u.name as participant_name, u.email, u.phone, u.university,
            su.name as scanned_by_name
     FROM meal_scans ms
     JOIN participants p ON p.id=ms.participant_id
@@ -1870,6 +2129,118 @@ app.get('/api/admin/meals/:id/report',auth,roles('ADMIN','SUPER_ADMIN'),asyncRou
     redemptionRate: totalEligible.count ? Math.round((attendees.length / totalEligible.count) * 100) : 0,
     attendees
   });
+}));
+
+app.get('/api/admin/attendance/report',auth,roles('ADMIN','SUPER_ADMIN','VOLUNTEER'),asyncRoute(async(req,res)=>{
+  const conferenceId = req.query.conferenceId || 1;
+  const sessionId = req.query.sessionId;
+
+  const [[totalReg]] = await pool.query('SELECT COUNT(*) as count FROM participants WHERE conference_id=?',[conferenceId]);
+  const [[uniqueCheckins]] = await pool.query(`
+    SELECT COUNT(DISTINCT participant_id) as count 
+    FROM attendance a 
+    JOIN participants p ON p.id=a.participant_id 
+    WHERE p.conference_id=?`,[conferenceId]);
+
+  const [sessions] = await pool.query(`
+    SELECT s.id, s.title, DATE_FORMAT(s.session_date, '%Y-%m-%d') as session_date, s.start_time, s.end_time,
+           h.name as hall_name, sp.name as speaker_name,
+           (SELECT COUNT(*) FROM attendance WHERE session_id=s.id) as attendance_count
+    FROM sessions s
+    LEFT JOIN halls h ON h.id=s.hall_id
+    LEFT JOIN speakers sp ON sp.id=s.speaker_id
+    WHERE s.conference_id=?
+    ORDER BY s.session_date, s.start_time
+  `,[conferenceId]);
+
+  let scansQuery = `
+    SELECT a.id, a.scanned_at, a.scan_type, a.session_id,
+           p.registration_no, p.category, u.name as participant_name, u.email, u.phone, u.university,
+           s.title as session_title, h.name as hall_name,
+           su.name as scanned_by_name
+    FROM attendance a
+    JOIN participants p ON p.id=a.participant_id
+    JOIN users u ON u.id=p.user_id
+    LEFT JOIN sessions s ON s.id=a.session_id
+    LEFT JOIN halls h ON h.id=s.hall_id
+    LEFT JOIN users su ON su.id=a.scanned_by
+    WHERE p.conference_id=?
+  `;
+  const scanParams = [conferenceId];
+  if(sessionId && sessionId !== 'ALL'){
+    if(sessionId === 'CHECKIN_ONLY'){
+      scansQuery += ` AND a.scan_type='CHECKIN'`;
+    } else {
+      scansQuery += ` AND a.session_id=?`;
+      scanParams.push(sessionId);
+    }
+  }
+  scansQuery += ` ORDER BY a.scanned_at DESC`;
+
+  const [scans] = await pool.query(scansQuery, scanParams);
+
+  // Category breakdown
+  const categoryMap = {};
+  scans.forEach(s => {
+    categoryMap[s.category] = (categoryMap[s.category] || 0) + 1;
+  });
+
+  const totalRegistered = Number(totalReg?.count || 0);
+  const totalCheckedIn = Number(uniqueCheckins?.count || 0);
+
+  res.json({
+    totalRegistered,
+    totalCheckedIn,
+    absentCount: Math.max(0, totalRegistered - totalCheckedIn),
+    attendanceRate: totalRegistered ? Math.round((totalCheckedIn / totalRegistered) * 100) : 0,
+    totalScans: scans.length,
+    categoryBreakdown: categoryMap,
+    sessions,
+    scans
+  });
+}));
+
+app.get('/api/admin/certificates/report',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
+  const conferenceId = req.query.conferenceId || 1;
+  const [r]=await pool.query(`
+    SELECT p.id, p.registration_no, p.category, p.status, p.kit_issued, p.certificate_issued,
+           u.name as participant_name, u.email, u.phone, u.university, u.designation,
+           c.id as certificate_id, c.certificate_no, c.issued_at,
+           (SELECT COUNT(*) FROM attendance WHERE participant_id=p.id) as attendance_count,
+           (SELECT COUNT(*) FROM feedback WHERE participant_id=p.id) as feedback_count
+    FROM participants p
+    JOIN users u ON u.id=p.user_id
+    LEFT JOIN certificates c ON c.participant_id=p.id
+    WHERE p.conference_id=?
+    ORDER BY p.id DESC
+  `,[conferenceId]);
+  res.json(r);
+}));
+
+app.post('/api/admin/certificates/bulk-generate',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
+  const conferenceId = req.body.conferenceId || 1;
+  const [participants] = await pool.query(`
+    SELECT p.id, p.registration_no, u.name
+    FROM participants p
+    JOIN users u ON u.id=p.user_id
+    WHERE p.conference_id=? AND p.status='APPROVED'
+  `,[conferenceId]);
+
+  let generated = 0;
+  for(const p of participants){
+    const [[existing]] = await pool.query('SELECT id FROM certificates WHERE participant_id=? LIMIT 1',[p.id]);
+    if(!existing){
+      const certNo = `CERT-2026-${p.id}-${Date.now().toString().slice(-4)}`;
+      await pool.query('INSERT INTO certificates(participant_id, certificate_no, issued_at) VALUES(?,?,NOW())',[p.id, certNo]);
+      await pool.query('UPDATE participants SET certificate_issued=1 WHERE id=?',[p.id]);
+      generated++;
+    } else {
+      await pool.query('UPDATE participants SET certificate_issued=1 WHERE id=?',[p.id]);
+    }
+  }
+
+  io.emit('certificates_updated', { count: generated });
+  ok(res, { count: generated, total: participants.length }, `Bulk Certificate Generation Complete: ${generated} new certificates generated!`);
 }));
 
 app.get('/api/admin/attendance/live',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{

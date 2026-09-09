@@ -60,6 +60,7 @@ aside {
   height: 100vh;
   box-shadow: 4px 0 24px rgba(0, 0, 0, 0.08);
   z-index: 10;
+  overflow: hidden;
 }
 
 .sidebrand {
@@ -107,6 +108,10 @@ aside {
 
 nav {
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
   padding: 16px 0;
   flex: 1;
   display: flex;
@@ -115,11 +120,17 @@ nav {
 }
 
 nav::-webkit-scrollbar {
-  width: 4px;
+  width: 5px;
+}
+nav::-webkit-scrollbar-track {
+  background: transparent;
 }
 nav::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.25);
   border-radius: 4px;
+}
+nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
 }
 
 .navgroup {
@@ -140,7 +151,7 @@ aside button {
   font-weight: 600;
   cursor: pointer;
   width: 100%;
-  transition: var(--transition);
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
   font-family: inherit;
 }
 
@@ -151,7 +162,6 @@ aside button span {
 aside button:hover {
   background: rgba(255, 255, 255, 0.12);
   color: #ffffff;
-  transform: translateX(3px);
 }
 
 aside button.active {

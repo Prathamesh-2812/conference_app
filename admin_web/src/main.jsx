@@ -43,7 +43,7 @@ function normalizeConference(data){
   return {...emptyConference,...data,startDate:toInputDate(data?.startDate),endDate:toInputDate(data?.endDate),registrationStartDate:toInputDate(data?.registrationStartDate),registrationEndDate:toInputDate(data?.registrationEndDate),venue:{...emptyVenue,...data?.venue},branding:{...emptyBranding,...data?.branding},settings:{...emptySettings,...data?.settings}};
 }
 
-function Login({onLogin}){const[e,setE]=useState('admin@conference.local'),[p,setP]=useState('Admin@123'),[busy,setBusy]=useState(false);const submit=async x=>{x.preventDefault();setBusy(true);try{const d=await req('/auth/login',{method:'POST',body:JSON.stringify({email:e,password:p})});localStorage.setItem('token',d.token);onLogin()}catch(err){alert(err.message)}finally{setBusy(false)}};return <div className="login"><form onSubmit={submit}><div className="brand-logo-container"><img src="/logo.png" alt="DY Patil Logo" className="brand-img" /></div><h1>Conference Control Room</h1><p>Manage live conference content, logistics, and mobile app data from MySQL.</p><input value={e} onChange={x=>setE(x.target.value)} placeholder="Email"/><input type="password" value={p} onChange={x=>setP(x.target.value)} placeholder="Password"/><button disabled={busy}>{busy?'Signing in...':'Sign in'}</button><small>Demo: admin@conference.local / Admin@123</small></form></div>}
+function Login({onLogin}){const[e,setE]=useState(''),[p,setP]=useState(''),[busy,setBusy]=useState(false);const submit=async x=>{x.preventDefault();setBusy(true);try{const d=await req('/auth/login',{method:'POST',body:JSON.stringify({email:e,password:p})});localStorage.setItem('token',d.token);onLogin()}catch(err){alert(err.message)}finally{setBusy(false)}};return <div className="login"><form onSubmit={submit}><div className="brand-logo-container"><img src="/logo.png" alt="DY Patil Logo" className="brand-img" /></div><h1>Conference Control Room</h1><p>Manage live conference content, logistics, and mobile app data from MySQL.</p><input value={e} onChange={x=>setE(x.target.value)} placeholder="Email"/><input type="password" value={p} onChange={x=>setP(x.target.value)} placeholder="Password"/><button disabled={busy}>{busy?'Signing in...':'Sign in'}</button></form></div>}
 
 const menu=[
   {title:'Dashboard',icon:LayoutDashboard},
@@ -500,7 +500,7 @@ function FormShell({icon:Icon,title,description,children,onSave,onReset,preview}
 function BrandPreview({branding}){return <div className="brandpreview" style={{background:branding.backgroundColor||'#FCFAF5',borderColor:branding.primaryColor||'#8C1119'}}>{branding.bannerUrl&&<img src={branding.bannerUrl.startsWith('/uploads')?API.replace('/api','')+branding.bannerUrl:branding.bannerUrl} alt="Conference banner"/>}<div><span style={{color:branding.accentColor}}>Live Preview</span><strong style={{color:branding.primaryColor}}>Mobile conference branding</strong><small style={{color:branding.secondaryColor}}>Logo, banner, and colors are API driven.</small></div></div>}
 
 function Participants({tab, notify, selectedConferenceId}){
-  const[d,setD]=useState([]),[q,setQ]=useState(''),[statusFilter,setStatusFilter]=useState('ALL'),[catFilter,setCatFilter]=useState('ALL'),[appFilter,setAppFilter]=useState('ALL'),[hotelFilter,setHotelFilter]=useState('ALL'),[payFilter,setPayFilter]=useState('ALL'),[busy,setBusy]=useState(false),[edit,setEdit]=useState(null),[importModal,setImportModal]=useState(false),[qrModal,setQrModal]=useState(null),[liaisons,setLiaisons]=useState([]),[whatsappModal,setWhatsappModal]=useState(false);
+  const[d,setD]=useState([]),[q,setQ]=useState(''),[statusFilter,setStatusFilter]=useState('ALL'),[catFilter,setCatFilter]=useState('ALL'),[appFilter,setAppFilter]=useState('ALL'),[hotelFilter,setHotelFilter]=useState('ALL'),[payFilter,setPayFilter]=useState('ALL'),[kitFilter,setKitFilter]=useState('ALL'),[certFilter,setCertFilter]=useState('ALL'),[foodFilter,setFoodFilter]=useState('ALL'),[busy,setBusy]=useState(false),[edit,setEdit]=useState(null),[importModal,setImportModal]=useState(false),[qrModal,setQrModal]=useState(null),[liaisons,setLiaisons]=useState([]),[whatsappModal,setWhatsappModal]=useState(false);
   
   const load=async()=>{
     setBusy(true);
@@ -522,14 +522,37 @@ function Participants({tab, notify, selectedConferenceId}){
     if(tab==='Import Participants') setImportModal(true);
   },[tab]);
 
+  const toggleKit = async (id) => {
+    try {
+      const res = await req(`/admin/participants/${id}/toggle-kit`, { method: 'PUT' });
+      notify(res.message || 'Kit status updated');
+      setD(prev => prev.map(p => p.id === id ? { ...p, kit_issued: res.data?.kit_issued } : p));
+    } catch(err) {
+      alert(err.message);
+    }
+  };
+
+  const toggleCert = async (id) => {
+    try {
+      const res = await req(`/admin/participants/${id}/toggle-certificate`, { method: 'PUT' });
+      notify(res.message || 'Certificate status updated');
+      setD(prev => prev.map(p => p.id === id ? { ...p, certificate_issued: res.data?.certificate_issued, has_certificate: res.data?.certificate_issued ? 1 : p.has_certificate } : p));
+    } catch(err) {
+      alert(err.message);
+    }
+  };
+
   const filtered=d.filter(x=>{
-    const matchesQ=`${x.name} ${x.email} ${x.phone} ${x.registration_no} ${x.university} ${x.hotel_name||''} ${x.room_number||''}`.toLowerCase().includes(q.toLowerCase());
+    const matchesQ=`${x.name} ${x.email} ${x.phone} ${x.registration_no} ${x.university||''} ${x.designation||''} ${x.hotel_name||''} ${x.room_number||''}`.toLowerCase().includes(q.toLowerCase());
     const matchesStatus=statusFilter==='ALL'||x.status===statusFilter;
     const matchesCat=catFilter==='ALL'||x.category===catFilter;
     const matchesApp=appFilter==='ALL'||(appFilter==='NEVER_OPENED' && !x.last_login_at)||(appFilter==='LOGGED_IN' && !!x.last_login_at);
     const matchesHotel=hotelFilter==='ALL'||(hotelFilter==='NO_HOTEL'?!x.hotel_name:x.hotel_name===hotelFilter);
     const matchesPay=payFilter==='ALL'||x.payment_status===payFilter;
-    return matchesQ && matchesStatus && matchesCat && matchesApp && matchesHotel && matchesPay;
+    const matchesKit=kitFilter==='ALL'||(kitFilter==='KIT_ISSUED'?x.kit_issued:!x.kit_issued);
+    const matchesCert=certFilter==='ALL'||(certFilter==='CERT_ISSUED'?(x.certificate_issued||x.has_certificate>0):(!x.certificate_issued&&!x.has_certificate));
+    const matchesFood=foodFilter==='ALL'||(x.food_preference||'VEG')===foodFilter;
+    return matchesQ && matchesStatus && matchesCat && matchesApp && matchesHotel && matchesPay && matchesKit && matchesCert && matchesFood;
   });
 
   const categories=['ALL',...Array.from(new Set(d.map(x=>x.category).filter(Boolean)))];
@@ -567,7 +590,7 @@ function Participants({tab, notify, selectedConferenceId}){
 
   const exportCSV=()=>{
     if(!filtered.length){alert('No participants to export');return}
-    const headers=['ID','Registration No','Name','Email','Phone','Designation','University','Category','Status','App Status','Payment Status','Hotel Assigned','Room No','Room Type','Check In','Check Out','Mode of Travel','Flight No','Arrival Date','Arrival Time','Departure Date','Departure Time','Liaison Officer','Liaison Phone'];
+    const headers=['ID','Registration No','Name','Email','Phone','Designation','University','Category','Food Preference','Kit Issued','Certificate Issued','Status','App Status','Payment Status','Hotel Assigned','Room No','Room Type','Check In','Check Out','Mode of Travel','Flight No','Arrival Date','Arrival Time','Departure Date','Departure Time','Liaison Officer','Liaison Phone'];
     const rows=filtered.map(x=>[
       x.id,
       `"${x.registration_no||''}"`,
@@ -577,6 +600,9 @@ function Participants({tab, notify, selectedConferenceId}){
       `"${x.designation||''}"`,
       `"${x.university||''}"`,
       `"${x.category||''}"`,
+      `"${x.food_preference||'VEG'}"`,
+      `"${x.kit_issued?'Issued':'Pending'}"`,
+      `"${x.certificate_issued||x.has_certificate>0?'Issued':'Pending'}"`,
       `"${x.status||''}"`,
       `"${x.last_login_at?'Active (Logged In)':'Never Opened App'}"`,
       `"${x.payment_status||''}"`,
@@ -603,64 +629,105 @@ function Participants({tab, notify, selectedConferenceId}){
     document.body.removeChild(link);
   };
 
-  const neverOpenedCount = d.filter(x => !x.last_login_at).length;
-  const activeCount = d.filter(x => !!x.last_login_at).length;
+  const kitsCount = d.filter(x => x.kit_issued).length;
+  const certsCount = d.filter(x => x.certificate_issued || x.has_certificate > 0).length;
+  const hotelCount = d.filter(x => x.hotel_name).length;
+  const vegCount = d.filter(x => (x.food_preference||'VEG') === 'VEG').length;
+  const nonVegCount = d.filter(x => x.food_preference === 'NON_VEG').length;
 
   return <div className="panel">
     <div className="pagehead">
       <div>
-        <h3>Participants Directory</h3>
-        <p>
-          Showing {filtered.length} of {d.length} delegates.
-          &nbsp;&bull;&nbsp;<span style={{color:'#dc2626',fontWeight:700}}>🔴 Never Opened App: {neverOpenedCount}</span>
-          &nbsp;&bull;&nbsp;<span style={{color:'#16a34a',fontWeight:700}}>🟢 App Active: {activeCount}</span>
-        </p>
+        <h3>Participants Directory & Desk Operations</h3>
+        <p>Manage delegate registrations, conference kit distribution, certificates, accommodation, and real-time mapping.</p>
       </div>
       <div className="actions">
-        <button className="secondary" style={{borderColor:'#16a34a',color:'#16a34a',fontWeight:600}} onClick={()=>setWhatsappModal(true)}>📲 WhatsApp Inactive Delegates</button>
+        <button className="secondary" style={{borderColor:'#16a34a',color:'#16a34a',fontWeight:600}} onClick={()=>setWhatsappModal(true)}>📲 WhatsApp Delegates</button>
         <button className="secondary" onClick={exportCSV}>📥 Export CSV</button>
         <button className="secondary" onClick={()=>setImportModal(true)}>📂 Import Excel / CSV</button>
-        <button onClick={()=>setEdit({})}>+ Add Participant</button>
+        <button className="primary" onClick={()=>setEdit({})}>+ Add Participant</button>
+      </div>
+    </div>
+
+    {/* Metric Overview Cards */}
+    <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:'12px', marginBottom:'16px'}}>
+      <div style={{background:'#fff', padding:'14px 16px', borderRadius:'12px', border:'1px solid #e2e8f0', boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
+        <small style={{color:'#64748b', fontWeight:700, fontSize:'11.5px', textTransform:'uppercase', letterSpacing:'0.5px'}}>Total Registered</small>
+        <div style={{fontSize:'22px', fontWeight:800, color:'#8C1119', marginTop:'2px'}}>{d.length}</div>
+        <small style={{color:'#059669', fontSize:'11.5px', fontWeight:600}}>All categories</small>
+      </div>
+      <div style={{background:'#fff', padding:'14px 16px', borderRadius:'12px', border:'1px solid #e2e8f0', boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
+        <small style={{color:'#64748b', fontWeight:700, fontSize:'11.5px', textTransform:'uppercase', letterSpacing:'0.5px'}}>🎁 Conference Kits</small>
+        <div style={{fontSize:'22px', fontWeight:800, color:'#0284c7', marginTop:'2px'}}>{kitsCount} <span style={{fontSize:'13px', color:'#64748b', fontWeight:500}}>/ {d.length}</span></div>
+        <small style={{color:'#0284c7', fontSize:'11.5px', fontWeight:600}}>{d.length ? Math.round((kitsCount/d.length)*100) : 0}% Distributed</small>
+      </div>
+      <div style={{background:'#fff', padding:'14px 16px', borderRadius:'12px', border:'1px solid #e2e8f0', boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
+        <small style={{color:'#64748b', fontWeight:700, fontSize:'11.5px', textTransform:'uppercase', letterSpacing:'0.5px'}}>📜 Certificates</small>
+        <div style={{fontSize:'22px', fontWeight:800, color:'#7c3aed', marginTop:'2px'}}>{certsCount} <span style={{fontSize:'13px', color:'#64748b', fontWeight:500}}>/ {d.length}</span></div>
+        <small style={{color:'#7c3aed', fontSize:'11.5px', fontWeight:600}}>{d.length ? Math.round((certsCount/d.length)*100) : 0}% Issued</small>
+      </div>
+      <div style={{background:'#fff', padding:'14px 16px', borderRadius:'12px', border:'1px solid #e2e8f0', boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
+        <small style={{color:'#64748b', fontWeight:700, fontSize:'11.5px', textTransform:'uppercase', letterSpacing:'0.5px'}}>🏨 Accommodation</small>
+        <div style={{fontSize:'22px', fontWeight:800, color:'#d97706', marginTop:'2px'}}>{hotelCount}</div>
+        <small style={{color:'#d97706', fontSize:'11.5px', fontWeight:600}}>Rooms allocated</small>
+      </div>
+      <div style={{background:'#fff', padding:'14px 16px', borderRadius:'12px', border:'1px solid #e2e8f0', boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
+        <small style={{color:'#64748b', fontWeight:700, fontSize:'11.5px', textTransform:'uppercase', letterSpacing:'0.5px'}}>🍽️ Food Preference</small>
+        <div style={{fontSize:'16px', fontWeight:800, color:'#1e293b', marginTop:'4px'}}>🥦 {vegCount} &nbsp;|&nbsp; 🍗 {nonVegCount}</div>
+        <small style={{color:'#64748b', fontSize:'11.5px'}}>Veg / Non-Veg split</small>
       </div>
     </div>
     
-    <div className="toolbar" style={{display:'flex',gap:'8px',flexWrap:'wrap',alignItems:'center',background:'#f8fafc',padding:'12px',borderRadius:'10px',border:'1px solid #e2e8f0'}}>
-      <div className="search" style={{flex:1,minWidth:'220px'}}><Search size={18}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search name, email, phone, reg no, hotel, college..."/></div>
+    {/* Advanced Multi-Filter Toolbar */}
+    <div className="toolbar" style={{display:'flex',gap:'8px',flexWrap:'wrap',alignItems:'center',background:'#f8fafc',padding:'14px',borderRadius:'12px',border:'1px solid #e2e8f0',marginBottom:'16px'}}>
+      <div className="search" style={{flex:1,minWidth:'220px'}}><Search size={18}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search name, email, phone, reg no, college, hotel..."/></div>
       
       <div style={{display:'flex',gap:'4px',alignItems:'center'}}>
-        <small style={{fontWeight:600,color:'#64748B'}}>Category:</small>
+        <small style={{fontWeight:700,color:'#475569'}}>Category:</small>
         <select value={catFilter} onChange={e=>setCatFilter(e.target.value)} style={{padding:'6px 8px',borderRadius:'6px',border:'1px solid #cbd5e1',fontSize:'12.5px'}}>
           {categories.map(c=><option key={c} value={c}>{c}</option>)}
         </select>
       </div>
 
       <div style={{display:'flex',gap:'4px',alignItems:'center'}}>
-        <small style={{fontWeight:600,color:'#64748B'}}>Status:</small>
-        <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} style={{padding:'6px 8px',borderRadius:'6px',border:'1px solid #cbd5e1',fontSize:'12.5px'}}>
-          {statuses.map(s=><option key={s} value={s}>{s}</option>)}
+        <small style={{fontWeight:700,color:'#475569'}}>Kit:</small>
+        <select value={kitFilter} onChange={e=>setKitFilter(e.target.value)} style={{padding:'6px 8px',borderRadius:'6px',border:'1px solid #cbd5e1',fontSize:'12.5px',color:kitFilter==='KIT_ISSUED'?'#0284c7':kitFilter==='KIT_PENDING'?'#d97706':'#333'}}>
+          <option value="ALL">All Kit Status</option>
+          <option value="KIT_ISSUED">✅ Kit Issued</option>
+          <option value="KIT_PENDING">⏳ Kit Pending</option>
         </select>
       </div>
 
       <div style={{display:'flex',gap:'4px',alignItems:'center'}}>
-        <small style={{fontWeight:600,color:'#64748B'}}>Hotel:</small>
+        <small style={{fontWeight:700,color:'#475569'}}>Cert:</small>
+        <select value={certFilter} onChange={e=>setCertFilter(e.target.value)} style={{padding:'6px 8px',borderRadius:'6px',border:'1px solid #cbd5e1',fontSize:'12.5px',color:certFilter==='CERT_ISSUED'?'#7c3aed':certFilter==='CERT_PENDING'?'#d97706':'#333'}}>
+          <option value="ALL">All Cert Status</option>
+          <option value="CERT_ISSUED">📜 Cert Issued</option>
+          <option value="CERT_PENDING">⏳ Cert Pending</option>
+        </select>
+      </div>
+
+      <div style={{display:'flex',gap:'4px',alignItems:'center'}}>
+        <small style={{fontWeight:700,color:'#475569'}}>Food:</small>
+        <select value={foodFilter} onChange={e=>setFoodFilter(e.target.value)} style={{padding:'6px 8px',borderRadius:'6px',border:'1px solid #cbd5e1',fontSize:'12.5px'}}>
+          <option value="ALL">All Food</option>
+          <option value="VEG">🥦 Veg</option>
+          <option value="NON_VEG">🍗 Non-Veg</option>
+          <option value="JAIN">🍃 Jain</option>
+        </select>
+      </div>
+
+      <div style={{display:'flex',gap:'4px',alignItems:'center'}}>
+        <small style={{fontWeight:700,color:'#475569'}}>Hotel:</small>
         <select value={hotelFilter} onChange={e=>setHotelFilter(e.target.value)} style={{padding:'6px 8px',borderRadius:'6px',border:'1px solid #cbd5e1',fontSize:'12.5px'}}>
           {hotels.map(h=><option key={h} value={h}>{h==='NO_HOTEL'?'Unassigned Hotel':h}</option>)}
         </select>
       </div>
 
       <div style={{display:'flex',gap:'4px',alignItems:'center'}}>
-        <small style={{fontWeight:600,color:'#64748B'}}>Payment:</small>
-        <select value={payFilter} onChange={e=>setPayFilter(e.target.value)} style={{padding:'6px 8px',borderRadius:'6px',border:'1px solid #cbd5e1',fontSize:'12.5px'}}>
-          {payStatuses.map(p=><option key={p} value={p}>{p}</option>)}
-        </select>
-      </div>
-
-      <div style={{display:'flex',gap:'4px',alignItems:'center'}}>
-        <small style={{fontWeight:600,color:'#64748B'}}>App:</small>
-        <select value={appFilter} onChange={e=>setAppFilter(e.target.value)} style={{padding:'6px 8px',borderRadius:'6px',border:'1px solid #cbd5e1',fontSize:'12.5px',color:appFilter==='NEVER_OPENED'?'#dc2626':appFilter==='LOGGED_IN'?'#16a34a':'#333'}}>
-          <option value="ALL">All App Status</option>
-          <option value="NEVER_OPENED">🔴 Never Opened</option>
-          <option value="LOGGED_IN">🟢 Logged In</option>
+        <small style={{fontWeight:700,color:'#475569'}}>Status:</small>
+        <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} style={{padding:'6px 8px',borderRadius:'6px',border:'1px solid #cbd5e1',fontSize:'12.5px'}}>
+          {statuses.map(s=><option key={s} value={s}>{s}</option>)}
         </select>
       </div>
 
@@ -670,13 +737,22 @@ function Participants({tab, notify, selectedConferenceId}){
     <div className="tablewrap">
       <table>
         <thead>
-          <tr><th>Reg No & Pass</th><th>Participant Details</th><th>University & Role</th><th>Category</th><th>Status & App Activity</th><th>Accommodation & Travel</th><th>Liaison</th><th>WhatsApp & Actions</th></tr>
+          <tr>
+            <th>Reg No & Pass</th>
+            <th>Participant Details</th>
+            <th>University & Role</th>
+            <th>Category & Food</th>
+            <th>Kit & Certificate</th>
+            <th>Status & Accommodation</th>
+            <th>Liaison</th>
+            <th>Actions</th>
+          </tr>
         </thead>
         <tbody>
           {filtered.map(x=><tr key={x.id}>
             <td>
               <strong>{x.registration_no||'-'}</strong><br/>
-              <button className="pill small" style={{cursor:'pointer',marginTop:'4px',background:'#8C1119',color:'#fff'}} onClick={()=>setQrModal(x)}>View QR ID</button>
+              <button className="pill small" style={{cursor:'pointer',marginTop:'4px',background:'#8C1119',color:'#fff',border:0}} onClick={()=>setQrModal(x)}>📱 View QR ID</button>
             </td>
             <td>
               <b>{x.name}</b><br/>
@@ -685,29 +761,43 @@ function Participants({tab, notify, selectedConferenceId}){
             </td>
             <td>
               {x.university||'-'}<br/>
-              <small>{x.designation||'-'}</small>
+              <small style={{color:'#64748b'}}>{x.designation||'-'}</small>
+              {x.blood_group && <small style={{display:'block',color:'#dc2626',fontWeight:700}}>🩸 {x.blood_group}</small>}
             </td>
-            <td><span className="pill">{x.category||'Delegate'}</span></td>
+            <td>
+              <span className="pill">{x.category||'Delegate'}</span><br/>
+              <span className="pill small" style={{marginTop:'4px',background:(x.food_preference==='NON_VEG'?'#fef2f2':'#ecfdf5'),color:(x.food_preference==='NON_VEG'?'#991b1b':'#065f46'),border:(x.food_preference==='NON_VEG'?'1px solid #fecaca':'1px solid #a7f3d0')}}>
+                {x.food_preference === 'NON_VEG' ? '🍗 Non-Veg' : x.food_preference === 'JAIN' ? '🍃 Jain' : '🥦 Veg'}
+              </span>
+            </td>
+            <td>
+              <div style={{display:'flex',flexDirection:'column',gap:'4px'}}>
+                <button
+                  onClick={()=>toggleKit(x.id)}
+                  style={{cursor:'pointer',padding:'3px 8px',borderRadius:'12px',fontSize:'11.5px',fontWeight:700,border:x.kit_issued?'1px solid #38bdf8':'1px solid #cbd5e1',background:x.kit_issued?'#f0f9ff':'#f8fafc',color:x.kit_issued?'#0369a1':'#64748b',textAlign:'left'}}
+                  title="Click to toggle Kit status"
+                >
+                  {x.kit_issued ? '✅ Kit Issued' : '⏳ Kit Pending'}
+                </button>
+                <button
+                  onClick={()=>toggleCert(x.id)}
+                  style={{cursor:'pointer',padding:'3px 8px',borderRadius:'12px',fontSize:'11.5px',fontWeight:700,border:(x.certificate_issued||x.has_certificate>0)?'1px solid #c084fc':'1px solid #cbd5e1',background:(x.certificate_issued||x.has_certificate>0)?'#faf5ff':'#f8fafc',color:(x.certificate_issued||x.has_certificate>0)?'#7e22ce':'#64748b',textAlign:'left'}}
+                  title="Click to toggle Certificate status"
+                >
+                  {(x.certificate_issued || x.has_certificate > 0) ? '📜 Cert Issued' : '⏳ Cert Pending'}
+                </button>
+              </div>
+            </td>
             <td>
               <span className={`pill ${x.status}`}>{x.status}</span><br/>
-              {x.last_login_at ? (
-                <small style={{color:'#16a34a',fontWeight:700,display:'block',marginTop:'3px'}}>🟢 App Active</small>
-              ) : (
-                <small style={{color:'#dc2626',fontWeight:700,display:'block',marginTop:'3px'}}>🔴 Never Opened</small>
-              )}
-              <small style={{color:x.payment_status==='PAID'?'green':'orange',fontWeight:600}}>{x.payment_status}</small>
-            </td>
-            <td>
               {x.hotel_name ? (
-                <div style={{marginBottom:'4px'}}>
+                <div style={{marginTop:'4px'}}>
                   <small style={{color:'#8C1119',fontWeight:700}}>🏨 {x.hotel_name}</small><br/>
-                  <small><b>Room:</b> {x.room_number || 'TBD'} ({x.room_type || 'Standard'})</small>
+                  <small>Room: {x.room_number || 'TBD'}</small>
                 </div>
               ) : (
-                <small style={{color:'#94a3b8',display:'block',marginBottom:'4px'}}>No hotel assigned</small>
+                <small style={{color:'#94a3b8',display:'block',marginTop:'4px'}}>No hotel assigned</small>
               )}
-              <small><b>Travel:</b> {x.mode_of_travel||'Not specified'}</small><br/>
-              <small><b>Arrival:</b> {x.arrival_date?String(x.arrival_date).slice(0,10):'-'} {x.arrival_time||''}</small>
             </td>
             <td>{x.liaison_name?<><small><b>{x.liaison_name}</b></small><br/><small>{x.liaison_phone}</small></>:'-'}</td>
             <td>
@@ -730,6 +820,7 @@ function Participants({tab, notify, selectedConferenceId}){
     {edit && <ParticipantModal value={edit} liaisons={liaisons} onSave={save} onClose={()=>setEdit(null)} notify={notify}/>}
     {importModal && <BulkImportModal conferenceId={selectedConferenceId || 1} onClose={()=>setImportModal(false)} onImportSuccess={()=>{setImportModal(false);load();notify('Participants imported successfully!')}}/>}
     {whatsappModal && <WhatsAppBroadcasterModal participants={d} onClose={()=>setWhatsappModal(false)} notify={notify}/>}
+    {qrModal && <QrModal value={qrModal} onClose={()=>setQrModal(null)}/>}
   </div>
 }
 
@@ -1170,10 +1261,13 @@ function ParticipantModal({value, liaisons=[], onSave, onClose, notify}){
         </div>
 
         <div className="form-section">
-          <h4>Registration & Category</h4>
+          <h4>Registration, Food & Conference Kit</h4>
           <div className="formgrid">
             <Field label="Registration No" value={v.registration_no} onChange={x=>set('registration_no',x)}/>
-            <SelectField label="Category" value={v.category} onChange={x=>set('category',x)} options={['Delegate','Speaker','VC','VIP','Faculty','Student','Volunteer']}/>
+            <SelectField label="Category" value={v.category} onChange={x=>set('category',x)} options={['Delegate','Speaker','VC','VIP','Faculty','Student','Volunteer','Organiser']}/>
+            <SelectField label="Food Preference" value={v.food_preference||'VEG'} onChange={x=>set('food_preference',x)} options={[{value:'VEG',label:'🥦 Vegetarian'},{value:'NON_VEG',label:'🍗 Non-Vegetarian'},{value:'JAIN',label:'🍃 Jain'}]}/>
+            <SelectField label="Conference Kit Status" value={v.kit_issued ? '1' : '0'} onChange={x=>set('kit_issued', x==='1'?1:0)} options={[{value:'1',label:'✅ Kit Distributed / Issued'},{value:'0',label:'⏳ Kit Pending'}]}/>
+            <SelectField label="Certificate Status" value={v.certificate_issued ? '1' : '0'} onChange={x=>set('certificate_issued', x==='1'?1:0)} options={[{value:'1',label:'📜 Certificate Issued'},{value:'0',label:'⏳ Certificate Pending'}]}/>
             <SelectField label="Status" value={v.status} onChange={x=>set('status',x)} options={['PENDING','APPROVED','CHECKED_IN','CANCELLED']}/>
             <SelectField label="Payment Status" value={v.payment_status} onChange={x=>set('payment_status',x)} options={['PENDING','PAID','REFUNDED']}/>
             <Field label="Amount Paid (₹)" value={v.amount} onChange={x=>set('amount',x)}/>
@@ -1784,132 +1878,316 @@ function Placeholder({title}){
   </div>;
 }
 
-function Attendance({notify}){
+function Attendance({notify, selectedConferenceId}){
+  const[subTab,setSubTab]=useState('scanner');
   const[scans,setScans]=useState([]),[sessions,setSessions]=useState([]),[meals,setMeals]=useState([]),[busy,setBusy]=useState(false);
   const[mode,setMode]=useState('CHECKIN'),[sessionId,setSessionId]=useState(''),[mealId,setMealId]=useState(''),[qr,setQr]=useState('');
   const[projectSession,setProjectSession]=useState(null);
+  const[attReport,setAttReport]=useState(null);
+  const[selectedSessionFilter,setSelectedSessionFilter]=useState('ALL');
+  const[attCategoryFilter,setAttCategoryFilter]=useState('ALL');
+  const[attSearchQuery,setAttSearchQuery]=useState('');
 
   const load=async()=>{
     setBusy(true);
+    const confId = selectedConferenceId || 1;
     try{
-      const[s,se,me]=await Promise.all([
+      const[s,se,me,rep]=await Promise.all([
         req('/admin/attendance/live').catch(()=>[]),
-        req('/admin/sessions?conferenceId=1').catch(()=>[]),
-        req('/admin/meals?conferenceId=1').catch(()=>[])
+        req('/admin/sessions?conferenceId='+confId).catch(()=>[]),
+        req('/admin/meals?conferenceId='+confId).catch(()=>[]),
+        req(`/admin/attendance/report?conferenceId=${confId}${selectedSessionFilter!=='ALL'?`&sessionId=${selectedSessionFilter}`:''}`).catch(()=>null)
       ]);
-      setScans(s); setSessions(se); setMeals(me);
+      setScans(s); setSessions(se); setMeals(me); setAttReport(rep);
     }finally{setBusy(false)}
   };
-  useEffect(()=>{load()},[]);
+  useEffect(()=>{load()},[selectedConferenceId, selectedSessionFilter]);
 
   const handleScan=async(e)=>{
     e.preventDefault();
-    if(!qr)return;
+    if(!qr.trim())return;
     try{
-      await req('/attendance/scan',{method:'POST',body:JSON.stringify({qrToken:qr, scanType:mode, sessionId:sessionId?Number(sessionId):null, mealId:mealId?Number(mealId):null})});
+      await req('/attendance/scan',{method:'POST',body:JSON.stringify({qrToken:qr.trim(), scanType:mode, sessionId:sessionId?Number(sessionId):null, mealId:mealId?Number(mealId):null})});
       notify('Attendance recorded successfully');
       setQr('');
       load();
     }catch(err){alert(err.message)}
   };
 
+  const exportAttendanceXLSX = () => {
+    const list = attReport?.scans || scans;
+    if(!list.length){alert('No attendance scan records to export'); return;}
+    const data = list.map((x, idx) => ({
+      'Sr No': idx + 1,
+      'Participant Name': x.participant_name || '',
+      'Registration No': x.registration_no || '',
+      'Category': x.category || 'Delegate',
+      'Scan Type': x.scan_type || 'CHECKIN',
+      'Session / Activity': x.session_title || (x.scan_type === 'CHECKIN' ? 'Main Check-in' : 'General'),
+      'Hall / Location': x.hall_name || '-',
+      'University / Institution': x.university || '',
+      'Scanned At': new Date(x.scanned_at).toLocaleString(),
+      'Scanned By': x.scanned_by_name || 'Admin Desk'
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Attendance Reports');
+    XLSX.writeFile(wb, `attendance_report_${new Date().toISOString().slice(0,10)}.xlsx`);
+    notify('Exported attendance report to Excel');
+  };
+
+  const exportAttendanceCSV = () => {
+    const list = attReport?.scans || scans;
+    if(!list.length){alert('No attendance scan records to export'); return;}
+    const headers = ['Sr No', 'Participant Name', 'Registration No', 'Category', 'Scan Type', 'Session / Activity', 'Hall', 'University', 'Scanned At', 'Scanned By'];
+    const rows = list.map((x, idx) => [
+      idx + 1,
+      `"${x.participant_name||''}"`,
+      `"${x.registration_no||''}"`,
+      `"${x.category||'Delegate'}"`,
+      `"${x.scan_type||'CHECKIN'}"`,
+      `"${x.session_title || (x.scan_type === 'CHECKIN' ? 'Main Check-in' : 'General')}"`,
+      `"${x.hall_name||'-'}"`,
+      `"${x.university||''}"`,
+      `"${new Date(x.scanned_at).toLocaleString()}"`,
+      `"${x.scanned_by_name||'Admin Desk'}"`
+    ]);
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const link = document.createElement('a');
+    link.setAttribute('href', encodeURI(csvContent));
+    link.setAttribute('download', `attendance_report_${new Date().toISOString().slice(0,10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    notify('Exported attendance report to CSV');
+  };
+
+  const filteredScans = (attReport?.scans || scans).filter(x => {
+    const matchesQ = `${x.participant_name} ${x.registration_no} ${x.session_title||''} ${x.university||''}`.toLowerCase().includes(attSearchQuery.toLowerCase());
+    const matchesCat = attCategoryFilter === 'ALL' || x.category === attCategoryFilter;
+    return matchesQ && matchesCat;
+  });
+
+  const categories = ['ALL', ...Array.from(new Set((attReport?.scans || scans).map(x => x.category).filter(Boolean)))];
+
   return <div className="panel">
     <div className="pagehead">
-      <div><h3>Live Attendance & QR Scanner</h3><p>Monitor real-time attendee check-ins, generate session QR codes, and view live scans.</p></div>
-      {sessions.length > 0 && (
-        <div className="actions">
+      <div>
+        <h3>Live Attendance & QR Check-in</h3>
+        <p>Monitor real-time attendee check-ins, generate session QR codes, and view detailed attendance reports.</p>
+      </div>
+      <div className="actions" style={{display:'flex', gap:'12px', alignItems:'center'}}>
+        <div style={{background:'var(--bg-app)', padding:'4px', borderRadius:'var(--radius-sm)', display:'flex', gap:'4px', border:'1px solid var(--border)'}}>
+          <button style={{padding:'6px 14px', fontSize:'13px', background:subTab==='scanner'?'var(--surface)':'transparent', color:subTab==='scanner'?'var(--primary)':'var(--text-muted)', border:0, boxShadow:subTab==='scanner'?'var(--shadow-sm)':'none', fontWeight:600}} onClick={()=>setSubTab('scanner')}>⚡ Scanner & Simulator</button>
+          <button style={{padding:'6px 14px', fontSize:'13px', background:subTab==='reports'?'var(--surface)':'transparent', color:subTab==='reports'?'var(--primary)':'var(--text-muted)', border:0, boxShadow:subTab==='reports'?'var(--shadow-sm)':'none', fontWeight:600}} onClick={()=>setSubTab('reports')}>📊 Attendance Reports</button>
+        </div>
+        {subTab === 'reports' && (
+          <div style={{display:'flex', gap:'8px'}}>
+            <button className="primary" onClick={exportAttendanceXLSX} style={{display:'flex', alignItems:'center', gap:'6px'}}>📥 Export Excel</button>
+            <button className="secondary" onClick={exportAttendanceCSV}>CSV</button>
+            <button className="secondary" onClick={()=>window.print()} style={{display:'flex', alignItems:'center', gap:'6px'}}><Printer size={15}/> Print</button>
+          </div>
+        )}
+        {sessions.length > 0 && subTab === 'scanner' && (
           <button style={{background:'#8C1119',color:'#fff',display:'flex',alignItems:'center',gap:'6px'}} onClick={()=>setProjectSession(sessions[0])}>
             <QrCode size={16}/> Project Session Attendance QR
-          </button>
-        </div>
-      )}
-    </div>
-
-    {/* Quick Session QR Generator Banner */}
-    <div style={{background:'linear-gradient(135deg, #FFF8F8 0%, #FFFDF8 100%)',border:'1.5px solid #C8A45A',borderRadius:'16px',padding:'18px 22px',marginBottom:'20px',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:'14px'}}>
-      <div style={{display:'flex',alignItems:'center',gap:'14px'}}>
-        <div style={{background:'#8C1119',color:'#C8A45A',padding:'12px',borderRadius:'14px',display:'flex'}}>
-          <Tv size={26}/>
-        </div>
-        <div>
-          <h4 style={{margin:0,fontSize:'16px',color:'#8C1119',fontWeight:'900'}}>Projector Mode: Session QR Code Display</h4>
-          <p style={{margin:'3px 0 0',fontSize:'13px',color:'#64748B'}}>Select any session below to project its official attendance QR code on the big screen.</p>
-        </div>
-      </div>
-      <div style={{display:'flex',gap:'10px',alignItems:'center'}}>
-        <select
-          onChange={(e)=>{
-            const found = sessions.find(s => s.id === Number(e.target.value));
-            if(found) setProjectSession(found);
-          }}
-          style={{padding:'8px 14px',fontSize:'13px',borderRadius:'8px',border:'1px solid #cbd5e1',fontWeight:'600'}}
-          defaultValue=""
-        >
-          <option value="" disabled>-- Select Session to Project --</option>
-          {sessions.map(s => <option key={s.id} value={s.id}>{s.title} ({s.hall_name||'Hall A'})</option>)}
-        </select>
-        {sessions.length > 0 && (
-          <button className="primary" onClick={()=>setProjectSession(sessions[0])} style={{display:'flex',alignItems:'center',gap:'6px'}}>
-            <Maximize2 size={14}/> Launch Projector
           </button>
         )}
       </div>
     </div>
 
-    <div className="split">
-      <div className="panel scanner-panel">
-        <h4>QR Scanner Simulation</h4>
-        <form onSubmit={handleScan} className="formgrid">
-          <SelectField label="Scan Mode" value={mode} onChange={setMode} options={['CHECKIN','SESSION','MEAL','DEPARTURE']}/>
-          {mode==='SESSION' && <SelectField label="Select Session" value={sessionId} onChange={setSessionId} options={[{value:'',label:'-- Select Session --'},...sessions.map(s=>({value:s.id,label:`${s.title} (${s.hall_name||'Main Hall'}, ${toInputDate(s.session_date)})`}))]}/>}
-          {mode==='MEAL' && <SelectField label="Select Meal" value={mealId} onChange={setMealId} options={[{value:'',label:'-- Select Meal --'},...meals.map(m=>({value:m.id,label:`${m.meal_type} (${toInputDate(m.meal_date)}, ${m.location||'Dining Hall'})`}))]}/>}
-          <Field label="QR Token / Registration No" value={qr} onChange={setQr}/>
-          <button className="primary wide" type="submit">Submit Scan</button>
-        </form>
-      </div>
-      <div className="panel scans-panel">
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}}>
-          <h4 style={{margin:0}}>Recent Live Scans ({scans.length})</h4>
-          <button className="icon" onClick={load} title="Refresh Scans"><RefreshCw size={15}/></button>
-        </div>
-        <div className="scan-list">
-          {scans.map(x=><div className="scan-item" key={x.id}>
-            <div className="scan-time">{new Date(x.scanned_at).toLocaleTimeString()}</div>
-            <div className="scan-info">
-              <b>{x.participant_name}</b>
-              <p>{x.scan_type} {x.session_title ? ` - ${x.session_title}` : ''}</p>
+    {subTab === 'scanner' ? (
+      <>
+        {/* Quick Session QR Generator Banner */}
+        <div style={{background:'linear-gradient(135deg, #FFF8F8 0%, #FFFDF8 100%)',border:'1.5px solid #C8A45A',borderRadius:'16px',padding:'18px 22px',marginBottom:'20px',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:'14px'}}>
+          <div style={{display:'flex',alignItems:'center',gap:'14px'}}>
+            <div style={{background:'#8C1119',color:'#C8A45A',padding:'12px',borderRadius:'14px',display:'flex'}}>
+              <Tv size={26}/>
             </div>
-          </div>)}
-          {!scans.length && <p style={{color:'#888',padding:'20px'}}>No live scans yet. Try the simulator on the left or scan via mobile app.</p>}
+            <div>
+              <h4 style={{margin:0,fontSize:'16px',color:'#8C1119',fontWeight:'900'}}>Projector Mode: Session QR Code Display</h4>
+              <p style={{margin:'3px 0 0',fontSize:'13px',color:'#64748B'}}>Select any session below to project its official attendance QR code on the big screen.</p>
+            </div>
+          </div>
+          <div style={{display:'flex',gap:'10px',alignItems:'center'}}>
+            <select
+              onChange={(e)=>{
+                const found = sessions.find(s => s.id === Number(e.target.value));
+                if(found) setProjectSession(found);
+              }}
+              style={{padding:'8px 14px',fontSize:'13px',borderRadius:'8px',border:'1px solid #cbd5e1',fontWeight:'600'}}
+              defaultValue=""
+            >
+              <option value="" disabled>-- Select Session to Project --</option>
+              {sessions.map(s => <option key={s.id} value={s.id}>{s.title} ({s.hall_name||'Hall A'})</option>)}
+            </select>
+            {sessions.length > 0 && (
+              <button className="primary" onClick={()=>setProjectSession(sessions[0])} style={{display:'flex',alignItems:'center',gap:'6px'}}>
+                <Maximize2 size={14}/> Launch Projector
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="split">
+          <div className="panel scanner-panel">
+            <h4>QR Scanner Simulation</h4>
+            <form onSubmit={handleScan} className="formgrid">
+              <SelectField label="Scan Mode" value={mode} onChange={setMode} options={['CHECKIN','SESSION','MEAL','DEPARTURE']}/>
+              {mode==='SESSION' && <SelectField label="Select Session" value={sessionId} onChange={setSessionId} options={[{value:'',label:'-- Select Session --'},...sessions.map(s=>({value:s.id,label:`${s.title} (${s.hall_name||'Main Hall'}, ${toInputDate(s.session_date)})`}))]}/>}
+              {mode==='MEAL' && <SelectField label="Select Meal" value={mealId} onChange={setMealId} options={[{value:'',label:'-- Select Meal --'},...meals.map(m=>({value:m.id,label:`${m.meal_type} (${toInputDate(m.meal_date)}, ${m.location||'Dining Hall'})`}))]}/>}
+              <Field label="QR Token / Registration No" value={qr} onChange={setQr}/>
+              <button className="primary wide" type="submit">Submit Scan</button>
+            </form>
+          </div>
+          <div className="panel scans-panel">
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}}>
+              <h4 style={{margin:0}}>Recent Live Scans ({scans.length})</h4>
+              <button className="icon" onClick={load} title="Refresh Scans"><RefreshCw size={15}/></button>
+            </div>
+            <div className="scan-list">
+              {scans.map(x=><div className="scan-item" key={x.id}>
+                <div className="scan-time">{new Date(x.scanned_at).toLocaleTimeString()}</div>
+                <div className="scan-info">
+                  <b>{x.participant_name}</b>
+                  <p>{x.scan_type} {x.session_title ? ` - ${x.session_title}` : ''} {x.registration_no ? `(${x.registration_no})` : ''}</p>
+                </div>
+              </div>)}
+              {!scans.length && <p style={{color:'#888',padding:'20px'}}>No live scans yet. Try the simulator on the left or scan via mobile app.</p>}
+            </div>
+          </div>
+        </div>
+      </>
+    ) : (
+      <div>
+        {/* Attendance Reports Metric Overview */}
+        <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))', gap:'14px', marginBottom:'20px'}}>
+          <div className="stat" style={{background:'#fff', border:'1px solid #e2e8f0', borderRadius:'12px', padding:'16px'}}>
+            <Users color="#8C1119" size={20}/>
+            <span style={{fontSize:'13px', color:'#64748b'}}>Total Registered</span>
+            <strong style={{fontSize:'22px', color:'#1e293b'}}>{attReport?.totalRegistered ?? '—'}</strong>
+          </div>
+          <div className="stat" style={{background:'#fff', border:'1px solid #e2e8f0', borderRadius:'12px', padding:'16px'}}>
+            <CheckCircle color="#10b981" size={20}/>
+            <span style={{fontSize:'13px', color:'#64748b'}}>Checked In</span>
+            <strong style={{fontSize:'22px', color:'#047857'}}>{attReport?.totalCheckedIn ?? '—'}</strong>
+          </div>
+          <div className="stat" style={{background:'#fff', border:'1px solid #e2e8f0', borderRadius:'12px', padding:'16px'}}>
+            <Users color="#f59e0b" size={20}/>
+            <span style={{fontSize:'13px', color:'#64748b'}}>Absent / Pending</span>
+            <strong style={{fontSize:'22px', color:'#b45309'}}>{attReport?.absentCount ?? '—'}</strong>
+          </div>
+          <div className="stat" style={{background:'#fff', border:'1px solid #e2e8f0', borderRadius:'12px', padding:'16px'}}>
+            <FileCheck color="#2E6F95" size={20}/>
+            <span style={{fontSize:'13px', color:'#64748b'}}>Check-in Rate</span>
+            <strong style={{fontSize:'22px', color:'#2E6F95'}}>{attReport?.attendanceRate ?? 0}%</strong>
+          </div>
+          <div className="stat" style={{background:'#fff', border:'1px solid #e2e8f0', borderRadius:'12px', padding:'16px'}}>
+            <QrCode color="#8C1119" size={20}/>
+            <span style={{fontSize:'13px', color:'#64748b'}}>Total Scans</span>
+            <strong style={{fontSize:'22px', color:'#8C1119'}}>{attReport?.totalScans ?? filteredScans.length}</strong>
+          </div>
+        </div>
+
+        {/* Filters Toolbar */}
+        <div className="toolbar" style={{display:'flex', gap:'12px', alignItems:'center', background:'#f8fafc', padding:'12px 16px', borderRadius:'10px', border:'1px solid #e2e8f0', marginBottom:'16px', flexWrap:'wrap'}}>
+          <div className="search" style={{flex:1, minWidth:'220px'}}>
+            <Search size={16}/>
+            <input value={attSearchQuery} onChange={e=>setAttSearchQuery(e.target.value)} placeholder="Filter by delegate name, reg no, session..."/>
+          </div>
+          <div style={{display:'flex', gap:'6px', alignItems:'center'}}>
+            <small style={{fontWeight:600, color:'#64748b'}}>Session:</small>
+            <select value={selectedSessionFilter} onChange={e=>setSelectedSessionFilter(e.target.value)} style={{padding:'7px 10px', borderRadius:'6px', border:'1px solid #cbd5e1', fontSize:'13px', fontWeight:600}}>
+              <option value="ALL">All Scans & Sessions</option>
+              <option value="CHECKIN_ONLY">Main Check-in Desk Only</option>
+              {sessions.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
+            </select>
+          </div>
+          <div style={{display:'flex', gap:'6px', alignItems:'center'}}>
+            <small style={{fontWeight:600, color:'#64748b'}}>Category:</small>
+            <select value={attCategoryFilter} onChange={e=>setAttCategoryFilter(e.target.value)} style={{padding:'7px 10px', borderRadius:'6px', border:'1px solid #cbd5e1', fontSize:'13px'}}>
+              {categories.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <button onClick={load} disabled={busy} style={{padding:'7px 14px', fontSize:'13px'}}>{busy?'...':'↻ Refresh'}</button>
+        </div>
+
+        {/* Detailed Attendance Table */}
+        <div className="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Participant & Reg No</th>
+                <th>Category</th>
+                <th>Scan Type & Activity</th>
+                <th>Hall / Venue</th>
+                <th>University / Hospital</th>
+                <th>Scanned Timestamp</th>
+                <th>Operator</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredScans.map(x => (
+                <tr key={x.id}>
+                  <td>
+                    <b>{x.participant_name}</b><br/>
+                    <small style={{color:'#64748b'}}>{x.registration_no || '—'}</small>
+                  </td>
+                  <td><span className="pill small">{x.category || 'Delegate'}</span></td>
+                  <td>
+                    <span className="pill" style={{
+                      background: x.scan_type==='CHECKIN'?'#ecfdf5':x.scan_type==='SESSION'?'#eff6ff':'#fff7ed',
+                      color: x.scan_type==='CHECKIN'?'#065f46':x.scan_type==='SESSION'?'#1e40af':'#9a3412',
+                      fontWeight:700
+                    }}>
+                      {x.scan_type}
+                    </span>
+                    {x.session_title && <div style={{fontSize:'12px', marginTop:'3px', color:'#334155'}}>{x.session_title}</div>}
+                  </td>
+                  <td>{x.hall_name || 'Main Hall'}</td>
+                  <td>{x.university || '—'}</td>
+                  <td><span style={{color:'#059669', fontWeight:700}}>{new Date(x.scanned_at).toLocaleString()}</span></td>
+                  <td>{x.scanned_by_name || 'Admin Desk'}</td>
+                </tr>
+              ))}
+              {!filteredScans.length && (
+                <tr><td colSpan="7" style={{textAlign:'center', padding:'30px', color:'#888'}}>No attendance scans found matching filter criteria.</td></tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
-    </div>
+    )}
 
     {projectSession && <SessionQrModal session={projectSession} onClose={()=>setProjectSession(null)}/>}
-  </div>
+  </div>;
 }
 
-function Meals({tab, notify}){
+function Meals({tab, notify, selectedConferenceId}){
   const[subTab,setSubTab]=useState('schedule'),[d,setD]=useState([]),[busy,setBusy]=useState(false),[showAdd,setShowAdd]=useState(false);
   const[selectedMeal,setSelectedMeal]=useState(''),[qrInput,setQrInput]=useState(''),[scanResult,setScanResult]=useState(null),[scans,setScans]=useState([]),[scanning,setScanning]=useState(false);
-  const[mealReports,setMealReports]=useState([]),[activeReportMeal,setActiveReportMeal]=useState('ALL');
+  const[mealReport,setMealReport]=useState(null),[activeReportMeal,setActiveReportMeal]=useState('ALL');
+  const[mealCatFilter,setMealCatFilter]=useState('ALL'),[dietFilter,setDietFilter]=useState('ALL'),[mealSearchQ,setMealSearchQ]=useState('');
 
   const load=async()=>{
     setBusy(true);
+    const confId = selectedConferenceId || 1;
     try{
-      const[r, liveScans]=await Promise.all([
-        req('/admin/meals?conferenceId=1'),
-        req('/admin/meals/live').catch(()=>[])
+      const[r, liveScans, rep]=await Promise.all([
+        req('/admin/meals?conferenceId='+confId),
+        req('/admin/meals/live').catch(()=>[]),
+        req(`/admin/meals/report?conferenceId=${confId}${activeReportMeal!=='ALL'?`&mealId=${activeReportMeal}`:''}`).catch(()=>null)
       ]);
       setD(r);
       setScans(liveScans);
+      setMealReport(rep);
       if(r.length && !selectedMeal) setSelectedMeal(String(r[0].id));
     }finally{
       setBusy(false);
     }
   };
 
-  useEffect(()=>{load()},[]);
+  useEffect(()=>{load()},[selectedConferenceId, activeReportMeal]);
   useEffect(()=>{if(tab==='Schedule Meal')setShowAdd(true)},[tab]);
 
   const handleScanSubmit = async (e) => {
@@ -1941,14 +2219,39 @@ function Meals({tab, notify}){
     }
   };
 
+  const exportMealReportXLSX = () => {
+    const list = filteredReportScans;
+    if(!list.length){alert('No meal redemption records to export'); return;}
+    const data = list.map((x, idx) => ({
+      'Sr No': idx + 1,
+      'Delegate Name': x.participant_name || '',
+      'Registration No': x.registration_no || '',
+      'Category': x.category || 'Delegate',
+      'Food Preference': x.food_preference || 'VEG',
+      'University / Hospital': x.university || '',
+      'Meal Type': x.meal_type || '',
+      'Meal Date': x.meal_date || '',
+      'Location': x.location || '',
+      'Redeemed At': new Date(x.scanned_at).toLocaleString(),
+      'Scanned By': x.scanned_by_name || 'Admin Desk'
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Food Pass Reports');
+    XLSX.writeFile(wb, `food_pass_redemption_report_${new Date().toISOString().slice(0,10)}.xlsx`);
+    notify('Exported Food Pass report to Excel');
+  };
+
   const exportMealReportCSV = () => {
-    if(!scans.length){alert('No meal redemption records to export'); return;}
-    const headers = ['ID', 'Delegate Name', 'Registration No', 'Category', 'University', 'Meal Type', 'Meal Date', 'Location', 'Redeemed At', 'Scanned By'];
-    const rows = scans.map(x => [
-      x.id,
+    const list = filteredReportScans;
+    if(!list.length){alert('No meal redemption records to export'); return;}
+    const headers = ['Sr No', 'Delegate Name', 'Registration No', 'Category', 'Food Preference', 'University', 'Meal Type', 'Meal Date', 'Location', 'Redeemed At', 'Scanned By'];
+    const rows = list.map((x, idx) => [
+      idx + 1,
       `"${x.participant_name||''}"`,
       `"${x.registration_no||''}"`,
       `"${x.category||'Delegate'}"`,
+      `"${x.food_preference||'VEG'}"`,
       `"${x.university||''}"`,
       `"${x.meal_type||''}"`,
       `"${x.meal_date||''}"`,
@@ -1959,35 +2262,51 @@ function Meals({tab, notify}){
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const link = document.createElement('a');
     link.setAttribute('href', encodeURI(csvContent));
-    link.setAttribute('download', `meal_pass_redemption_report_${new Date().toISOString().slice(0,10)}.csv`);
+    link.setAttribute('download', `food_pass_redemption_report_${new Date().toISOString().slice(0,10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    notify('Exported Food Pass report to CSV');
   };
 
   const save=async(v)=>{
-    await req('/admin/meals',{method:'POST',body:JSON.stringify(v)});
+    await req('/admin/meals',{method:'POST',body:JSON.stringify({...v, conference_id: selectedConferenceId || 1})});
     notify('Meal scheduled');
     setShowAdd(false);
     load();
   };
 
+  const reportScansList = mealReport?.scans || scans;
+  const filteredReportScans = reportScansList.filter(x => {
+    const matchesQ = `${x.participant_name} ${x.registration_no} ${x.meal_type||''} ${x.university||''}`.toLowerCase().includes(mealSearchQ.toLowerCase());
+    const matchesCat = mealCatFilter === 'ALL' || x.category === mealCatFilter;
+    const matchesDiet = dietFilter === 'ALL' || (x.food_preference || 'VEG') === dietFilter;
+    return matchesQ && matchesCat && matchesDiet;
+  });
+
+  const categories = ['ALL', ...Array.from(new Set(reportScansList.map(x => x.category).filter(Boolean)))];
   const currentMealObj = d.find(m => String(m.id) === String(selectedMeal));
 
   return <div className="panel">
     <div className="pagehead">
       <div>
         <h3>Meals & Food Pass Management</h3>
-        <p>Manage catering timelines, scan delegate food passes with duplicate prevention, and view redemption analytics.</p>
+        <p>Manage catering timelines, scan delegate food passes with duplicate prevention, and view real-time redemption analytics.</p>
       </div>
       <div className="actions" style={{display:'flex', gap:'12px', alignItems:'center'}}>
         <div style={{background:'var(--bg-app)', padding:'4px', borderRadius:'var(--radius-sm)', display:'flex', gap:'4px', border:'1px solid var(--border)'}}>
           <button style={{padding:'6px 14px', fontSize:'13px', background:subTab==='schedule'?'var(--surface)':'transparent', color:subTab==='schedule'?'var(--primary)':'var(--text-muted)', border:0, boxShadow:subTab==='schedule'?'var(--shadow-sm)':'none', fontWeight:600}} onClick={()=>setSubTab('schedule')}>🍽️ Meal Schedule</button>
           <button style={{padding:'6px 14px', fontSize:'13px', background:subTab==='scanner'?'var(--surface)':'transparent', color:subTab==='scanner'?'var(--primary)':'var(--text-muted)', border:0, boxShadow:subTab==='scanner'?'var(--shadow-sm)':'none', fontWeight:600}} onClick={()=>setSubTab('scanner')}>📷 Food Pass Scanner</button>
-          <button style={{padding:'6px 14px', fontSize:'13px', background:subTab==='reports'?'var(--surface)':'transparent', color:subTab==='reports'?'var(--primary)':'var(--text-muted)', border:0, boxShadow:subTab==='reports'?'var(--shadow-sm)':'none', fontWeight:600}} onClick={()=>setSubTab('reports')}>📊 Redemption Reports</button>
+          <button style={{padding:'6px 14px', fontSize:'13px', background:subTab==='reports'?'var(--surface)':'transparent', color:subTab==='reports'?'var(--primary)':'var(--text-muted)', border:0, boxShadow:subTab==='reports'?'var(--shadow-sm)':'none', fontWeight:600}} onClick={()=>setSubTab('reports')}>📊 Food Pass Reports</button>
         </div>
         {subTab === 'schedule' && <button className="primary" onClick={()=>setShowAdd(true)}>+ Schedule Meal</button>}
-        {subTab === 'reports' && <button className="secondary" onClick={exportMealReportCSV}>📥 Export CSV</button>}
+        {subTab === 'reports' && (
+          <div style={{display:'flex', gap:'8px'}}>
+            <button className="primary" onClick={exportMealReportXLSX} style={{display:'flex', alignItems:'center', gap:'6px'}}>📥 Export Excel</button>
+            <button className="secondary" onClick={exportMealReportCSV}>CSV</button>
+            <button className="secondary" onClick={()=>window.print()} style={{display:'flex', alignItems:'center', gap:'6px'}}><Printer size={15}/> Print</button>
+          </div>
+        )}
       </div>
     </div>
 
@@ -2081,7 +2400,7 @@ function Meals({tab, notify}){
                   </h4>
                   {scanResult.participant && (
                     <p style={{margin:'4px 0 0', fontSize:'13px', color:'#334155'}}>
-                      <b>{scanResult.participant.name}</b> &bull; Reg: {scanResult.participant.registration_no} &bull; Category: <span className="pill small">{scanResult.participant.category||'Delegate'}</span>
+                      <b>{scanResult.participant.name}</b> &bull; Reg: {scanResult.participant.registration_no} &bull; Category: <span className="pill small">{scanResult.participant.category||'Delegate'}</span> &bull; Diet: <b>{scanResult.participant.food_preference || 'VEG'}</b>
                     </p>
                   )}
                 </div>
@@ -2117,44 +2436,123 @@ function Meals({tab, notify}){
 
     {subTab === 'reports' && (
       <div>
+        {/* Metric Summary Cards */}
+        <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:'14px', marginBottom:'20px'}}>
+          <div className="stat" style={{background:'#fff', border:'1px solid #e2e8f0', borderRadius:'12px', padding:'16px'}}>
+            <Users color="#8C1119" size={20}/>
+            <span style={{fontSize:'13px', color:'#64748b'}}>Total Eligible Delegates</span>
+            <strong style={{fontSize:'22px', color:'#1e293b'}}>{mealReport?.totalEligible ?? '—'}</strong>
+          </div>
+          <div className="stat" style={{background:'#fff', border:'1px solid #e2e8f0', borderRadius:'12px', padding:'16px'}}>
+            <CheckCircle color="#10b981" size={20}/>
+            <span style={{fontSize:'13px', color:'#64748b'}}>Passes Redeemed</span>
+            <strong style={{fontSize:'22px', color:'#047857'}}>{mealReport?.totalRedeemed ?? filteredReportScans.length}</strong>
+          </div>
+          <div className="stat" style={{background:'#fff', border:'1px solid #e2e8f0', borderRadius:'12px', padding:'16px'}}>
+            <Users color="#f59e0b" size={20}/>
+            <span style={{fontSize:'13px', color:'#64748b'}}>Remaining Passes</span>
+            <strong style={{fontSize:'22px', color:'#b45309'}}>{mealReport?.remainingCount ?? '—'}</strong>
+          </div>
+          <div className="stat" style={{background:'#fff', border:'1px solid #e2e8f0', borderRadius:'12px', padding:'16px'}}>
+            <FileCheck color="#2E6F95" size={20}/>
+            <span style={{fontSize:'13px', color:'#64748b'}}>Claim Rate</span>
+            <strong style={{fontSize:'22px', color:'#2E6F95'}}>{mealReport?.redemptionRate ?? 0}%</strong>
+          </div>
+          <div className="stat" style={{background:'#fff', border:'1px solid #e2e8f0', borderRadius:'12px', padding:'16px'}}>
+            <span style={{fontSize:'20px'}}>🥗</span>
+            <span style={{fontSize:'13px', color:'#64748b'}}>Veg vs Non-Veg</span>
+            <strong style={{fontSize:'16px', color:'#1e293b'}}>
+              <span style={{color:'#10b981'}}>{mealReport?.vegCount ?? 0} Veg</span> / <span style={{color:'#ef4444'}}>{mealReport?.nonVegCount ?? 0} Non-Veg</span>
+            </strong>
+          </div>
+        </div>
+
+        {/* Meal Breakdown Progress Cards */}
         <div style={{background:'#fff', padding:'18px', borderRadius:'12px', border:'1px solid #e2e8f0', marginBottom:'20px'}}>
-          <h4 style={{margin:'0 0 14px', fontSize:'16px', color:'#1e293b'}}>Meal Pass Redemption Summary</h4>
-          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(240px, 1fr))', gap:'16px'}}>
-            {d.map(m=><div key={m.id} style={{padding:'14px', background:'#f8fafc', borderRadius:'10px', border:'1px solid #e2e8f0'}}>
+          <h4 style={{margin:'0 0 14px', fontSize:'15px', color:'#1e293b'}}>Scheduled Meal Sessions Breakdown</h4>
+          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(220px, 1fr))', gap:'14px'}}>
+            {d.map(m=><div key={m.id} style={{padding:'12px 14px', background:'#f8fafc', borderRadius:'10px', border:'1px solid #e2e8f0'}}>
               <div style={{display:'flex', justifyContent:'space-between', marginBottom:'6px'}}>
-                <strong style={{color:'#8C1119', fontSize:'14px'}}>{m.meal_type}</strong>
+                <strong style={{color:'#8C1119', fontSize:'13.5px'}}>{m.meal_type}</strong>
                 <span style={{fontSize:'12px', color:'#64748b'}}>{toInputDate(m.meal_date)}</span>
               </div>
-              <div style={{display:'flex', justifyContent:'space-between', fontSize:'13px', margin:'8px 0'}}>
-                <span style={{color:'#64748b'}}>Total Redeemed:</span>
-                <strong style={{color:'#047857', fontSize:'14px'}}>{m.redeemed_count || 0} passes</strong>
+              <div style={{display:'flex', justifyContent:'space-between', fontSize:'12.5px', margin:'6px 0'}}>
+                <span style={{color:'#64748b'}}>Claimed:</span>
+                <strong style={{color:'#047857', fontSize:'13px'}}>{m.redeemed_count || 0} passes</strong>
               </div>
-              <div style={{background:'#e2e8f0', borderRadius:'6px', height:'8px', overflow:'hidden'}}>
-                <div style={{background:'#8C1119', height:'100%', width:`${Math.min(100, Math.round(((m.redeemed_count||0)/Math.max(1, d.length*20))*100))}%`}}/>
+              <div style={{background:'#e2e8f0', borderRadius:'6px', height:'6px', overflow:'hidden'}}>
+                <div style={{background:'#8C1119', height:'100%', width:`${Math.min(100, Math.round(((m.redeemed_count||0)/Math.max(1, mealReport?.totalEligible || 20))*100))}%`}}/>
               </div>
             </div>)}
           </div>
         </div>
 
+        {/* Filters Toolbar */}
+        <div className="toolbar" style={{display:'flex', gap:'12px', alignItems:'center', background:'#f8fafc', padding:'12px 16px', borderRadius:'10px', border:'1px solid #e2e8f0', marginBottom:'16px', flexWrap:'wrap'}}>
+          <div className="search" style={{flex:1, minWidth:'220px'}}>
+            <Search size={16}/>
+            <input value={mealSearchQ} onChange={e=>setMealSearchQ(e.target.value)} placeholder="Filter by delegate name, reg no, meal type..."/>
+          </div>
+          <div style={{display:'flex', gap:'6px', alignItems:'center'}}>
+            <small style={{fontWeight:600, color:'#64748b'}}>Meal:</small>
+            <select value={activeReportMeal} onChange={e=>setActiveReportMeal(e.target.value)} style={{padding:'7px 10px', borderRadius:'6px', border:'1px solid #cbd5e1', fontSize:'13px', fontWeight:600}}>
+              <option value="ALL">All Meal Sessions</option>
+              {d.map(m => <option key={m.id} value={m.id}>{m.meal_type} ({toInputDate(m.meal_date)})</option>)}
+            </select>
+          </div>
+          <div style={{display:'flex', gap:'6px', alignItems:'center'}}>
+            <small style={{fontWeight:600, color:'#64748b'}}>Category:</small>
+            <select value={mealCatFilter} onChange={e=>setMealCatFilter(e.target.value)} style={{padding:'7px 10px', borderRadius:'6px', border:'1px solid #cbd5e1', fontSize:'13px'}}>
+              {categories.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div style={{display:'flex', gap:'6px', alignItems:'center'}}>
+            <small style={{fontWeight:600, color:'#64748b'}}>Diet:</small>
+            <select value={dietFilter} onChange={e=>setDietFilter(e.target.value)} style={{padding:'7px 10px', borderRadius:'6px', border:'1px solid #cbd5e1', fontSize:'13px'}}>
+              <option value="ALL">All Food Types</option>
+              <option value="VEG">🥗 Veg Only</option>
+              <option value="NON_VEG">🍗 Non-Veg Only</option>
+            </select>
+          </div>
+          <button onClick={load} disabled={busy} style={{padding:'7px 14px', fontSize:'13px'}}>{busy?'...':'↻ Refresh'}</button>
+        </div>
+
+        {/* Detailed Table */}
         <div className="tablewrap">
           <table>
             <thead>
-              <tr><th>Delegate Name & Reg No</th><th>Category</th><th>University</th><th>Meal Type</th><th>Meal Date & Time</th><th>Redeemed Timestamp</th><th>Scanned By</th></tr>
+              <tr>
+                <th>Delegate Name & Reg No</th>
+                <th>Category</th>
+                <th>Food Preference</th>
+                <th>Meal Type</th>
+                <th>Meal Date & Venue</th>
+                <th>Redeemed Timestamp</th>
+                <th>Operator</th>
+              </tr>
             </thead>
             <tbody>
-              {scans.map(x=><tr key={x.id}>
+              {filteredReportScans.map(x=><tr key={x.id}>
                 <td>
                   <b>{x.participant_name}</b><br/>
-                  <small style={{color:'#64748b'}}>{x.registration_no}</small>
+                  <small style={{color:'#64748b'}}>{x.registration_no || '—'}</small>
                 </td>
                 <td><span className="pill small">{x.category || 'Delegate'}</span></td>
-                <td>{x.university || '-'}</td>
+                <td>
+                  <span className="pill small" style={{
+                    background: x.food_preference==='NON_VEG'?'#fef2f2':'#ecfdf5',
+                    color: x.food_preference==='NON_VEG'?'#b91c1c':'#047857',
+                    fontWeight:700
+                  }}>
+                    {x.food_preference === 'NON_VEG' ? '🍗 NON-VEG' : '🥗 VEG'}
+                  </span>
+                </td>
                 <td><strong style={{color:'#8C1119'}}>{x.meal_type}</strong></td>
                 <td>{toInputDate(x.meal_date)} ({x.location || 'Dining Hall'})</td>
                 <td><span style={{color:'#059669', fontWeight:700}}>{new Date(x.scanned_at).toLocaleString()}</span></td>
                 <td>{x.scanned_by_name || 'Admin'}</td>
               </tr>)}
-              {!scans.length && <tr><td colSpan="7" style={{textAlign:'center', padding:'30px', color:'#888'}}>No meal redemption logs found.</td></tr>}
+              {!filteredReportScans.length && <tr><td colSpan="7" style={{textAlign:'center', padding:'30px', color:'#888'}}>No meal redemption logs found matching filter criteria.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -2252,10 +2650,12 @@ function DutyAssignmentModal({duties,users,onSave,onClose}){
   }}>Assign</button></div></div></div>;
 }
 
-function Certificates({tab, notify}){
+function Certificates({tab, notify, selectedConferenceId}){
   const[d,setD]=useState([]),[participants,setParticipants]=useState([]),[busy,setBusy]=useState(false),[showAdd,setShowAdd]=useState(false);
   const[subTab,setSubTab]=useState('issued');
   const[certQ,setCertQ]=useState(''),[certCat,setCertCat]=useState('ALL');
+  const[eligibilityFilter,setEligibilityFilter]=useState('ALL');
+  const[bulkGenBusy,setBulkGenBusy]=useState(false);
   
   // Generator states
   const[template,setTemplate]=useState(null);
@@ -2268,15 +2668,15 @@ function Certificates({tab, notify}){
   const[selectedIds,setSelectedIds]=useState([]);
   const[searchQuery,setSearchQuery]=useState('');
   const[generating,setGenerating]=useState(false);
-
   const[savingLayout,setSavingLayout]=useState(false);
 
   const load=async()=>{
     setBusy(true); 
+    const confId = selectedConferenceId || 1;
     try{
       const[c,p,s]=await Promise.all([
-        req('/admin/certificates'),
-        req('/admin/participants?conferenceId=1'),
+        req('/admin/certificates?conferenceId='+confId),
+        req('/admin/participants?conferenceId='+confId),
         req('/admin/certificates/settings').catch(()=>null)
       ]);
       setD(c); 
@@ -2287,7 +2687,7 @@ function Certificates({tab, notify}){
       setBusy(false)
     }
   };
-  useEffect(()=>{load()},[]);
+  useEffect(()=>{load()},[selectedConferenceId]);
   useEffect(()=>{if(tab==='Issue Certificate')setShowAdd(true)},[tab]);
 
   const handleSaveLayout = async () => {
@@ -2305,9 +2705,26 @@ function Certificates({tab, notify}){
     }
   };
 
+  const handleAutoBulkGenerate = async (onlyAttended = false) => {
+    if(!confirm(`Are you sure you want to auto-generate certificates for all ${onlyAttended ? 'attended delegates' : 'approved participants'}?`)) return;
+    setBulkGenBusy(true);
+    try {
+      const res = await req('/admin/certificates/bulk-generate', {
+        method: 'POST',
+        body: JSON.stringify({ conferenceId: selectedConferenceId || 1, onlyAttended })
+      });
+      notify(res.message || `Generated certificates successfully!`);
+      load();
+    } catch(e) {
+      alert(e.message);
+    } finally {
+      setBulkGenBusy(false);
+    }
+  };
+
   const handleSelectAll = (checked) => {
     if(checked) {
-      setSelectedIds(participants.map(p => p.id));
+      setSelectedIds(filteredParticipants.map(p => p.id));
     } else {
       setSelectedIds([]);
     }
@@ -2321,12 +2738,18 @@ function Certificates({tab, notify}){
     }
   };
 
-  const filteredParticipants = participants.filter(p => 
-    p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    (p.registration_no && p.registration_no.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const issuedParticipantIds = new Set(d.map(c => c.participant_id));
 
-  const categories = ['ALL', ...Array.from(new Set(d.map(x => x.category).filter(Boolean)))];
+  const filteredParticipants = participants.filter(p => {
+    const matchesQ = `${p.name} ${p.registration_no||''} ${p.university||''}`.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCat = certCat === 'ALL' || p.category === certCat;
+    let matchesEligibility = true;
+    if(eligibilityFilter === 'PENDING_ONLY') matchesEligibility = !issuedParticipantIds.has(p.id);
+    else if(eligibilityFilter === 'ISSUED_ONLY') matchesEligibility = issuedParticipantIds.has(p.id);
+    return matchesQ && matchesCat && matchesEligibility;
+  });
+
+  const categories = ['ALL', ...Array.from(new Set(participants.map(x => x.category).filter(Boolean)))];
 
   const filteredIssued = d.filter(x => {
     const matchesQ = `${x.participant_name} ${x.registration_no} ${x.certificate_no} ${x.university||''}`.toLowerCase().includes(certQ.toLowerCase());
@@ -2334,11 +2757,30 @@ function Certificates({tab, notify}){
     return matchesQ && matchesCat;
   });
 
+  const exportCertificatesXLSX = () => {
+    if(!filteredIssued.length){alert('No certificates to export'); return;}
+    const data = filteredIssued.map((x, idx) => ({
+      'Sr No': idx + 1,
+      'Delegate Name': x.participant_name || '',
+      'Registration No': x.registration_no || '',
+      'Category': x.category || 'Delegate',
+      'Certificate No': x.certificate_no || '',
+      'Issued At': new Date(x.issued_at).toLocaleString(),
+      'Verification URL': `${API.replace('/api','')}/certificates/verify/${x.certificate_no}`,
+      'Certificate Image URL': x.certificate_url ? resolveMediaUrl(x.certificate_url) : ''
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Issued Certificates');
+    XLSX.writeFile(wb, `issued_certificates_${new Date().toISOString().slice(0,10)}.xlsx`);
+    notify('Exported certificates roster to Excel');
+  };
+
   const exportCertificatesCSV = () => {
     if(!filteredIssued.length){alert('No certificates to export'); return;}
-    const headers = ['ID', 'Delegate Name', 'Registration No', 'Category', 'Certificate No', 'Issued At', 'Certificate URL'];
-    const rows = filteredIssued.map(x => [
-      x.id,
+    const headers = ['Sr No', 'Delegate Name', 'Registration No', 'Category', 'Certificate No', 'Issued At', 'Certificate URL'];
+    const rows = filteredIssued.map((x, idx) => [
+      idx + 1,
       `"${x.participant_name||''}"`,
       `"${x.registration_no||''}"`,
       `"${x.category||'Delegate'}"`,
@@ -2353,6 +2795,7 @@ function Certificates({tab, notify}){
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    notify('Exported certificates roster to CSV');
   };
 
   const handleGenerate = async () => {
@@ -2384,14 +2827,23 @@ function Certificates({tab, notify}){
     <div className="pagehead">
       <div>
         <h3>Certificates</h3>
-        <p>Manage, issue, and verify conference participation certificates ({filteredIssued.length} issued).</p>
+        <p>Manage, issue, and verify conference participation certificates ({filteredIssued.length} issued of {participants.length} delegates).</p>
       </div>
       <div className="actions" style={{display:'flex', gap:'12px', alignItems:'center'}}>
         <div style={{background:'var(--bg-app)', padding:'4px', borderRadius:'var(--radius-sm)', display:'flex', gap:'4px', border:'1px solid var(--border)'}}>
-          <button style={{padding:'6px 12px', fontSize:'13px', background:subTab==='issued'?'var(--surface)':'transparent', color:subTab==='issued'?'var(--primary)':'var(--text-muted)', border:0, boxShadow:subTab==='issued'?'var(--shadow-sm)':'none', fontWeight:600}} onClick={()=>setSubTab('issued')}>Issued List ({d.length})</button>
-          <button style={{padding:'6px 12px', fontSize:'13px', background:subTab==='generate'?'var(--surface)':'transparent', color:subTab==='generate'?'var(--primary)':'var(--text-muted)', border:0, boxShadow:subTab==='generate'?'var(--shadow-sm)':'none', fontWeight:600}} onClick={()=>setSubTab('generate')}>Bulk Generator</button>
+          <button style={{padding:'6px 12px', fontSize:'13px', background:subTab==='issued'?'var(--surface)':'transparent', color:subTab==='issued'?'var(--primary)':'var(--text-muted)', border:0, boxShadow:subTab==='issued'?'var(--shadow-sm)':'none', fontWeight:600}} onClick={()=>setSubTab('issued')}>📜 Issued Roster ({d.length})</button>
+          <button style={{padding:'6px 12px', fontSize:'13px', background:subTab==='generate'?'var(--surface)':'transparent', color:subTab==='generate'?'var(--primary)':'var(--text-muted)', border:0, boxShadow:subTab==='generate'?'var(--shadow-sm)':'none', fontWeight:600}} onClick={()=>setSubTab('generate')}>🎨 Certificate Designer & Bulk Generator</button>
         </div>
-        {subTab === 'issued' && <button className="secondary" onClick={exportCertificatesCSV}>📥 Export CSV</button>}
+        {subTab === 'issued' && (
+          <div style={{display:'flex', gap:'8px'}}>
+            <button className="primary" onClick={exportCertificatesXLSX} style={{display:'flex', alignItems:'center', gap:'6px'}}>📥 Export Excel</button>
+            <button className="secondary" onClick={exportCertificatesCSV}>CSV</button>
+            <button className="secondary" onClick={()=>window.print()} style={{display:'flex', alignItems:'center', gap:'6px'}}><Printer size={15}/> Print</button>
+          </div>
+        )}
+        <button className="secondary" disabled={bulkGenBusy} onClick={()=>handleAutoBulkGenerate(false)} style={{fontWeight:700}}>
+          {bulkGenBusy ? 'Generating...' : '⚡ 1-Click Auto Issue All'}
+        </button>
         <button className="primary" onClick={()=>setShowAdd(true)}>+ Issue Single</button>
       </div>
     </div>
@@ -2423,14 +2875,14 @@ function Certificates({tab, notify}){
                     [<a href={resolveMediaUrl(x.certificate_url)} target="_blank" rel="noopener noreferrer" style={{color:'#8C1119', fontWeight:700}}>View PNG</a>]
                   </span>
                 )}
-                <br/><small style={{color:'#64748b'}}>{x.registration_no}</small>
+                <br/><small style={{color:'#64748b'}}>{x.registration_no || '—'}</small>
               </td>
               <td><span className="pill small">{x.category || 'Delegate'}</span></td>
               <td><span className="pill" style={{background:'#2E6F95',color:'#fff', fontWeight:700}}>{x.certificate_no}</span></td>
               <td>{new Date(x.issued_at).toLocaleString()}</td>
               <td>
                 <div style={{display:'flex', gap:'8px'}}>
-                  <button className="secondary" style={{padding:'4px 10px', fontSize:'13px'}} onClick={()=>window.open(API.replace('/api','/certificates/verify/')+x.certificate_no,'_blank')}>Verify</button>
+                  <button className="secondary" style={{padding:'4px 10px', fontSize:'13px'}} onClick={()=>window.open(API.replace('/api','')+'/certificates/verify/'+x.certificate_no,'_blank')}>Verify</button>
                   <button className="secondary" style={{padding:'4px 10px', fontSize:'13px', color:'var(--danger)', borderColor:'var(--danger-bg)'}} onClick={async()=>{
                     if(confirm('Are you sure you want to delete this certificate?')){
                       await req(`/admin/certificates/${x.id}`, {method:'DELETE'});
@@ -2509,9 +2961,9 @@ function Certificates({tab, notify}){
                     .regText { font-family: 'Arial', sans-serif; fill: ${layout.regColor || '#2E6F95'}; font-size: ${layout.regSize || 18}px; text-anchor: ${layout.regAlign === 'left' ? 'start' : layout.regAlign === 'right' ? 'end' : 'middle'}; dominant-baseline: middle; }
                     .certText { font-family: 'Arial', sans-serif; fill: ${layout.certColor || '#64748b'}; font-size: ${layout.certSize || 16}px; text-anchor: ${layout.certAlign === 'left' ? 'start' : layout.certAlign === 'right' ? 'end' : 'middle'}; dominant-baseline: middle; }
                   `}</style>
-                  <text x={`${layout.nameX ?? 50}%`} y={`${imgSize.height * ((layout.nameY ?? 45) / 100)}`} className="nameText">John Doe</text>
-                  <text x={`${layout.regX ?? 50}%`} y={`${imgSize.height * ((layout.regY ?? 55) / 100)}`} className="regText">Registration No: REG-12345</text>
-                  <text x={`${layout.certX ?? 50}%`} y={`${imgSize.height * ((layout.certY ?? 65) / 100)}`} className="certText">Certificate No: CERT-987654</text>
+                  <text x={`${layout.nameX ?? 50}%`} y={`${imgSize.height * ((layout.nameY ?? 45) / 100)}`} className="nameText">Dr. Delegate Name</text>
+                  <text x={`${layout.regX ?? 50}%`} y={`${imgSize.height * ((layout.regY ?? 55) / 100)}`} className="regText">Registration No: MAPCON-2026-001</text>
+                  <text x={`${layout.certX ?? 50}%`} y={`${imgSize.height * ((layout.certY ?? 65) / 100)}`} className="certText">Certificate No: CERT-2026-0001</text>
                 </svg>
               </div>
 
@@ -2605,10 +3057,10 @@ function Certificates({tab, notify}){
         </div>
 
         {/* Right Side: Participant List */}
-        <div style={{display:'flex', flexDirection:'column', gap:'16px', background:'var(--surface)', padding:'20px', borderRadius:'var(--radius-md)', border:'1px solid var(--border)', height:'fit-content', maxHeight:'700px', overflowY:'auto'}}>
+        <div style={{display:'flex', flexDirection:'column', gap:'14px', background:'var(--surface)', padding:'20px', borderRadius:'var(--radius-md)', border:'1px solid var(--border)', height:'fit-content', maxHeight:'750px', overflowY:'auto'}}>
           <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-            <h4 style={{margin:0}}>Select Participants</h4>
-            <span style={{fontSize:'12px', background:'var(--primary-subtle)', color:'var(--primary)', padding:'2px 8px', borderRadius:'12px', fontWeight:'bold'}}>{selectedIds.length} Selected</span>
+            <h4 style={{margin:0}}>Select Participants ({filteredParticipants.length})</h4>
+            <span style={{fontSize:'12px', background:'var(--primary-subtle)', color:'var(--primary)', padding:'3px 10px', borderRadius:'12px', fontWeight:'bold'}}>{selectedIds.length} Selected</span>
           </div>
 
           <div style={{position:'relative'}}>
@@ -2622,21 +3074,46 @@ function Certificates({tab, notify}){
             <Search size={16} color="var(--text-light)" style={{position:'absolute', left:'12px', top:'50%', transform:'translateY(-50%)'}}/>
           </div>
 
+          <div style={{display:'flex', gap:'8px', flexWrap:'wrap'}}>
+            <button 
+              type="button"
+              style={{padding:'4px 10px', fontSize:'12px', borderRadius:'6px', border:'1px solid var(--border)', background: eligibilityFilter==='ALL'?'#8C1119':'#f8fafc', color: eligibilityFilter==='ALL'?'#fff':'#334155', fontWeight:600}}
+              onClick={()=>setEligibilityFilter('ALL')}
+            >
+              All ({participants.length})
+            </button>
+            <button 
+              type="button"
+              style={{padding:'4px 10px', fontSize:'12px', borderRadius:'6px', border:'1px solid var(--border)', background: eligibilityFilter==='PENDING_ONLY'?'#8C1119':'#f8fafc', color: eligibilityFilter==='PENDING_ONLY'?'#fff':'#334155', fontWeight:600}}
+              onClick={()=>setEligibilityFilter('PENDING_ONLY')}
+            >
+              Pending Issue
+            </button>
+            <button 
+              type="button"
+              style={{padding:'4px 10px', fontSize:'12px', borderRadius:'6px', border:'1px solid var(--border)', background: eligibilityFilter==='ISSUED_ONLY'?'#8C1119':'#f8fafc', color: eligibilityFilter==='ISSUED_ONLY'?'#fff':'#334155', fontWeight:600}}
+              onClick={()=>setEligibilityFilter('ISSUED_ONLY')}
+            >
+              Already Issued
+            </button>
+          </div>
+
           {/* List Wrapper */}
           <div style={{border:'1px solid var(--border)', borderRadius:'var(--radius-sm)', overflow:'hidden'}}>
             <div style={{display:'flex', alignItems:'center', gap:'12px', padding:'10px 14px', background:'#f8fafc', borderBottom:'1px solid var(--border)'}}>
               <input 
                 type="checkbox" 
-                checked={participants.length > 0 && selectedIds.length === participants.length} 
+                checked={filteredParticipants.length > 0 && selectedIds.length === filteredParticipants.length} 
                 onChange={e => handleSelectAll(e.target.checked)}
                 style={{cursor:'pointer'}}
               />
-              <span style={{fontSize:'13px', fontWeight:'bold', cursor:'pointer'}} onClick={() => handleSelectAll(selectedIds.length !== participants.length)}>Select All ({participants.length})</span>
+              <span style={{fontSize:'13px', fontWeight:'bold', cursor:'pointer'}} onClick={() => handleSelectAll(selectedIds.length !== filteredParticipants.length)}>Select All ({filteredParticipants.length})</span>
             </div>
             
             <div style={{maxHeight:'320px', overflowY:'auto'}}>
               {filteredParticipants.map(p => {
                 const isSelected = selectedIds.includes(p.id);
+                const isAlreadyIssued = issuedParticipantIds.has(p.id);
                 return (
                   <div 
                     key={p.id} 
@@ -2656,15 +3133,18 @@ function Certificates({tab, notify}){
                       onChange={e => handleSelectParticipant(p.id, e.target.checked)}
                       style={{cursor:'pointer'}}
                     />
-                    <div style={{fontSize:'13px', cursor:'pointer'}} onClick={() => handleSelectParticipant(p.id, !isSelected)}>
-                      <b style={{display:'block'}}>{p.name}</b>
-                      <small style={{color:'var(--text-muted)'}}>{p.registration_no || 'No Reg No.'} • {p.university || 'No Univ.'}</small>
+                    <div style={{fontSize:'13px', cursor:'pointer', flex:1}} onClick={() => handleSelectParticipant(p.id, !isSelected)}>
+                      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                        <b>{p.name}</b>
+                        {isAlreadyIssued && <span className="pill small" style={{background:'#ecfdf5', color:'#047857'}}>Issued</span>}
+                      </div>
+                      <small style={{color:'var(--text-muted)'}}>{p.registration_no || 'No Reg No.'} • {p.category || 'Delegate'} • {p.university || 'No Univ.'}</small>
                     </div>
                   </div>
                 );
               })}
               {!filteredParticipants.length && (
-                <div style={{padding:'20px', textAlign:'center', color:'var(--text-light)', fontSize:'13px'}}>No participants match search.</div>
+                <div style={{padding:'20px', textAlign:'center', color:'var(--text-light)', fontSize:'13px'}}>No participants match filter.</div>
               )}
             </div>
           </div>
@@ -2675,20 +3155,14 @@ function Certificates({tab, notify}){
             onClick={handleGenerate}
             disabled={generating || !template || !selectedIds.length}
           >
-            {generating ? (
-              <>
-                Generating Certificates...
-              </>
-            ) : (
-              `Generate ${selectedIds.length} Certificate${selectedIds.length === 1 ? '' : 's'}`
-            )}
+            {generating ? 'Generating Certificates...' : `Generate ${selectedIds.length} Certificate${selectedIds.length === 1 ? '' : 's'}`}
           </button>
         </div>
       </div>
     )}
 
     {showAdd && <IssueModal participants={participants} onSave={async(v)=>{await req(`/admin/certificates/${v.participant_id}/issue`,{method:'POST',body:JSON.stringify(v)}); setShowAdd(false); load(); notify('Certificate issued successfully');}} onClose={()=>setShowAdd(false)}/>}
-  </div>
+  </div>;
 }
 
 function IssueModal({participants,onSave,onClose}){
@@ -3110,21 +3584,45 @@ function FeedbackDetailModal({item, onClose}){
   </div>
 }
 
-function Reports({tab, notify}){
+function Reports({tab, notify, selectedConferenceId}){
   const reportMap={'Participant Reports':'participants','Attendance Reports':'attendance','Accommodation Reports':'accommodation','Transport Reports':'transport','Meal Reports':'meals','Certificate Reports':'certificates','CME Feedback Reports':'feedback'};
   const initialType=reportMap[tab]||'participants';
   const[type,setType]=useState(initialType),[data,setData]=useState([]),[busy,setBusy]=useState(false);
+  const[searchQ,setSearchQ]=useState('');
   
   useEffect(()=>{if(reportMap[tab])setType(reportMap[tab])},[tab]);
 
-  const load=async()=>{setBusy(true); try{const r=await req(`/admin/reports/${type}`);setData(r)}finally{setBusy(false)}};
-  useEffect(()=>{load()},[type]);
+  const load=async()=>{
+    setBusy(true); 
+    const confId = selectedConferenceId || 1;
+    try{
+      const r=await req(`/admin/reports/${type}?conferenceId=${confId}`);
+      setData(r);
+    }finally{
+      setBusy(false);
+    }
+  };
+  useEffect(()=>{load()},[type, selectedConferenceId]);
+
+  const filteredData = data.filter(row => {
+    if(!searchQ.trim()) return true;
+    return Object.values(row).some(v => String(v||'').toLowerCase().includes(searchQ.toLowerCase()));
+  });
+
+  const exportXLSX=()=>{
+    if(!filteredData.length){alert('No data to export');return}
+    const ws = XLSX.utils.json_to_sheet(filteredData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, type.toUpperCase());
+    XLSX.writeFile(wb, `conference_${type}_report_${new Date().toISOString().slice(0,10)}.xlsx`);
+    notify(`Exported ${type} report to Excel (.xlsx)`);
+  };
 
   const exportCSV=()=>{
-    if(!data.length){alert('No data to export');return}
-    const keys=Object.keys(data[0]);
+    if(!filteredData.length){alert('No data to export');return}
+    const keys=Object.keys(filteredData[0]);
     const csvRows=[keys.join(',')];
-    data.forEach(row=>{
+    filteredData.forEach(row=>{
       const vals=keys.map(k=>`"${String(row[k]||'').replace(/"/g,'""')}"`);
       csvRows.push(vals.join(','));
     });
@@ -3138,18 +3636,60 @@ function Reports({tab, notify}){
   };
 
   return <div className="panel">
-    <div className="pagehead"><div><h3>Conference Reports & Analytics</h3><p>Export operational data and attendee rosters to CSV / Excel.</p></div><div className="actions"><button className="primary" onClick={exportCSV}>📥 Export CSV</button></div></div>
-    <div className="toolbar" style={{display:'flex',gap:'12px',alignItems:'center'}}>
-      <SelectField label="Select Report Category" value={type} onChange={setType} options={['participants','attendance','accommodation','transport','meals','certificates','feedback']}/>
+    <div className="pagehead">
+      <div>
+        <h3>Conference Reports & Analytics</h3>
+        <p>Export operational rosters, food pass audits, attendance percentages, and logistics reports to Excel / CSV.</p>
+      </div>
+      <div className="actions" style={{display:'flex', gap:'8px', alignItems:'center'}}>
+        <button className="primary" onClick={exportXLSX} style={{display:'flex', alignItems:'center', gap:'6px'}}>📥 Export Excel (.xlsx)</button>
+        <button className="secondary" onClick={exportCSV}>📄 CSV</button>
+        <button className="secondary" onClick={()=>window.print()} style={{display:'flex', alignItems:'center', gap:'6px'}}><Printer size={15}/> Print</button>
+      </div>
     </div>
-    <table>
-      <thead><tr>{data[0] && Object.keys(data[0]).map(k=><th key={k}>{k.replace('_',' ').toUpperCase()}</th>)}</tr></thead>
-      <tbody>
-        {data.map((row,i)=><tr key={i}>{Object.values(row).map((v,j)=><td key={j}>{String(v===null||v===undefined?'—':v)}</td>)}</tr>)}
-        {!data.length && !busy && <tr><td colSpan="6" style={{textAlign:'center',padding:'30px',color:'#888'}}>No records found for this report.</td></tr>}
-      </tbody>
-    </table>
-  </div>
+    
+    <div className="toolbar" style={{display:'flex', gap:'12px', alignItems:'center', background:'#f8fafc', padding:'12px 16px', borderRadius:'10px', border:'1px solid #e2e8f0', marginBottom:'16px', flexWrap:'wrap'}}>
+      <div style={{display:'flex', gap:'8px', alignItems:'center'}}>
+        <small style={{fontWeight:600, color:'#64748b'}}>Report Module:</small>
+        <select value={type} onChange={e=>setType(e.target.value)} style={{padding:'7px 12px', borderRadius:'6px', border:'1px solid #cbd5e1', fontSize:'13.5px', fontWeight:700}}>
+          <option value="participants">👥 Participants Master Roster</option>
+          <option value="attendance">⚡ Attendance & Check-in Scans</option>
+          <option value="accommodation">🏨 Accommodation & Rooms</option>
+          <option value="transport">🚐 Transport & Vehicle Schedule</option>
+          <option value="meals">🍽️ Meal Passes & Redemptions</option>
+          <option value="certificates">📜 Issued Certificates</option>
+          <option value="feedback">💬 CME Feedback & Ratings</option>
+        </select>
+      </div>
+      <div className="search" style={{flex:1, minWidth:'220px'}}>
+        <Search size={16}/>
+        <input value={searchQ} onChange={e=>setSearchQ(e.target.value)} placeholder="Filter records in this report..."/>
+      </div>
+      <button onClick={load} disabled={busy} style={{padding:'7px 14px', fontSize:'13px'}}>{busy?'...':'↻ Refresh'}</button>
+    </div>
+
+    <div className="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            {filteredData[0] && Object.keys(filteredData[0]).map(k=>(
+              <th key={k}>{k.replace(/_/g,' ').toUpperCase()}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {filteredData.map((row,i)=>(
+            <tr key={i}>
+              {Object.values(row).map((v,j)=>(
+                <td key={j}>{String(v===null||v===undefined?'—':v)}</td>
+              ))}
+            </tr>
+          ))}
+          {!filteredData.length && !busy && <tr><td colSpan="8" style={{textAlign:'center',padding:'30px',color:'#888'}}>No records found for this report.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  </div>;
 }
 
 function Chat({notify}){

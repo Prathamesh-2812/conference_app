@@ -1539,6 +1539,24 @@ class HomeScreen extends StatelessWidget {
                     onTap: () => go(context, const MealsScreen()),
                   ),
                   CardButton(
+                    icon: Icons.explore_rounded,
+                    title: 'Travel & Nearest Tourist Places',
+                    subtitle: 'Temples, forts, Kolhapuri food, lassi & local transit',
+                    trailingBadge: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: gold.withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: gold.withOpacity(0.6)),
+                      ),
+                      child: const Text(
+                        'KOLHAPUR',
+                        style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w900, color: darkMaroon),
+                      ),
+                    ),
+                    onTap: () => go(context, const TravelGuideScreen()),
+                  ),
+                  CardButton(
                     icon: Icons.emergency,
                     title: 'Emergency Help & Contacts',
                     subtitle: 'Help desk, medical unit & security',
@@ -1563,9 +1581,6 @@ class HomeScreen extends StatelessWidget {
                     onTap: () => go(context, const SponsorsScreen()),
                   ),
                   const SizedBox(height: 24),
-
-                  // Our Sponsors & Partners Section
-                  _HomeSponsorsSection(onViewAll: () => go(context, const SponsorsScreen())),
                 ],
               ),
             ),
@@ -7302,4 +7317,789 @@ class ListApiPage extends StatelessWidget {
           },
         ),
       );
+}
+
+// ====================================================
+// TRAVEL, LOCAL EXCURSIONS & TOURIST GUIDE (KOLHAPUR)
+// ====================================================
+
+class TravelGuideScreen extends StatefulWidget {
+  const TravelGuideScreen({super.key});
+
+  @override
+  State<TravelGuideScreen> createState() => _TravelGuideScreenState();
+}
+
+class _TravelGuideScreenState extends State<TravelGuideScreen> {
+  String _selectedCategory = 'ALL';
+  String _searchQuery = '';
+
+  static const List<Map<String, dynamic>> _places = [
+    // ---------------- SIGHTSEEING & ATTRACTIONS ----------------
+    {
+      'name': 'Shree Mahalaxmi Temple',
+      'category': 'SIGHTSEEING',
+      'tag': 'Hindu Temple',
+      'rating': '4.8',
+      'status': 'Open',
+      'distance': '~2.5 km from Sayaji Hotel',
+      'travel_time': '10–12 min drive',
+      'transport': 'Auto-rickshaw/taxi (~₹50–₹150), shared KMT bus, or two-wheeler rental.',
+      'speciality': 'One of Kolhapur\'s most revered temples dedicated to Goddess Mahalaxmi; excellent Dravidian temple architecture and vibrant daily aarti. High footfall during Navaratri and weekends.',
+      'maps_query': 'Shree Mahalaxmi Temple Kolhapur',
+      'icon': Icons.temple_hindu_rounded,
+      'color': Color(0xFF8C1119),
+    },
+    {
+      'name': 'Rankala Lake',
+      'category': 'SIGHTSEEING',
+      'tag': 'Tourist Attraction',
+      'rating': '4.5',
+      'status': 'Open',
+      'distance': '~3 km from Sayaji Hotel',
+      'travel_time': '10–15 min drive',
+      'transport': 'Autos/taxis, local buses (KMT) or bicycle rentals.',
+      'speciality': 'Scenic urban lake with walking paths, boating, evening lights, street snacks, and sunset views over the water—great for leisure evenings.',
+      'maps_query': 'Rankala Lake Kolhapur',
+      'icon': Icons.water_rounded,
+      'color': Color(0xFF2E6F95),
+    },
+    {
+      'name': 'New Palace (Shri Chhatrapati Shahu Museum)',
+      'category': 'SIGHTSEEING',
+      'tag': 'Historical Landmark',
+      'rating': '4.5',
+      'status': 'Open',
+      'distance': '~4 km from Sayaji Hotel',
+      'travel_time': '12–15 min drive',
+      'transport': 'Auto / Taxi / City Bus',
+      'speciality': 'Grand heritage palace with a museum housing royal armour, weapons, paintings, taxidermy, and personal belongings of Kolhapur royalty.',
+      'maps_query': 'New Palace Museum Kolhapur',
+      'icon': Icons.castle_rounded,
+      'color': Color(0xFFC8A45A),
+    },
+    {
+      'name': 'Khasbag Maidan',
+      'category': 'SIGHTSEEING',
+      'tag': 'Wrestling Ground (Kushti)',
+      'rating': '4.5',
+      'status': 'Open',
+      'distance': '~4 km from Sayaji Hotel',
+      'travel_time': '12–15 min drive',
+      'transport': 'Short auto/taxi trip, local bus',
+      'speciality': 'One of India\'s largest traditional wrestling grounds and cultural landmark where historic Kushti (wrestling) events and training take place.',
+      'maps_query': 'Khasbag Maidan Kolhapur',
+      'icon': Icons.sports_kabaddi_rounded,
+      'color': Color(0xFFD97706),
+    },
+    {
+      'name': 'Mirajkar Tikti Dudh Katta',
+      'category': 'SIGHTSEEING',
+      'tag': 'Cultural Chill-Spot',
+      'rating': '4.6',
+      'status': 'Open',
+      'distance': '~2.5–3 km from Sayaji Hotel',
+      'travel_time': '8–10 min drive',
+      'transport': 'Auto/rickshaw',
+      'speciality': 'Local favourite evening chill-spot dairy café with regional milk refreshments, basundi, flavoured milk and lively city banter.',
+      'maps_query': 'Mirajkar Tikti Kolhapur',
+      'icon': Icons.local_cafe_rounded,
+      'color': Color(0xFF059669),
+    },
+    {
+      'name': 'Panhala Fort (Must Visit)',
+      'category': 'SIGHTSEEING',
+      'tag': 'Historic Hill Fort',
+      'rating': '4.9',
+      'status': 'Must Visit',
+      'distance': '~20–22 km from Sayaji Hotel',
+      'travel_time': '35–45 minutes by car',
+      'transport': 'Private car / self-drive (best option), Taxi (~₹800–₹1500 approx round trip), MSRTC bus from Kolhapur CBS, or scenic bike ride.',
+      'speciality': 'Historic hill fort associated with Chhatrapati Shivaji Maharaj. Features cool hill-station climate, Sajja Kothi, Andhar Bavadi, Teen Darwaza, and panoramic Sahyadri views. Best time: Morning or late afternoon.',
+      'maps_query': 'Panhala Fort Kolhapur',
+      'icon': Icons.fort_rounded,
+      'color': Color(0xFF8C1119),
+    },
+    {
+      'name': 'Bahubali (Kumbhojgiri) Temple',
+      'category': 'SIGHTSEEING',
+      'tag': 'Jain Pilgrimage',
+      'rating': '4.7',
+      'status': 'Open',
+      'distance': '~27–30 km from Sayaji Hotel',
+      'travel_time': '45–60 minutes by car',
+      'transport': 'Private car / self-drive (best), Taxi (~₹1200–₹2000 round trip), MSRTC bus towards Kumbhoj, or scenic bike ride.',
+      'speciality': 'Sacred Jain pilgrimage site located on a hill at Kumbhoj. Features a massive 28-foot statue of Lord Bahubali, peaceful spiritual atmosphere, and 400+ steps to the top. Best visited early morning or evening.',
+      'maps_query': 'Bahubali Kumbhoj Temple',
+      'icon': Icons.account_balance_rounded,
+      'color': Color(0xFF4B5563),
+    },
+    {
+      'name': 'Kopeshwar Temple (Khidrapur)',
+      'category': 'SIGHTSEEING',
+      'tag': 'Architectural Marvel',
+      'rating': '4.8',
+      'status': 'Open',
+      'distance': '~60–65 km from Sayaji Hotel',
+      'travel_time': '1.5–2 hours by car',
+      'transport': 'Private car / taxi (best option for comfort), MSRTC bus towards Shirol / Khidrapur, or long scenic rural bike trip.',
+      'speciality': 'Ancient Kopeshwar Temple dedicated to Lord Shiva with stunning Hemadpanthi architecture, intricately carved stone pillars, unique circular Swarg Mandap structure without roof, situated near the Krishna River.',
+      'maps_query': 'Kopeshwar Temple Khidrapur',
+      'icon': Icons.temple_buddhist_rounded,
+      'color': Color(0xFF8C1119),
+    },
+    {
+      'name': 'Gaganbawada',
+      'category': 'SIGHTSEEING',
+      'tag': 'Scenic Hill Station',
+      'rating': '4.7',
+      'status': 'Open',
+      'distance': '~55 km from Sayaji Hotel',
+      'travel_time': '1.5 hours by car',
+      'transport': 'Taxi (~₹1500–₹2500 round trip), private car/bike ride; limited MSRTC buses available.',
+      'speciality': 'Scenic hill station known for lush green valleys, misty weather, breathtaking viewpoints, sunset vistas, nearby waterfalls, and the historic Gaganbawada Fort.',
+      'maps_query': 'Gaganbawada Kolhapur',
+      'icon': Icons.landscape_rounded,
+      'color': Color(0xFF047857),
+    },
+
+    // ---------------- ICONIC KOLHAPURI CUISINE ----------------
+    {
+      'name': 'PHADTARE MISAL CENTER',
+      'category': 'FOOD',
+      'tag': 'Iconic Kolhapuri Misal',
+      'rating': '4.8',
+      'status': 'Breakfast / Lunch',
+      'distance': '~2.0–2.5 km from Sayaji Hotel',
+      'travel_time': '6–8 min drive',
+      'transport': 'Auto / Taxi (Shivaji Udyam Nagar / Mangalwar Peth)',
+      'speciality': 'Classic Kolhapuri misal spot with fiery local flavours, crunchy farsan, rassa and soft pav served with authentic chutneys.',
+      'maps_query': 'Phadtare Misal Center Kolhapur',
+      'icon': Icons.local_fire_department_rounded,
+      'color': Color(0xFFDC2626),
+    },
+    {
+      'name': 'DEHAATI',
+      'category': 'FOOD',
+      'tag': 'Authentic Kolhapuri Thali',
+      'rating': '4.8',
+      'status': 'Lunch / Dinner',
+      'distance': '~0.5 km from Sayaji Hotel',
+      'travel_time': '2–5 min walk / drive',
+      'transport': 'Walking distance from Hotel Sayaji (Tararani Chowk on Old Pune-Bangalore Hwy)',
+      'speciality': 'World-famous authentic Kolhapuri Mutton & Chicken Thalis served with freshly prepared Tambda & Pandhra Rassa, Sukka, and Bhakri.',
+      'maps_query': 'Dehaati Restaurant Kolhapur',
+      'icon': Icons.restaurant_rounded,
+      'color': Color(0xFF8C1119),
+    },
+    {
+      'name': 'Patlacha Wada',
+      'category': 'FOOD',
+      'tag': 'Traditional Non-Veg Thali',
+      'rating': '4.7',
+      'status': 'Lunch / Dinner',
+      'distance': '~3.5 km from Sayaji Hotel',
+      'travel_time': '10 min drive',
+      'transport': 'Auto / Taxi',
+      'speciality': 'Famous for authentic Kolhapuri thalis with Tambda Rassa, Pandhra Rassa, Mutton Sukka and rural royal ambiance.',
+      'maps_query': 'Patlacha Wada Kolhapur',
+      'icon': Icons.restaurant_rounded,
+      'color': Color(0xFFB45309),
+    },
+    {
+      'name': 'The Thalis Kolhapuri Thali',
+      'category': 'FOOD',
+      'tag': 'Speciality Non-Veg',
+      'rating': '4.6',
+      'status': 'Lunch / Dinner',
+      'distance': '~3.0 km from Sayaji Hotel',
+      'travel_time': '8–10 min drive',
+      'transport': 'Auto / Taxi',
+      'speciality': 'Fantastic non-veg thalis with rich Kolhapuri spices, authentic gravies, and succulent chicken and mutton preparations.',
+      'maps_query': 'The Thalis Kolhapuri Thali Kolhapur',
+      'icon': Icons.dinner_dining_rounded,
+      'color': Color(0xFF991B1B),
+    },
+    {
+      'name': 'Hotel Parakh',
+      'category': 'FOOD',
+      'tag': 'Heritage Dining',
+      'rating': '4.7',
+      'status': 'Lunch / Dinner',
+      'distance': '~2.8 km from Sayaji Hotel',
+      'travel_time': '8 min drive',
+      'transport': 'Auto / Taxi',
+      'speciality': 'Classic heritage Kolhapuri restaurant famous for legendary Pandhra Rassa, aromatic curries, and traditional hospitality loved by locals.',
+      'maps_query': 'Hotel Parakh Kolhapur',
+      'icon': Icons.restaurant_menu_rounded,
+      'color': Color(0xFF7C2D12),
+    },
+    {
+      'name': 'Bawada Misal',
+      'category': 'FOOD',
+      'tag': 'Breakfast & Street Food',
+      'rating': '4.6',
+      'status': 'Morning / Lunch',
+      'distance': '~4.5 km from Sayaji Hotel',
+      'travel_time': '12 min drive',
+      'transport': 'Auto / Taxi / City Bus',
+      'speciality': 'A must-visit for Kolhapuri Misal Pav with unique local flavours and spicy kat, serving foodies since decades.',
+      'maps_query': 'Bawada Misal Kolhapur',
+      'icon': Icons.soup_kitchen_rounded,
+      'color': Color(0xFFEA580C),
+    },
+    {
+      'name': 'Basalt | Pure Veg Fine Dine',
+      'category': 'FOOD',
+      'tag': 'Pure Vegetarian Fine Dine',
+      'rating': '4.7',
+      'status': 'Lunch / Dinner',
+      'distance': '~2.5 km from Sayaji Hotel',
+      'travel_time': '7 min drive',
+      'transport': 'Auto / Taxi',
+      'speciality': 'Upscale pure-vegetarian fine dining restaurant with premium ambiance, multi-cuisine offerings, and curated Maharashtrian specialties.',
+      'maps_query': 'Basalt Veg Restaurant Kolhapur',
+      'icon': Icons.eco_rounded,
+      'color': Color(0xFF047857),
+    },
+    {
+      'name': 'Bansuri Pure Veg Restaurant',
+      'category': 'FOOD',
+      'tag': 'Vegetarian Thalis',
+      'rating': '4.5',
+      'status': 'Lunch / Dinner',
+      'distance': '~2.0 km from Sayaji Hotel',
+      'travel_time': '6 min drive',
+      'transport': 'Auto / Taxi',
+      'speciality': 'Great for family veg dining including royal veg thalis, paneer delicacies, and traditional Maharashtrian preparations.',
+      'maps_query': 'Bansuri Pure Veg Restaurant Kolhapur',
+      'icon': Icons.local_florist_rounded,
+      'color': Color(0xFF10B981),
+    },
+    {
+      'name': 'Moon Tree Cafe & Lounge',
+      'category': 'FOOD',
+      'tag': 'Cafe & Fusion Dining',
+      'rating': '4.6',
+      'status': 'All Day',
+      'distance': '~3.2 km from Sayaji Hotel',
+      'travel_time': '10 min drive',
+      'transport': 'Auto / Taxi',
+      'speciality': 'Charming café serving continental fusion food, specialty coffees, wood-fired pizzas, and artisan desserts.',
+      'maps_query': 'Moon Tree Cafe Kolhapur',
+      'icon': Icons.coffee_rounded,
+      'color': Color(0xFF4B5563),
+    },
+    {
+      'name': 'Sharawati - Taste of Karavali',
+      'category': 'FOOD',
+      'tag': 'Coastal & Seafood',
+      'rating': '4.6',
+      'status': 'Lunch / Dinner',
+      'distance': '~3.0 km from Sayaji Hotel',
+      'travel_time': '8–10 min drive',
+      'transport': 'Auto / Taxi',
+      'speciality': 'Renowned for authentic coastal seafood, fish thalis, neer dosa, and regional Karavali delicacies.',
+      'maps_query': 'Sharawati Restaurant Kolhapur',
+      'icon': Icons.set_meal_rounded,
+      'color': Color(0xFF0284C7),
+    },
+
+    // ---------------- COLD DRINKS & LASSI ----------------
+    {
+      'name': 'Imperial Cold Drink House',
+      'category': 'DESSERT',
+      'tag': 'Ice Cream & Mastani',
+      'rating': '4.8',
+      'status': 'Cold Drinks & Desserts',
+      'distance': '~2.0–2.8 km from Sayaji Hotel (Rajarampuri)',
+      'travel_time': '7–10 min drive',
+      'transport': 'Auto / Taxi towards Rajarampuri',
+      'speciality': 'One of Kolhapur\'s legendary ice-cream & cold-drink parlours famous for rich mango mastani, sundaes, milkshakes, and classic falooda.',
+      'maps_query': 'Imperial Cold Drink House Rajarampuri Kolhapur',
+      'icon': Icons.icecream_rounded,
+      'color': Color(0xFFD97706),
+    },
+    {
+      'name': 'Sugandha Cold Drink House',
+      'category': 'DESSERT',
+      'tag': 'Iconic Lassi & Kulfi',
+      'rating': '4.8',
+      'status': 'Cold Drinks & Desserts',
+      'distance': '~1.8–2.2 km from Sayaji Hotel',
+      'travel_time': '6–8 min drive',
+      'transport': 'Auto / Taxi (Mangalwar Peth / Babujamal)',
+      'speciality': 'Celebrated for thick malai lassi, cold drinks & refreshing kulfis — the quintessential sweet stop after a spicy Kolhapuri meal.',
+      'maps_query': 'Sugandha Cold Drink House Kolhapur',
+      'icon': Icons.local_drink_rounded,
+      'color': Color(0xFF2E6F95),
+    },
+    {
+      'name': 'Solanki Cold Drink House',
+      'category': 'DESSERT',
+      'tag': 'Falooda & Mastani',
+      'rating': '4.6',
+      'status': 'Cold Drinks & Desserts',
+      'distance': '~2.5 km from Sayaji Hotel',
+      'travel_time': '7 min drive',
+      'transport': 'Auto / Taxi (Rajarampuri)',
+      'speciality': 'Popular destination for traditional cold drinks, thick shakes, royal falooda, and artisanal ice creams.',
+      'maps_query': 'Solanki Cold Drink House Kolhapur',
+      'icon': Icons.emoji_food_beverage_rounded,
+      'color': Color(0xFF8C1119),
+    },
+
+    // ---------------- TRANSIT & TRAVEL TIPS ----------------
+    {
+      'name': 'Kolhapur Railway Station (CSMT)',
+      'category': 'TRANSIT',
+      'tag': 'Railway Hub',
+      'rating': '4.5',
+      'status': '24/7 Transit',
+      'distance': '~3.2 km from Sayaji Hotel',
+      'travel_time': '10 min drive',
+      'transport': 'Prepaid Autos, Taxis & City Buses',
+      'speciality': 'Chhatrapati Shahu Maharaj Terminus connecting direct trains to Pune, Mumbai, Bengaluru, Hyderabad, and major Indian cities.',
+      'maps_query': 'Kolhapur Railway Station',
+      'icon': Icons.train_rounded,
+      'color': Color(0xFF1E293B),
+    },
+    {
+      'name': 'Central Bus Stand (CBS Kolhapur)',
+      'category': 'TRANSIT',
+      'tag': 'MSRTC Bus Terminal',
+      'rating': '4.4',
+      'status': '24/7 Transit',
+      'distance': '~2.0 km from Sayaji Hotel',
+      'travel_time': '5–7 min drive',
+      'transport': 'Walking / Auto (~₹30–₹50)',
+      'speciality': 'Primary intercity transport depot for MSRTC Shivneri, Shivshahi, and private sleeper buses across Maharashtra, Goa, and Karnataka.',
+      'maps_query': 'Central Bus Stand CBS Kolhapur',
+      'icon': Icons.directions_bus_rounded,
+      'color': Color(0xFF0F766E),
+    },
+    {
+      'name': 'Kolhapur Airport (KLH - Ujalaiwadi)',
+      'category': 'TRANSIT',
+      'tag': 'Airport Terminal',
+      'rating': '4.6',
+      'status': 'Domestic Flights',
+      'distance': '~8.5–9.0 km from Sayaji Hotel',
+      'travel_time': '15–20 min drive',
+      'transport': 'Taxis, Ola/Uber & Airport Autos',
+      'speciality': 'Direct domestic flight connectivity to Mumbai, Bengaluru, Hyderabad, and Tirupati. Fast airport transfer via NH-48.',
+      'maps_query': 'Kolhapur Airport Ujalaiwadi',
+      'icon': Icons.flight_takeoff_rounded,
+      'color': Color(0xFF2E6F95),
+    },
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _places.where((p) {
+      final matchesCat = _selectedCategory == 'ALL' || p['category'] == _selectedCategory;
+      final matchesQ = _searchQuery.isEmpty ||
+          p['name'].toString().toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          p['tag'].toString().toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          p['speciality'].toString().toLowerCase().contains(_searchQuery.toLowerCase());
+      return matchesCat && matchesQ;
+    }).toList();
+
+    return SafeArea(
+      top: false,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFFCFAF5),
+        appBar: AppBar(
+          title: const Text(
+            'Kolhapur Travel & Tourist Guide',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 17),
+          ),
+          backgroundColor: maroon,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+            onPressed: () => Navigator.pop(context),
+          ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.open_in_browser_rounded, color: Colors.white, size: 22),
+              tooltip: 'Official Travel Portal',
+              onPressed: () => launchUrl(
+                Uri.parse('https://www.mapcon2026kop.com/travel.php'),
+                mode: LaunchMode.externalApplication,
+              ),
+            ),
+          ],
+        ),
+        body: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Banner Card
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+                decoration: const BoxDecoration(
+                  color: maroon,
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(24),
+                    bottomRight: Radius.circular(24),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: gold.withOpacity(0.25),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: gold, width: 1),
+                          ),
+                          child: const Text(
+                            '📍 BASE: HOTEL SAYAJI, KOLHAPUR',
+                            style: TextStyle(color: gold, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.6),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Explore Historic Kolhapur',
+                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Temples, hill forts, traditional wrestling, iconic Kolhapuri Misal, Tambda-Pandhra Rassa & royal heritage.',
+                      style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.85), height: 1.3),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Search Box inside Banner
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4)),
+                        ],
+                      ),
+                      child: TextField(
+                        onChanged: (val) => setState(() => _searchQuery = val),
+                        decoration: InputDecoration(
+                          hintText: 'Search places, temples, food, lassi...',
+                          hintStyle: TextStyle(fontSize: 13.5, color: Colors.grey.shade500),
+                          prefixIcon: const Icon(Icons.search, color: maroon, size: 22),
+                          suffixIcon: _searchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, size: 18),
+                                  onPressed: () => setState(() => _searchQuery = ''),
+                                )
+                              : null,
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Filter Category Chips
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    _buildChip('ALL', '✨ All Highlights (${_places.length})'),
+                    _buildChip('SIGHTSEEING', '🏰 Tourist Places (9)'),
+                    _buildChip('FOOD', '🍛 Kolhapuri Food (10)'),
+                    _buildChip('DESSERT', '🍦 Lassi & Cold Drinks (3)'),
+                    _buildChip('TRANSIT', '🚍 Travel & Transit (3)'),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Kolhapuri Cuisine Quick Tip Card
+              if (_selectedCategory == 'ALL' || _selectedCategory == 'FOOD')
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFFF8F0), Color(0xFFFFFDF8)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFFDBA74), width: 1.2),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEA580C),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.tips_and_updates_rounded, color: Colors.white, size: 18),
+                          ),
+                          const SizedBox(width: 10),
+                          const Text(
+                            'Must-Try Kolhapuri Food Specialties',
+                            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14.5, color: Color(0xFF9A3412)),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '• Kolhapuri Misal Pav: Fiery, spiced sprouted bean curry served with soft pav.\n'
+                        '• Tambda & Pandhra Rassa: Signature red chili broth and soothing coconut-milk white broth.\n'
+                        '• Traditional Jowar/Bajra Bhakri with authentic Sukka mutton/chicken.\n'
+                        '• Refreshing Sugandha or Imperial Mango Mastani & Malai Lassi after spicy meals.',
+                        style: TextStyle(fontSize: 12.5, color: Colors.brown.shade800, height: 1.4),
+                      ),
+                    ],
+                  ),
+                ),
+
+              // Places List
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(18, 8, 18, 90),
+                itemCount: filtered.length,
+                itemBuilder: (context, index) {
+                  final place = filtered[index];
+                  final Color placeColor = place['color'] as Color? ?? maroon;
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: Colors.grey.shade200, width: 1.2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.04),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Header: Icon + Title + Rating Badge
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: placeColor.withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: Icon(place['icon'] as IconData? ?? Icons.location_on, color: placeColor, size: 24),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            place['name'],
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w900,
+                                              fontSize: 16,
+                                              color: slate,
+                                            ),
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFFEF3C7),
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(color: const Color(0xFFF59E0B)),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(Icons.star_rounded, color: Color(0xFFD97706), size: 14),
+                                              const SizedBox(width: 3),
+                                              Text(
+                                                place['rating'],
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.w900,
+                                                  fontSize: 11.5,
+                                                  color: Color(0xFF92400E),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      place['tag'],
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: placeColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const Divider(height: 22, thickness: 0.8),
+
+                          // Distance & Transport Details
+                          Row(
+                            children: [
+                              const Icon(Icons.near_me_rounded, color: maroon, size: 15),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  'Distance: ${place['distance']}',
+                                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5, color: slate),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(Icons.directions_car_filled_rounded, color: Color(0xFF2E6F95), size: 15),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  place['transport'],
+                                  style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 10),
+
+                          // Speciality Description
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.grey.shade200),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('✨ ', style: TextStyle(fontSize: 12)),
+                                Expanded(
+                                  child: Text(
+                                    place['speciality'],
+                                    style: const TextStyle(fontSize: 12.5, color: Color(0xFF334155), height: 1.35),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: 12),
+
+                          // Map Navigation Button
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              icon: const Icon(Icons.map_rounded, size: 16),
+                              label: const Text('Open in Google Maps'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: maroon,
+                                side: const BorderSide(color: maroon, width: 1.2),
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                              onPressed: () {
+                                final query = Uri.encodeComponent(place['maps_query']);
+                                launchUrl(
+                                  Uri.parse('https://www.google.com/maps/search/?api=1&query=$query'),
+                                  mode: LaunchMode.externalApplication,
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+
+              if (filtered.isEmpty)
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(40),
+                    child: Column(
+                      children: [
+                        Icon(Icons.search_off_rounded, size: 48, color: Colors.grey.shade400),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'No places found matching your search.',
+                          style: TextStyle(fontWeight: FontWeight.w700, color: muted, fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChip(String category, String label) {
+    final isSelected = _selectedCategory == category;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        label: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : slate,
+            fontWeight: FontWeight.w800,
+            fontSize: 12,
+          ),
+        ),
+        selected: isSelected,
+        selectedColor: maroon,
+        backgroundColor: Colors.white,
+        side: BorderSide(color: isSelected ? maroon : Colors.grey.shade300, width: 1.2),
+        elevation: isSelected ? 2 : 0,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        onSelected: (_) => setState(() => _selectedCategory = category),
+      ),
+    );
+  }
 }
