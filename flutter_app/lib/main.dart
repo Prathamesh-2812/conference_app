@@ -522,24 +522,36 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 20),
-                    Text(
-                      conference.shortName,
+                    const SizedBox(height: 16),
+                    const Text(
+                      'DYPESCONF',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: 22,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 2.5,
+                        color: gold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      conference.shortName.isNotEmpty ? conference.shortName : 'MAPCON 2026',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 24,
                         fontWeight: FontWeight.w900,
                         color: conference.primaryColor,
                       ),
                     ),
                     const SizedBox(height: 6),
                     const Text(
-                      'Delegate & Participant Portal',
+                      'D. Y. Patil Education Society, Kolhapur\nDelegate & Participant Portal',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: muted,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                        height: 1.3,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                     const SizedBox(height: 28),

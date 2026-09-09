@@ -318,17 +318,17 @@ async function runMigrations(){
     try {
       await pool.query(`
         UPDATE conferences SET 
-          name = 'DYPESCONF 2026',
-          short_name = 'DYPESCONF 2026',
-          description = 'Annual State Conference of DYPESCONF 2026 (MAPCON 2026) organized by D.Y. Patil Education Society (Deemed to be University), Kolhapur.',
-          welcome_message = 'D.Y. Patil Education Society welcomes you to DYPESCONF 2026 at Hotel Sayaji, Kolhapur.',
-          about_conference = 'Annual State Conference of Maharashtra Chapter of IAPM hosted by D.Y. Patil Education Society (Deemed to be University), Kolhapur.',
-          organizer = 'D.Y. Patil Education Society (Deemed to be University), Kolhapur',
-          host_institution = 'D.Y. Patil Education Society, Kolhapur',
+          name = 'MAPCON 2026',
+          short_name = 'MAPCON 2026',
+          description = '46th Annual State Conference of MAPCON 2026 organized by Maharashtra Chapter of IAPM & hosted by D.Y. Patil Education Society (Deemed to be University), Kolhapur.',
+          welcome_message = 'D.Y. Patil Education Society welcomes you to MAPCON 2026 at Hotel Sayaji, Kolhapur.',
+          about_conference = '46th Annual State Conference organized by Maharashtra Chapter of IAPM hosted by D.Y. Patil Education Society, Kolhapur.',
+          organizer = 'Maharashtra Chapter of IAPM',
+          host_institution = 'D.Y. Patil Education Society (Deemed to be University), Kolhapur',
           theme = 'Recent Advances in Pathology & Modern Healthcare',
           venue = 'Hotel Sayaji, Kolhapur',
           address = 'Old Pune-Bangalore Highway, Kawala Naka, Kolhapur, Maharashtra 416001'
-        WHERE id = 1 AND (name LIKE '%100th%' OR name LIKE '%AIU%' OR short_name LIKE '%DPU%' OR short_name LIKE '%MAPCON%' OR name LIKE '%MAPCON%');
+        WHERE id = 1;
       `);
     } catch(confErr) {
       console.warn("Conference auto-update notice:", confErr.message);
