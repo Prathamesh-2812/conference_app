@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import '../config.dart';
+import 'api_service.dart';
 
 class RealtimeSyncService {
   static final RealtimeSyncService instance = RealtimeSyncService._internal();
@@ -18,10 +19,57 @@ class RealtimeSyncService {
 
   void triggerSync() {
     syncNotifier.value++;
+    calculateUnreadCount();
   }
 
   void updateUnreadCount(int count) {
     unreadNotifCountNotifier.value = count;
+  }
+
+  Future<void> calculateUnreadCount() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final seenIds = (prefs.getStringList('seen_notice_ids') ?? []).toSet();
+      final res = await ApiService.get('/notices');
+      if (res is List) {
+        int unread = 0;
+        for (final item in res) {
+          final idStr = item['id']?.toString() ?? '';
+          if (idStr.isNotEmpty && !seenIds.contains(idStr)) {
+            unread++;
+          }
+        }
+        unreadNotifCountNotifier.value = unread;
+      }
+    } catch (_) {}
+  }
+
+  Future<void> markNoticesAsSeen(List<dynamic> notices) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final seenIds = (prefs.getStringList('seen_notice_ids') ?? []).toSet();
+      for (final item in notices) {
+        final idStr = item['id']?.toString() ?? '';
+        if (idStr.isNotEmpty) {
+          seenIds.add(idStr);
+        }
+      }
+      await prefs.setStringList('seen_notice_ids', seenIds.toList());
+      unreadNotifCountNotifier.value = 0;
+    } catch (_) {}
+  }
+
+  Future<void> markAllAsRead() async {
+    try {
+      final res = await ApiService.get('/notices');
+      if (res is List) {
+        await markNoticesAsSeen(res);
+      } else {
+        unreadNotifCountNotifier.value = 0;
+      }
+    } catch (_) {
+      unreadNotifCountNotifier.value = 0;
+    }
   }
 
   Future<void> joinUser(dynamic userId, [dynamic conferenceId = 1]) async {
@@ -41,6 +89,7 @@ class RealtimeSyncService {
 
     _initSocket();
     _startPolling();
+    calculateUnreadCount();
   }
 
   Future<void> _initSocket() async {
@@ -72,7 +121,18 @@ class RealtimeSyncService {
       });
 
       _socket?.on('conference_updated', (_) => triggerSync());
-      _socket?.on('sessions_updated', (_) => triggerSync());
+      _socket?.on('sessions_updated', (data) {
+        if (data is Map && data['title'] != null) {
+          lastNotificationNotifier.value = {
+            'title': '📅 Schedule Updated',
+            'message': data['title'],
+            'type': 'SCHEDULE',
+            'created_at': DateTime.now().toIso8601String(),
+          };
+          unreadNotifCountNotifier.value++;
+        }
+        triggerSync();
+      });
       _socket?.on('speakers_updated', (_) => triggerSync());
       _socket?.on('notices_updated', (_) => triggerSync());
       _socket?.on('new_notice', (data) {
@@ -114,4 +174,3 @@ class RealtimeSyncService {
     _initialized = false;
   }
 }
-

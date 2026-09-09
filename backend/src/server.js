@@ -463,6 +463,47 @@ async function generateDelegateCertificate(pName, regNo, certNo, confName = 'MAP
 
   return `/uploads/certificates/${filename}`;
 }
+
+async function createAndSendNotification({ user_id = null, conference_id = 1, title, message, type = 'GENERAL' }) {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NULL,
+        conference_id INT NOT NULL DEFAULT 1,
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        type VARCHAR(50) DEFAULT 'GENERAL',
+        is_read TINYINT(1) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    const [r] = await pool.query(
+      'INSERT INTO notifications(user_id, conference_id, title, message, type) VALUES(?,?,?,?,?)',
+      [user_id || null, conference_id, title, message, type]
+    );
+    const notifObj = {
+      id: r.insertId,
+      user_id,
+      conference_id,
+      title,
+      message,
+      type,
+      created_at: new Date().toISOString()
+    };
+    if (user_id) {
+      io.to(`user_${user_id}`).emit('notification_received', notifObj);
+    } else {
+      io.emit('notification_received', notifObj);
+    }
+    io.emit('new_notice', notifObj);
+    io.emit('notices_updated');
+    return notifObj;
+  } catch (err) {
+    console.error('Failed to create/send notification:', err.message);
+  }
+}
+
 app.get('/api/health',(req,res)=>res.json({ok:true,service:'conference-management-api',time:new Date().toISOString()}));
 app.get('/api/conference',asyncRoute(async(req,res)=>{const data=await getConference(req.query.conferenceId||1);if(!data)return res.status(404).json({success:false,message:'Conference not found'});ok(res,data)}));
 app.put('/api/admin/conference',auth,roles('ADMIN','SUPER_ADMIN'),[
@@ -1303,6 +1344,14 @@ app.post('/api/admin/sessions',auth,roles('ADMIN','SUPER_ADMIN'),[body('title').
   const [r]=await pool.query('INSERT INTO sessions(conference_id,hall_id,speaker_id,title,description,session_date,start_time,end_time,category) VALUES(?,?,?,?,?,?,?,?,?)',
     [req.body.conferenceId||1, req.body.hall_id, req.body.speaker_id, req.body.title, req.body.description, req.body.session_date, req.body.start_time, req.body.end_time, req.body.category]);
   io.emit('sessions_updated', { action: 'create', id: r.insertId });
+
+  await createAndSendNotification({
+    conference_id: req.body.conferenceId || 1,
+    title: 'New Session Added 📅',
+    message: `"${req.body.title}" has been scheduled for ${req.body.session_date || 'Conference'}. Check Schedule tab.`,
+    type: 'SCHEDULE'
+  });
+
   created(res,{id:r.insertId},'Session created');
 }));
 
@@ -1310,6 +1359,14 @@ app.put('/api/admin/sessions/:id',auth,roles('ADMIN','SUPER_ADMIN'),validate,asy
   await pool.query('UPDATE sessions SET hall_id=?, speaker_id=?, title=?, description=?, session_date=?, start_time=?, end_time=?, category=? WHERE id=?',
     [req.body.hall_id, req.body.speaker_id, req.body.title, req.body.description, req.body.session_date, req.body.start_time, req.body.end_time, req.body.category, req.params.id]);
   io.emit('sessions_updated', { action: 'update', id: req.params.id });
+
+  await createAndSendNotification({
+    conference_id: req.body.conferenceId || 1,
+    title: 'Schedule Updated ⏱️',
+    message: `Session "${req.body.title}" schedule or hall details have been updated.`,
+    type: 'SCHEDULE'
+  });
+
   ok(res,null,'Session updated');
 }));
 
@@ -2581,14 +2638,35 @@ app.get('/api/admin/notices',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(
 }));
 
 app.post('/api/admin/notices',auth,roles('ADMIN','SUPER_ADMIN'),[body('title').notEmpty(),body('message').notEmpty()],validate,asyncRoute(async(req,res)=>{
+  const conferenceId = req.body.conferenceId || 1;
+  const type = req.body.type || 'GENERAL';
   const [r]=await pool.query('INSERT INTO notices(conference_id,title,message,type,target_role,target_user_id) VALUES(?,?,?,?,?,?)',
-    [req.body.conferenceId||1, req.body.title, req.body.message, req.body.type||'GENERAL', req.body.target_role||null, req.body.target_user_id||null]);
-  io.emit('new_notice',{id:r.insertId, title:req.body.title, message:req.body.message, type:req.body.type||'GENERAL'});
+    [conferenceId, req.body.title, req.body.message, type, req.body.target_role||null, req.body.target_user_id||null]);
+  
+  await createAndSendNotification({
+    conference_id: conferenceId,
+    title: req.body.title,
+    message: req.body.message,
+    type: type,
+    user_id: req.body.target_user_id || null
+  });
+
   created(res,{id:r.insertId},'Notice published');
+}));
+
+app.post('/api/admin/broadcast',auth,roles('ADMIN','SUPER_ADMIN'),[body('title').notEmpty(),body('message').notEmpty()],validate,asyncRoute(async(req,res)=>{
+  const notif = await createAndSendNotification({
+    conference_id: req.body.conferenceId || 1,
+    title: req.body.title,
+    message: req.body.message,
+    type: req.body.type || 'ANNOUNCEMENT'
+  });
+  created(res, notif, 'Broadcast sent to all delegates');
 }));
 
 app.delete('/api/admin/notices/:id',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
   await pool.query('DELETE FROM notices WHERE id=?',[req.params.id]);
+  io.emit('notices_updated');
   ok(res,null,'Notice deleted');
 }));
 

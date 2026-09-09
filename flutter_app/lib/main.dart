@@ -749,6 +749,90 @@ class _MainShellState extends State<MainShell> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    RealtimeSyncService.instance.calculateUnreadCount();
+    RealtimeSyncService.instance.lastNotificationNotifier.addListener(_onLiveNotification);
+  }
+
+  @override
+  void dispose() {
+    RealtimeSyncService.instance.lastNotificationNotifier.removeListener(_onLiveNotification);
+    super.dispose();
+  }
+
+  void _onLiveNotification() {
+    final notif = RealtimeSyncService.instance.lastNotificationNotifier.value;
+    if (notif == null || !mounted) return;
+
+    final title = notif['title']?.toString() ?? '📢 Event Notification';
+    final message = notif['message']?.toString() ?? 'New event update from organizers';
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [Color(0xFFDC2626), maroon]),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(color: Colors.red.withOpacity(0.4), blurRadius: 6, offset: const Offset(0, 2)),
+                ],
+              ),
+              child: const Icon(Icons.notifications_active, color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13.5, color: Colors.white),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    message,
+                    style: const TextStyle(fontSize: 12, color: Color(0xFFE2E8F0)),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        action: SnackBarAction(
+          label: 'VIEW',
+          textColor: gold,
+          onPressed: () {
+            setState(() => i = 3);
+            RealtimeSyncService.instance.markAllAsRead();
+          },
+        ),
+        backgroundColor: const Color(0xFF0F172A),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        duration: const Duration(seconds: 5),
+      ),
+    );
+  }
+
+  void _onTabSelected(int idx) {
+    if (idx == 3) {
+      RealtimeSyncService.instance.markAllAsRead();
+    }
+    setState(() => i = idx);
+  }
+
+  @override
   Widget build(BuildContext c) {
     final conference = ConferenceScope.of(c);
     return AppShell(
@@ -763,34 +847,60 @@ class _MainShellState extends State<MainShell> {
           backgroundColor: Colors.white,
           indicatorColor: conference.primaryColor.withOpacity(0.14),
           elevation: 6,
-          onDestinationSelected: (x) => setState(() => i = x),
-          destinations: const [
-            NavigationDestination(
+          onDestinationSelected: _onTabSelected,
+          destinations: [
+            const NavigationDestination(
               icon: Icon(Icons.home_outlined),
               selectedIcon: Icon(Icons.home, color: maroon),
               label: 'Home',
             ),
-            NavigationDestination(
+            const NavigationDestination(
               icon: Icon(Icons.calendar_month_outlined),
               selectedIcon: Icon(Icons.calendar_month, color: maroon),
               label: 'Schedule',
             ),
-            NavigationDestination(
+            const NavigationDestination(
               icon: Icon(Icons.chat_bubble_outline),
               selectedIcon: Icon(Icons.chat_bubble, color: maroon),
               label: 'Chat',
             ),
             NavigationDestination(
-              icon: Icon(Icons.notifications_none),
-              selectedIcon: Icon(Icons.notifications, color: maroon),
+              icon: ValueListenableBuilder<int>(
+                valueListenable: RealtimeSyncService.instance.unreadNotifCountNotifier,
+                builder: (context, unreadCount, child) {
+                  return Badge(
+                    isLabelVisible: unreadCount > 0,
+                    label: Text(
+                      '$unreadCount',
+                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 10, color: Colors.white),
+                    ),
+                    backgroundColor: const Color(0xFFDC2626),
+                    child: const Icon(Icons.notifications_none),
+                  );
+                },
+              ),
+              selectedIcon: ValueListenableBuilder<int>(
+                valueListenable: RealtimeSyncService.instance.unreadNotifCountNotifier,
+                builder: (context, unreadCount, child) {
+                  return Badge(
+                    isLabelVisible: unreadCount > 0,
+                    label: Text(
+                      '$unreadCount',
+                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 10, color: Colors.white),
+                    ),
+                    backgroundColor: const Color(0xFFDC2626),
+                    child: const Icon(Icons.notifications, color: maroon),
+                  );
+                },
+              ),
               label: 'Notices',
             ),
-            NavigationDestination(
+            const NavigationDestination(
               icon: Icon(Icons.photo_library_outlined),
               selectedIcon: Icon(Icons.photo_library, color: maroon),
               label: 'Gallery',
             ),
-            NavigationDestination(
+            const NavigationDestination(
               icon: Icon(Icons.person_outline),
               selectedIcon: Icon(Icons.person, color: maroon),
               label: 'Profile',
@@ -1022,7 +1132,47 @@ class Header extends StatelessWidget {
                   ],
                 ),
               ),
-              if (trailing != null) trailing!,
+              if (trailing != null)
+                trailing!
+              else
+                ValueListenableBuilder<int>(
+                  valueListenable: RealtimeSyncService.instance.unreadNotifCountNotifier,
+                  builder: (context, unreadCount, _) {
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.18),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white24, width: 0.8),
+                      ),
+                      child: IconButton(
+                        icon: Badge(
+                          isLabelVisible: unreadCount > 0,
+                          label: Text(
+                            '$unreadCount',
+                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white),
+                          ),
+                          backgroundColor: const Color(0xFFDC2626),
+                          child: const Icon(Icons.notifications_outlined, color: Colors.white, size: 21),
+                        ),
+                        tooltip: 'Notices & Live Alerts',
+                        onPressed: () {
+                          RealtimeSyncService.instance.markAllAsRead();
+                          Navigator.push(
+                            c,
+                            MaterialPageRoute(
+                              builder: (_) => const AppShell(
+                                child: Scaffold(
+                                  backgroundColor: Colors.white,
+                                  body: NoticesScreen(),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    );
+                  },
+                ),
             ],
           ),
         ],
@@ -3547,6 +3697,36 @@ class _NoticesScreenState extends State<NoticesScreen> {
     super.dispose();
   }
 
+  Color _getNoticeColor(String? type, bool isUrgent) {
+    if (isUrgent) return const Color(0xFFDC2626);
+    final t = (type ?? '').toUpperCase();
+    if (t.contains('SCHEDULE') || t.contains('SESSION') || t.contains('TIME')) {
+      return const Color(0xFF2563EB);
+    } else if (t.contains('TRANSPORT') || t.contains('TRAVEL') || t.contains('VEHICLE')) {
+      return const Color(0xFF0D9488);
+    } else if (t.contains('VENUE') || t.contains('HALL') || t.contains('HOTEL')) {
+      return const Color(0xFFD97706);
+    } else if (t.contains('REGISTRATION') || t.contains('CERTIFICATE')) {
+      return const Color(0xFF059669);
+    }
+    return maroon;
+  }
+
+  IconData _getNoticeIcon(String? type, bool isUrgent) {
+    if (isUrgent) return Icons.warning_amber_rounded;
+    final t = (type ?? '').toUpperCase();
+    if (t.contains('SCHEDULE') || t.contains('SESSION')) {
+      return Icons.calendar_month_outlined;
+    } else if (t.contains('TRANSPORT') || t.contains('TRAVEL')) {
+      return Icons.directions_car_outlined;
+    } else if (t.contains('VENUE') || t.contains('HALL') || t.contains('HOTEL')) {
+      return Icons.location_on_outlined;
+    } else if (t.contains('REGISTRATION') || t.contains('CERTIFICATE')) {
+      return Icons.verified_outlined;
+    }
+    return Icons.notifications_active_outlined;
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -3574,6 +3754,13 @@ class _NoticesScreenState extends State<NoticesScreen> {
 
                   final data = snapshot.data is List ? snapshot.data as List : <dynamic>[];
 
+                  // Mark notices as seen so unread count clears automatically
+                  if (data.isNotEmpty) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      RealtimeSyncService.instance.markNoticesAsSeen(data);
+                    });
+                  }
+
                   if (data.isEmpty) {
                     return ListView(
                       physics: const AlwaysScrollableScrollPhysics(),
@@ -3590,7 +3777,7 @@ class _NoticesScreenState extends State<NoticesScreen> {
                                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: slate),
                               ),
                               SizedBox(height: 4),
-                              Text('Check back later for event updates', style: TextStyle(color: muted)),
+                              Text('Check back later for live event updates', style: TextStyle(color: muted)),
                             ],
                           ),
                         ),
@@ -3600,89 +3787,155 @@ class _NoticesScreenState extends State<NoticesScreen> {
 
                   return ListView.builder(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(18),
-                    itemCount: data.length,
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 30),
+                    itemCount: data.length + 1,
                     itemBuilder: (context, index) {
-                      final item = data[index];
-                      final isUrgent = item['priority'] == 'URGENT';
-
-                    return Card(
-                      elevation: 0,
-                      margin: const EdgeInsets.only(bottom: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18),
-                        side: BorderSide(
-                          color: isUrgent ? Colors.red.shade300 : Colors.grey.shade200,
-                          width: 1.2,
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(18),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: isUrgent ? Colors.red.shade50 : maroon.withOpacity(0.08),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    isUrgent ? Icons.warning_amber_rounded : Icons.notifications_active_outlined,
-                                    color: isUrgent ? Colors.red.shade700 : maroon,
-                                    size: 20,
+                      if (index == 0) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12, left: 4, right: 4),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: maroon.withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  '${data.length} Updates Available',
+                                  style: const TextStyle(
+                                    color: maroon,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
                                   ),
                                 ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    '${item['title'] ?? 'Announcement'}',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 16,
-                                      color: slate,
+                              ),
+                              const Spacer(),
+                              TextButton.icon(
+                                icon: const Icon(Icons.done_all, size: 16, color: maroon),
+                                label: const Text(
+                                  'Mark all seen',
+                                  style: TextStyle(color: maroon, fontSize: 12, fontWeight: FontWeight.bold),
+                                ),
+                                onPressed: () {
+                                  RealtimeSyncService.instance.markAllAsRead();
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('All notices marked as read'),
+                                      duration: Duration(seconds: 1),
+                                      backgroundColor: maroon,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      final item = data[index - 1];
+                      final isUrgent = item['priority'] == 'URGENT' || (item['type']?.toString().toUpperCase() == 'URGENT');
+                      final noticeType = item['type']?.toString().toUpperCase() ?? 'EVENT NOTICE';
+                      final noticeColor = _getNoticeColor(noticeType, isUrgent);
+                      final noticeIcon = _getNoticeIcon(noticeType, isUrgent);
+                      final createdAtStr = formatSessionDate(item['created_at']);
+
+                      return Card(
+                        elevation: 0,
+                        margin: const EdgeInsets.only(bottom: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          side: BorderSide(
+                            color: isUrgent ? const Color(0xFFFCA5A5) : Colors.grey.shade200,
+                            width: isUrgent ? 1.5 : 1.2,
+                          ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(18),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: noticeColor.withOpacity(0.12),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      noticeIcon,
+                                      color: noticeColor,
+                                      size: 20,
                                     ),
                                   ),
-                                ),
-                                if (isUrgent)
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '${item['title'] ?? 'Announcement'}',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w900,
+                                            fontSize: 16,
+                                            color: slate,
+                                            height: 1.2,
+                                          ),
+                                        ),
+                                        if (createdAtStr.isNotEmpty) ...[
+                                          const SizedBox(height: 3),
+                                          Text(
+                                            createdAtStr,
+                                            style: const TextStyle(
+                                              fontSize: 11.5,
+                                              color: muted,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
                                     decoration: BoxDecoration(
-                                      color: Colors.red.shade100,
+                                      color: noticeColor.withOpacity(0.12),
                                       borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: noticeColor.withOpacity(0.35)),
                                     ),
                                     child: Text(
-                                      'URGENT',
+                                      isUrgent ? 'URGENT' : noticeType,
                                       style: TextStyle(
-                                        color: Colors.red.shade900,
-                                        fontSize: 10,
+                                        color: noticeColor,
+                                        fontSize: 9.5,
                                         fontWeight: FontWeight.w900,
+                                        letterSpacing: 0.4,
                                       ),
                                     ),
                                   ),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              '${item['message'] ?? ''}',
-                              style: const TextStyle(fontSize: 14, color: Color(0xFF334155), height: 1.45),
-                            ),
-                          ],
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                '${item['message'] ?? ''}',
+                                style: const TextStyle(fontSize: 14, color: Color(0xFF334155), height: 1.45),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    );
-                  },
-                );
-              },
+                      );
+                    },
+                  );
+                },
+              ),
             ),
           ),
-        ),
-      ],
-    ),
-  );
-}
+        ],
+      ),
+    );
+  }
 }
 
 // ----------------------------------------------------
