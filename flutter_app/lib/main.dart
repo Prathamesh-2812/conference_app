@@ -356,7 +356,7 @@ class _ConferenceAppState extends State<ConferenceApp> with WidgetsBindingObserv
       info: info,
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
-        title: info.name,
+        title: 'DYPESCONF',
         theme: ThemeData(
           useMaterial3: true,
           scaffoldBackgroundColor: info.backgroundColor,
@@ -522,36 +522,26 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
                     const Text(
                       'DYPESCONF',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 2.5,
-                        color: gold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      conference.shortName.isNotEmpty ? conference.shortName : 'MAPCON 2026',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 24,
+                        fontSize: 26,
                         fontWeight: FontWeight.w900,
-                        color: conference.primaryColor,
+                        letterSpacing: 1.5,
+                        color: maroon,
                       ),
                     ),
                     const SizedBox(height: 6),
                     const Text(
-                      'D. Y. Patil Education Society, Kolhapur\nDelegate & Participant Portal',
+                      'D. Y. Patil Education Society\nConference & Delegate Portal',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: muted,
                         fontSize: 13,
-                        height: 1.3,
-                        fontWeight: FontWeight.w500,
+                        height: 1.35,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 28),
