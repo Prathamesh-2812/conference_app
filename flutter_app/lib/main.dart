@@ -7183,16 +7183,32 @@ class _CertificateScreenState extends State<CertificateScreen> {
   final TextEditingController _suggestionsController = TextEditingController();
 
   bool _isSubmitting = false;
-  int _refreshKey = 0;
+  bool _isLoading = true;
+  Map<String, dynamic>? _certData;
 
-  Future<Map<String, dynamic>> _loadCertificateData() async {
+  @override
+  void initState() {
+    super.initState();
+    _loadInitialData();
+  }
+
+  Future<void> _loadInitialData() async {
     try {
       final res = await ApiService.get('/me/certificate');
-      if (res is Map) {
-        return Map<String, dynamic>.from(res);
+      if (res is Map && mounted) {
+        setState(() {
+          _certData = Map<String, dynamic>.from(res);
+          _isLoading = false;
+        });
+        return;
       }
     } catch (_) {}
-    return {};
+    if (mounted) {
+      setState(() {
+        _certData = _certData ?? {};
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _submitFeedbackAndGenerate() async {
@@ -7240,18 +7256,17 @@ class _CertificateScreenState extends State<CertificateScreen> {
     };
 
     try {
+      dynamic res;
       try {
-        await ApiService.post('/me/feedback-and-certificate', payload);
+        res = await ApiService.post('/me/feedback-and-certificate', payload);
       } catch (_) {
-        await ApiService.post('/me/feedback', payload);
+        res = await ApiService.post('/me/feedback', payload);
       }
 
-      if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-          _refreshKey++;
-        });
+      await _loadInitialData();
 
+      if (mounted) {
+        setState(() => _isSubmitting = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('🎉 Feedback recorded! Your verified Certificate of Participation is now ready for download.'),
@@ -7275,10 +7290,37 @@ class _CertificateScreenState extends State<CertificateScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading && _certData == null) {
+      return Scaffold(
+        backgroundColor: cream,
+        appBar: AppBar(
+          title: const Text('CME & Conference Evaluation', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 17)),
+          backgroundColor: maroon,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
+        body: const Center(child: CircularProgressIndicator(color: maroon)),
+      );
+    }
+
+    final data = _certData ?? {};
+    final bool hasFeedback = data['hasFeedback'] == true || data['feedback_submitted'] == true;
+    final cert = data['certificate'] is Map
+        ? data['certificate'] as Map
+        : (data.containsKey('certificate_url') ? data : null);
+    final certUrl = cert?['certificate_url']?.toString();
+    final fullImageUrl = certUrl != null ? resolveMediaUrl(certUrl) : null;
+
     return Scaffold(
       backgroundColor: cream,
       appBar: AppBar(
-        title: const Text('CME & Conference Evaluation', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 17)),
+        title: Text(
+          (!hasFeedback || cert == null || fullImageUrl == null) ? 'Delegate Feedback Form' : 'Verified E-Certificate',
+          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 17),
+        ),
         backgroundColor: maroon,
         elevation: 0,
         leading: IconButton(
@@ -7286,31 +7328,9 @@ class _CertificateScreenState extends State<CertificateScreen> {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: FutureBuilder<Map<String, dynamic>>(
-        key: ValueKey(_refreshKey),
-        future: _loadCertificateData(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting && !_isSubmitting) {
-            return const Center(child: CircularProgressIndicator(color: maroon));
-          }
-
-          final data = snapshot.data ?? {};
-          final bool hasFeedback = data['hasFeedback'] == true || data['feedback_submitted'] == true;
-          final cert = data['certificate'] is Map
-              ? data['certificate'] as Map
-              : (data.containsKey('certificate_url') ? data : null);
-          final certUrl = cert?['certificate_url']?.toString();
-          final fullImageUrl = certUrl != null ? resolveMediaUrl(certUrl) : null;
-
-          // If feedback is NOT filled yet or certificate is missing, show the feedback form first
-          if (!hasFeedback || cert == null || fullImageUrl == null) {
-            return _buildFeedbackUnlockView(data['participant']);
-          }
-
-          // Otherwise show the unlocked certificate
-          return _buildUnlockedCertificateView(cert, fullImageUrl);
-        },
-      ),
+      body: (!hasFeedback || cert == null || fullImageUrl == null)
+          ? _buildFeedbackUnlockView(data['participant'])
+          : _buildUnlockedCertificateView(cert, fullImageUrl),
     );
   }
 

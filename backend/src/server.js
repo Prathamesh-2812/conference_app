@@ -783,62 +783,6 @@ app.get('/api/me/transport', auth, asyncRoute(async(req, res) => {
   ok(res, p, 'Transport details retrieved');
 }));
 
-// Personal Certificate & Feedback Gating Endpoints
-app.get('/api/me/certificate', auth, asyncRoute(async(req, res) => {
-  const conferenceId = req.query.conferenceId || 1;
-  const [[p]] = await pool.query(`
-    SELECT p.id as participant_id, p.registration_no, p.category, u.name as participant_name
-    FROM participants p
-    JOIN users u ON u.id = p.user_id
-    WHERE p.user_id = ? AND p.conference_id = ?
-    LIMIT 1
-  `, [req.user.id, conferenceId]);
-
-  if (!p) return res.status(404).json({ message: 'Participant record not found' });
-
-  const [[fb]] = await pool.query('SELECT id FROM feedback WHERE participant_id = ? LIMIT 1', [p.participant_id]);
-  const [[cert]] = await pool.query('SELECT * FROM certificates WHERE participant_id = ? LIMIT 1', [p.participant_id]);
-
-  let certData = cert;
-  if (!certData) {
-    // Generate certificate record if missing
-    const certNo = `CERT-${conferenceId}-${p.participant_id}-${Date.now().toString().slice(-4)}`;
-    const [cRes] = await pool.query(
-      'INSERT INTO certificates (participant_id, certificate_no, issued_at) VALUES (?, ?, NOW())',
-      [p.participant_id, certNo]
-    );
-    const [[newCert]] = await pool.query('SELECT * FROM certificates WHERE id = ?', [cRes.insertId]);
-    certData = newCert;
-  }
-
-  ok(res, {
-    certificate: certData,
-    feedbackSubmitted: !!fb,
-    participant: p
-  }, 'Certificate status retrieved');
-}));
-
-app.post('/api/me/feedback', auth, [
-  body('rating').isInt({ min: 1, max: 5 })
-], validate, asyncRoute(async(req, res) => {
-  const conferenceId = req.body.conferenceId || req.query.conferenceId || 1;
-  const [[p]] = await pool.query('SELECT id FROM participants WHERE user_id = ? AND conference_id = ? LIMIT 1', [req.user.id, conferenceId]);
-
-  if (!p) return res.status(404).json({ message: 'Participant registration not found' });
-
-  const rating = req.body.rating || 5;
-  const contentRating = req.body.contentRating || 5;
-  const speakerRating = req.body.speakerRating || 5;
-  const comment = req.body.comment || req.body.suggestions || '';
-
-  await pool.query(`
-    INSERT INTO feedback (participant_id, session_id, rating, content_rating, speaker_rating, comment, created_at)
-    VALUES (?, NULL, ?, ?, ?, ?, NOW())
-  `, [p.id, rating, contentRating, speakerRating, comment]);
-
-  ok(res, { feedbackSubmitted: true }, 'Feedback submitted successfully. Certificate unlocked!');
-}));
-
 // Home Banners / Main Media Sliders Endpoints
 app.get('/api/sliders', asyncRoute(async(req, res) => {
   const conferenceId = req.query.conferenceId || 1;
@@ -2011,33 +1955,7 @@ function processFeedbackPayload(b) {
   };
 }
 
-app.post('/api/me/feedback',auth,asyncRoute(async(req,res)=>{
-  const [[p]]=await pool.query('SELECT id FROM participants WHERE user_id=? LIMIT 1',[req.user.id]);
-  if(!p) return res.status(400).json({message:'Participant profile not found'});
-
-  const fb = processFeedbackPayload(req.body);
-
-  await pool.query(`
-    INSERT INTO feedback(
-      participant_id, session_id, rating, content_rating, speaker_rating, comment,
-      choice_of_speakers, thorough_exploration, presentation_quality, topic_usefulness,
-      suggestions, programme_evaluation, adequate_discussion_time, topics_covered_specialty,
-      understanding_improvement, arrangements_rating, registration_rating, overall_conduct_rating,
-      audiovisuals_rating, food_arrangements_rating, responses
-    )
-    VALUES(?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `, [
-    p.id, fb.rating, fb.contentRating, fb.speakerRating, fb.comment,
-    fb.choiceOfSpeakers, fb.thoroughExploration, fb.presentationQuality, fb.topicUsefulness,
-    fb.suggestions, fb.programmeEvaluation, fb.adequateDiscussionTime, fb.topicsCoveredSpecialty,
-    fb.understandingImprovement, fb.arrangementsRating, fb.registrationRating, fb.overallConductRating,
-    fb.audiovisualsRating, fb.foodArrangementsRating, fb.responsesJson
-  ]);
-
-  ok(res, { feedbackSubmitted: true }, 'Feedback submitted successfully');
-}));
-
-app.post('/api/me/feedback-and-certificate',auth,asyncRoute(async(req,res)=>{
+app.post(['/api/me/feedback', '/api/me/feedback-and-certificate'],auth,asyncRoute(async(req,res)=>{
   const [[p]]=await pool.query('SELECT p.id, p.registration_no, p.category, u.name, u.email FROM participants p JOIN users u ON u.id=p.user_id WHERE u.id=? LIMIT 1',[req.user.id]);
   if(!p) return res.status(400).json({success:false,message:'Participant profile not found'});
 
