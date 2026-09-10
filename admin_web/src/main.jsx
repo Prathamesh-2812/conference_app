@@ -53,15 +53,13 @@ const menu=[
   {title:'Schedule',icon:CalendarDays,children:['Sessions Timeline','Tracks & Halls','Add Session']},
   {title:'Accommodation',icon:Hotel,children:['Hotels','Rooms','Room Allocation']},
   {title:'Transport',icon:Bus,children:['Vehicles','Drivers','Transport Assignments']},
-  {title:'Attendance',icon:CheckCircle,children:['Live Attendance','QR Scanner Simulator']},
   {title:'Notices',icon:Bell,children:['Notices & Announcements','Send Push Notification']},
   {title:'Gallery',icon:Image,children:['Photo Gallery','Upload Photo']},
-  {title:'Meals',icon:CalendarDays,children:['Meal Schedule','Schedule Meal']},
   {title:'Duties',icon:Shield,children:['Duty Roster','Assign Staff']},
   {title:'Certificates',icon:FileCheck,children:['Issued Certificates','Issue Certificate']},
   {title:'Feedback',icon:MessageCircle,children:['CME Feedback & Ratings','Feedback Analytics']},
   {title:'Chat',icon:Bell,children:['Live Chat','Broadcast Message']},
-  {title:'Reports',icon:FileCheck,children:['Participant Reports','Attendance Reports','Accommodation Reports','Transport Reports','Meal Reports','Certificate Reports','CME Feedback Reports']},
+  {title:'Reports',icon:FileCheck,children:['Participant Reports','Accommodation Reports','Transport Reports','Certificate Reports','CME Feedback Reports']},
   {title:'Admin Users',icon:Lock,children:['Admin Users List','Audit Logs']},
   {title:'System Settings',icon:Settings},
 ];
@@ -943,6 +941,7 @@ function BulkImportModal({conferenceId, onClose, onImportSuccess}){
   const [fileName, setFileName] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [importReport, setImportReport] = useState(null);
 
   const downloadTemplate = () => {
     const templateData = [
@@ -953,21 +952,22 @@ function BulkImportModal({conferenceId, onClose, onImportSuccess}){
         'Category': 'VIP Delegate',
         'Designation': 'Professor & Head',
         'University': 'AIIMS Delhi',
-        'Registration Number': 'DPU-2026-001',
-        'Hotel Name': 'Hyatt Regency Pune',
-        'Hotel Address': 'Viman Nagar, Pune',
+        'Registration Number': 'MAPCON-2026-001',
+        'Food Preference': 'VEG',
+        'Hotel Name': 'Hotel Sayaji',
+        'Hotel Address': 'Kawala Naka, Kolhapur',
         'Room Number': '501',
         'Room Type': 'Executive Suite',
-        'Check In Date': '2026-04-27',
-        'Check Out Date': '2026-04-30',
+        'Check In Date': '2026-09-25',
+        'Check Out Date': '2026-09-28',
         'Travel Mode': 'Flight',
         'Flight/Train No': 'AI-852',
-        'Arrival Date': '2026-04-27',
+        'Arrival Date': '2026-09-25',
         'Arrival Time': '10:30 AM',
-        'Departure Date': '2026-04-30',
+        'Departure Date': '2026-09-28',
         'Departure Time': '06:00 PM',
-        'Pickup Point': 'Pune Airport Terminal 1',
-        'Drop Point': 'Hyatt Regency Pune',
+        'Pickup Point': 'Kolhapur Airport',
+        'Drop Point': 'Hotel Sayaji',
         'Driver Name': 'Rajesh Patil',
         'Driver Phone': '9876543210',
         'Vehicle Number': 'MH12AB1234'
@@ -979,21 +979,22 @@ function BulkImportModal({conferenceId, onClose, onImportSuccess}){
         'Category': 'Speaker',
         'Designation': 'Dean Academics',
         'University': 'Mumbai University',
-        'Registration Number': 'DPU-2026-002',
-        'Hotel Name': 'Sayaji Hotel',
+        'Registration Number': 'MAPCON-2026-002',
+        'Food Preference': 'NON-VEG',
+        'Hotel Name': 'Hotel Sayaji',
         'Hotel Address': 'Kawala Naka, Kolhapur',
         'Room Number': '302',
         'Room Type': 'Deluxe Double',
-        'Check In Date': '2026-04-27',
-        'Check Out Date': '2026-04-30',
+        'Check In Date': '2026-09-25',
+        'Check Out Date': '2026-09-28',
         'Travel Mode': 'Train',
         'Flight/Train No': 'Koyna Express (11029)',
-        'Arrival Date': '2026-04-27',
+        'Arrival Date': '2026-09-25',
         'Arrival Time': '02:15 PM',
-        'Departure Date': '2026-04-30',
+        'Departure Date': '2026-09-28',
         'Departure Time': '08:00 AM',
         'Pickup Point': 'Kolhapur Railway Station',
-        'Drop Point': 'Sayaji Hotel',
+        'Drop Point': 'Hotel Sayaji',
         'Driver Name': 'Amit Jadhav',
         'Driver Phone': '9876543211',
         'Vehicle Number': 'MH12CD5678'
@@ -1011,6 +1012,7 @@ function BulkImportModal({conferenceId, onClose, onImportSuccess}){
     if(!file) return;
     setFileName(file.name);
     setError('');
+    setImportReport(null);
 
     const reader = new FileReader();
     reader.onload = (evt) => {
@@ -1061,14 +1063,19 @@ function BulkImportModal({conferenceId, onClose, onImportSuccess}){
 
     setBusy(true);
     setError('');
+    setImportReport(null);
 
     try {
       const res = await req('/admin/participants/bulk-import', {
         method: 'POST',
         body: JSON.stringify({ participants: rowsToImport, conferenceId: conferenceId || 1 })
       });
-      alert(res.message || 'Import completed successfully');
-      onImportSuccess();
+      const report = res.data || res;
+      setImportReport(report);
+      alert(res.message || `Bulk Import Success: ${report.created || 0} created, ${report.updated || 0} updated`);
+      setTimeout(() => {
+        onImportSuccess();
+      }, 1200);
     } catch(err) {
       setError(err.message || 'Import failed');
     } finally {
@@ -1077,7 +1084,7 @@ function BulkImportModal({conferenceId, onClose, onImportSuccess}){
   };
 
   return <div className="modal-overlay">
-    <div className="modal" style={{maxWidth:'680px'}}>
+    <div className="modal" style={{maxWidth:'740px'}}>
       <div className="modal-header">
         <h3>Bulk Import Participants & Mapping (Excel / CSV)</h3>
         <button className="close" onClick={onClose}>&times;</button>
@@ -1096,8 +1103,8 @@ function BulkImportModal({conferenceId, onClose, onImportSuccess}){
         <div style={{background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:'10px', padding:'12px 16px', marginBottom:'14px'}}>
           <strong style={{color:'#1e40af', fontSize:'13px', display:'block', marginBottom:'4px'}}>✨ Smart Merge & Duplicate Protection Active</strong>
           <p style={{margin:0, fontSize:'12.5px', color:'#1e3a8a', lineHeight:1.4}}>
-            • If a delegate is <b>already registered</b> (matched by Reg No, Phone, or Email), the system <b>will not duplicate them</b>. Instead, it will update and enrich their profile with newly provided details (Hotel, Room Number, Liaison, Travel timings, University, etc.).<br/>
-            • New delegates will be automatically created with default password <code>Demo@123</code> and verified QR tokens.
+            • If a delegate is <b>already registered</b> (matched by Reg No, Phone, or Email), the system <b>will not duplicate them</b>. Instead, it will update and enrich their profile with newly provided details.<br/>
+            • New delegates will be automatically created with default password as their <b>Mobile Number</b> and auto-assigned verified QR tokens.
           </p>
         </div>
 
@@ -1109,8 +1116,35 @@ function BulkImportModal({conferenceId, onClose, onImportSuccess}){
           {fileName && <div style={{marginTop:'10px', color:'#2563eb', fontWeight:'bold', fontSize:'14px'}}>File Loaded: {fileName} ({parsedData?.length||0} rows detected)</div>}
         </div>
 
+        {parsedData && parsedData.length > 0 && (
+          <div style={{marginBottom:'14px', background:'#f8fafc', padding:'10px', borderRadius:'8px', border:'1px solid #e2e8f0'}}>
+            <div style={{fontSize:'12px', fontWeight:700, color:'#475569', marginBottom:'6px'}}>Preview (First {Math.min(3, parsedData.length)} of {parsedData.length} rows):</div>
+            <div style={{overflowX:'auto', maxHeight:'140px'}}>
+              <table style={{fontSize:'11.5px', width:'100%', borderCollapse:'collapse'}}>
+                <thead>
+                  <tr style={{background:'#e2e8f0'}}>
+                    {Object.keys(parsedData[0]).slice(0, 7).map(k => <th key={k} style={{padding:'4px 6px', textAlign:'left'}}>{k}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {parsedData.slice(0, 3).map((row, i) => (
+                    <tr key={i} style={{borderBottom:'1px solid #cbd5e1'}}>
+                      {Object.keys(parsedData[0]).slice(0, 7).map(k => <td key={k} style={{padding:'4px 6px'}}>{String(row[k]||'-')}</td>)}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         <Field textarea label="Or Paste CSV / Tab-separated Content Directly" value={csvText} onChange={setCsvText} placeholder="Name, Mobile, Email, Category, Hotel, Room..." />
         {error && <p style={{color:'red', marginTop:'8px', fontWeight:'bold'}}>{error}</p>}
+        {importReport && (
+          <div style={{marginTop:'10px', padding:'10px 14px', background:'#f0fdf4', border:'1px solid #86efac', borderRadius:'8px', color:'#166534', fontSize:'13px'}}>
+            ✅ <b>Import Summary:</b> {importReport.created || 0} Created, {importReport.updated || 0} Updated/Merged, {importReport.skipped || 0} Skipped.
+          </div>
+        )}
       </div>
       <div className="modal-footer">
         <button onClick={onClose}>Cancel</button>
@@ -3977,10 +4011,8 @@ function Reports({tab, notify, selectedConferenceId}){
         <small style={{fontWeight:600, color:'#64748b'}}>Report Module:</small>
         <select value={type} onChange={e=>setType(e.target.value)} style={{padding:'7px 12px', borderRadius:'6px', border:'1px solid #cbd5e1', fontSize:'13.5px', fontWeight:700}}>
           <option value="participants">👥 Participants Master Roster</option>
-          <option value="attendance">⚡ Attendance & Check-in Scans</option>
           <option value="accommodation">🏨 Accommodation & Rooms</option>
           <option value="transport">🚐 Transport & Vehicle Schedule</option>
-          <option value="meals">🍽️ Meal Passes & Redemptions</option>
           <option value="certificates">📜 Issued Certificates</option>
           <option value="feedback">💬 CME Feedback & Ratings</option>
         </select>

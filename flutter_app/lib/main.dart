@@ -1809,13 +1809,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       subtitle: 'QR badge for entry & session check-in',
                       onTap: () => go(context, const DigitalIdScreen()),
                     ),
-                  if (conference.settings['enableAttendance'] != false)
-                    CardButton(
-                      icon: Icons.fact_check,
-                      title: 'My Attendance',
-                      subtitle: 'Session attendance record & verification',
-                      onTap: () => go(context, const AttendanceScreen()),
-                    ),
                   if (conference.settings['enableCertificates'] != false)
                     CardButton(
                       icon: Icons.workspace_premium,
@@ -1823,12 +1816,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       subtitle: 'View & download certified credentials',
                       onTap: () => go(context, const CertificateScreen()),
                     ),
-                  CardButton(
-                    icon: Icons.restaurant,
-                    title: 'Meals & Dining',
-                    subtitle: 'Breakfast, lunch, high-tea & banquet',
-                    onTap: () => go(context, const MealsScreen()),
-                  ),
                   CardButton(
                     icon: Icons.explore_rounded,
                     title: 'Travel & Nearest Tourist Places',
@@ -7167,31 +7154,31 @@ class CertificateScreen extends StatefulWidget {
 
 class _CertificateScreenState extends State<CertificateScreen> {
   // 1. Choice of Speakers
-  String _choiceOfSpeakers = 'Excellent';
+  String? _choiceOfSpeakers;
   // 2. Did the CME and Conference provide a thorough exploration of the topic?
-  String _thoroughExploration = 'Excellent';
+  String? _thoroughExploration;
   // 3. Quality of Presentation
-  String _qualityOfPresentation = 'Excellent';
+  String? _qualityOfPresentation;
   // 4. Usefulness of Topic
-  String _usefulnessOfTopic = 'Excellent';
+  String? _usefulnessOfTopic;
   // 5. Evaluation of the programme as a whole
-  String _programmeEvaluation = 'Excellent';
+  String? _programmeEvaluation;
   // 6. Was there adequate time for discussion?
-  String _adequateDiscussionTime = 'Yes';
+  String? _adequateDiscussionTime;
   // 7. Were the topics selected cover important aspects of the specialty?
-  String _topicsCoveredSpecialty = 'Yes';
+  String? _topicsCoveredSpecialty;
   // 8. How would you rate the improvement of your understanding based on this session? (1-5)
-  int _understandingImprovement = 5;
+  int _understandingImprovement = 0;
   // 9. Rate the arrangements made by the organizers : (1-5)
-  int _arrangementsRating = 5;
+  int _arrangementsRating = 0;
   // 10. Registration : (1-5)
-  int _registrationRating = 5;
+  int _registrationRating = 0;
   // 11. Overall conduct of the CME & Conference: (1-5)
-  int _overallConductRating = 5;
+  int _overallConductRating = 0;
   // 12. Audiovisuals of the sessions : (1-5)
-  int _audiovisualsRating = 5;
+  int _audiovisualsRating = 0;
   // 13. Food Arrangements : (1-5)
-  int _foodArrangementsRating = 5;
+  int _foodArrangementsRating = 0;
   // 14. Suggestions (if any)
   final TextEditingController _suggestionsController = TextEditingController();
 
@@ -7209,6 +7196,29 @@ class _CertificateScreenState extends State<CertificateScreen> {
   }
 
   Future<void> _submitFeedbackAndGenerate() async {
+    if (_choiceOfSpeakers == null ||
+        _thoroughExploration == null ||
+        _qualityOfPresentation == null ||
+        _usefulnessOfTopic == null ||
+        _programmeEvaluation == null ||
+        _adequateDiscussionTime == null ||
+        _topicsCoveredSpecialty == null ||
+        _understandingImprovement == 0 ||
+        _arrangementsRating == 0 ||
+        _registrationRating == 0 ||
+        _overallConductRating == 0 ||
+        _audiovisualsRating == 0 ||
+        _foodArrangementsRating == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ Please fill out all evaluation questions and ratings before submitting.'),
+          backgroundColor: Color(0xFFDC2626),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
     final payload = {
       'choiceOfSpeakers': _choiceOfSpeakers,
@@ -7606,7 +7616,7 @@ class _CertificateScreenState extends State<CertificateScreen> {
     required String questionNumber,
     required String title,
     required List<String> options,
-    required String selectedValue,
+    required String? selectedValue,
     required ValueChanged<String> onChanged,
   }) {
     return Column(
@@ -7634,7 +7644,7 @@ class _CertificateScreenState extends State<CertificateScreen> {
           spacing: 8,
           runSpacing: 8,
           children: options.map((opt) {
-            final isSelected = selectedValue.toLowerCase() == opt.toLowerCase();
+            final isSelected = selectedValue != null && selectedValue.toLowerCase() == opt.toLowerCase();
             return ChoiceChip(
               label: Text(opt),
               selected: isSelected,
@@ -7710,7 +7720,7 @@ class _CertificateScreenState extends State<CertificateScreen> {
                     children: [
                       Icon(
                         Icons.star_rounded,
-                        color: isSelected ? gold : (val <= currentValue ? const Color(0xFFF59E0B) : Colors.grey.shade400),
+                        color: isSelected ? gold : (currentValue > 0 && val <= currentValue ? const Color(0xFFF59E0B) : Colors.grey.shade400),
                         size: 18,
                       ),
                       const SizedBox(height: 2),
