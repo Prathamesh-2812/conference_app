@@ -281,6 +281,29 @@ async function runMigrations(){
         FOREIGN KEY(conference_id) REFERENCES conferences(id) ON DELETE CASCADE
       )
     `);
+    const sessionCols = [
+      "zoom_link TEXT NULL",
+      "meeting_id VARCHAR(100) NULL",
+      "passcode VARCHAR(100) NULL",
+      "is_live TINYINT(1) DEFAULT 0",
+      "stream_platform VARCHAR(50) DEFAULT 'ZOOM'"
+    ];
+    for(const colDef of sessionCols){
+      const colName = colDef.split(' ')[0];
+      const [exists] = await pool.query(`SHOW COLUMNS FROM sessions LIKE '${colName}'`);
+      if(!exists.length){
+        await pool.query(`ALTER TABLE sessions ADD COLUMN ${colDef}`);
+      }
+    }
+    await pool.query(`
+      UPDATE sessions 
+      SET zoom_link = 'https://zoom.us/j/84512948123?pwd=MAPCON2026HYBRID',
+          meeting_id = '845 1294 8123',
+          passcode = 'MAPCON2026',
+          is_live = 1
+      WHERE zoom_link IS NULL OR zoom_link = ''
+    `).catch(() => {});
+
     // Repair broken gallery photo records pointing to missing local files or empty URLs
     await pool.query(`
       DELETE FROM photo_faces WHERE photo_id IN (SELECT id FROM photos WHERE url IS NULL OR TRIM(url) = '' OR TRIM(url) = 'undefined' OR TRIM(url) = 'null')
@@ -1462,8 +1485,9 @@ app.get('/api/admin/sessions',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async
 }));
 
 app.post('/api/admin/sessions',auth,roles('ADMIN','SUPER_ADMIN'),[body('title').notEmpty()],validate,asyncRoute(async(req,res)=>{
-  const [r]=await pool.query('INSERT INTO sessions(conference_id,hall_id,speaker_id,title,description,session_date,start_time,end_time,category) VALUES(?,?,?,?,?,?,?,?,?)',
-    [req.body.conferenceId||1, req.body.hall_id, req.body.speaker_id, req.body.title, req.body.description, req.body.session_date, req.body.start_time, req.body.end_time, req.body.category]);
+  const isLive = req.body.is_live !== undefined ? (req.body.is_live ? 1 : 0) : 0;
+  const [r]=await pool.query('INSERT INTO sessions(conference_id,hall_id,speaker_id,title,description,session_date,start_time,end_time,category,zoom_link,meeting_id,passcode,is_live,stream_platform) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+    [req.body.conferenceId||1, req.body.hall_id, req.body.speaker_id, req.body.title, req.body.description, req.body.session_date, req.body.start_time, req.body.end_time, req.body.category, req.body.zoom_link||null, req.body.meeting_id||null, req.body.passcode||null, isLive, req.body.stream_platform||'ZOOM']);
   io.emit('sessions_updated', { action: 'create', id: r.insertId });
 
   await createAndSendNotification({
@@ -1477,8 +1501,24 @@ app.post('/api/admin/sessions',auth,roles('ADMIN','SUPER_ADMIN'),[body('title').
 }));
 
 app.put('/api/admin/sessions/:id',auth,roles('ADMIN','SUPER_ADMIN'),validate,asyncRoute(async(req,res)=>{
-  await pool.query('UPDATE sessions SET hall_id=?, speaker_id=?, title=?, description=?, session_date=?, start_time=?, end_time=?, category=? WHERE id=?',
-    [req.body.hall_id, req.body.speaker_id, req.body.title, req.body.description, req.body.session_date, req.body.start_time, req.body.end_time, req.body.category, req.params.id]);
+  const isLive = req.body.is_live !== undefined ? (req.body.is_live ? 1 : 0) : null;
+  await pool.query(`
+    UPDATE sessions SET
+      hall_id=COALESCE(?,hall_id),
+      speaker_id=COALESCE(?,speaker_id),
+      title=COALESCE(?,title),
+      description=COALESCE(?,description),
+      session_date=COALESCE(?,session_date),
+      start_time=COALESCE(?,start_time),
+      end_time=COALESCE(?,end_time),
+      category=COALESCE(?,category),
+      zoom_link=COALESCE(?,zoom_link),
+      meeting_id=COALESCE(?,meeting_id),
+      passcode=COALESCE(?,passcode),
+      is_live=COALESCE(?,is_live),
+      stream_platform=COALESCE(?,stream_platform)
+    WHERE id=?
+  `, [req.body.hall_id, req.body.speaker_id, req.body.title, req.body.description, req.body.session_date, req.body.start_time, req.body.end_time, req.body.category, req.body.zoom_link, req.body.meeting_id, req.body.passcode, isLive, req.body.stream_platform, req.params.id]);
   io.emit('sessions_updated', { action: 'update', id: req.params.id });
 
   await createAndSendNotification({

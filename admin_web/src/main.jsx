@@ -1657,7 +1657,18 @@ function Schedule({tab, notify}){
       <tbody>
         {d.map(x=><tr key={x.id}>
           <td>{toInputDate(x.session_date)}<br/>{x.start_time} - {x.end_time}</td>
-          <td><b>{x.title}</b><br/><small>{x.category}</small></td>
+          <td>
+            <b>{x.title}</b><br/>
+            <small>{x.category}</small>
+            {(x.zoom_link || x.is_live) && (
+              <div style={{marginTop:'4px',display:'flex',gap:'4px',alignItems:'center',flexWrap:'wrap'}}>
+                <span className="pill" style={{background:x.is_live?'#dc2626':'#2563eb',color:'#fff',fontSize:'10px',padding:'2px 6px'}}>
+                  {x.is_live?'🔴 LIVE STREAM':'📹 Zoom Stream'}
+                </span>
+                {x.meeting_id && <small style={{color:'#64748b',fontSize:'10.5px'}}>ID: {x.meeting_id}</small>}
+              </div>
+            )}
+          </td>
           <td>{x.hall_name}</td>
           <td>{x.speaker_name}</td>
           <td>
@@ -1870,7 +1881,7 @@ function SessionModal({value,speakers,halls,onSave,onClose}){
     }
   };
 
-  return <div className="modal-overlay"><div className="modal" style={{maxWidth:'640px'}}><div className="modal-header"><h3>{v.id?'Edit Session':'Add Session'}</h3><button className="close" onClick={onClose}>&times;</button></div><div className="modal-body"><div className="formgrid">
+  return <div className="modal-overlay"><div className="modal" style={{maxWidth:'680px'}}><div className="modal-header"><h3>{v.id?'Edit Session':'Add Session'}</h3><button className="close" onClick={onClose}>&times;</button></div><div className="modal-body"><div className="formgrid">
     <Field label="Title" value={v.title} onChange={x=>set('title',x)}/>
     <Field type="date" label="Date" value={v.session_date} onChange={x=>set('session_date',x)}/>
     <Field type="time" label="Start Time" value={v.start_time} onChange={x=>set('start_time',x)}/>
@@ -1902,6 +1913,23 @@ function SessionModal({value,speakers,halls,onSave,onClose}){
 
     <Field label="Category" value={v.category} onChange={x=>set('category',x)}/>
     <Field textarea label="Description" value={v.description} onChange={x=>set('description',x)}/>
+
+    <div style={{gridColumn:'1/-1',background:'#f0fdf4',border:'1.5px solid #86efac',borderRadius:'12px',padding:'14px',marginTop:'4px'}}>
+      <div style={{fontWeight:'800',fontSize:'13.5px',color:'#166534',marginBottom:'10px',display:'flex',alignItems:'center',gap:'6px'}}>
+        🌐 Hybrid & Online Stream Integration (Zoom Meeting)
+      </div>
+      <div className="formgrid" style={{marginBottom:0}}>
+        <Field label="Zoom / Live Stream URL" value={v.zoom_link||''} onChange={x=>set('zoom_link',x)} placeholder="https://zoom.us/j/84512948123?pwd=..."/>
+        <Field label="Zoom Meeting ID" value={v.meeting_id||''} onChange={x=>set('meeting_id',x)} placeholder="e.g. 845 1294 8123"/>
+        <Field label="Passcode" value={v.passcode||''} onChange={x=>set('passcode',x)} placeholder="e.g. MAPCON2026"/>
+        <div style={{display:'flex',alignItems:'center',gap:'10px',marginTop:'18px'}}>
+          <input type="checkbox" id="is_live_chk" checked={!!v.is_live} onChange={e=>set('is_live', e.target.checked ? 1 : 0)} style={{width:'18px',height:'18px',cursor:'pointer'}}/>
+          <label htmlFor="is_live_chk" style={{fontWeight:'700',fontSize:'13px',color:v.is_live?'#dc2626':'#1e293b',cursor:'pointer'}}>
+            {v.is_live ? '🔴 Session is CURRENTLY LIVE' : 'Mark as Live Stream Active'}
+          </label>
+        </div>
+      </div>
+    </div>
   </div></div><div className="modal-footer"><button onClick={onClose}>Cancel</button><button className="primary" onClick={()=>onSave(v)}>Save</button></div></div></div>
 }
 
