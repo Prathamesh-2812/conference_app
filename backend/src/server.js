@@ -1342,7 +1342,7 @@ app.delete('/api/admin/sessions/:id',auth,roles('ADMIN','SUPER_ADMIN'),asyncRout
   ok(res,null,'Session deleted');
 }));
 app.get('/api/sessions',asyncRoute(async(req,res)=>{const [r]=await pool.query(`SELECT s.*, DATE_FORMAT(s.session_date, '%Y-%m-%d') as session_date, sp.name speaker_name,sp.photo speaker_photo,v.name venue_name,h.name hall_name FROM sessions s LEFT JOIN speakers sp ON sp.id=s.speaker_id LEFT JOIN halls h ON h.id=s.hall_id LEFT JOIN venues v ON v.id=h.venue_id WHERE s.conference_id=? ORDER BY s.session_date,s.start_time`,[req.query.conferenceId||1]);res.json(r)}));
-app.get('/api/notices',asyncRoute(async(req,res)=>{
+app.get('/api/notices', asyncRoute(async (req, res) => {
   let userRole = null, userId = null;
   try {
     const h = req.headers.authorization || '';
@@ -1353,7 +1353,28 @@ app.get('/api/notices',asyncRoute(async(req,res)=>{
       userId = u?.id;
     }
   } catch(_) {}
-  const [r]=await pool.query('SELECT * FROM notices WHERE conference_id=? AND (target_role IS NULL OR target_role=? OR target_user_id=?) ORDER BY created_at DESC',[req.query.conferenceId||1, userRole, userId]);
+
+  let query = `
+    SELECT * FROM notices 
+    WHERE conference_id = ? 
+      AND (
+        target_role IS NULL 
+        OR target_role = '' 
+        OR target_role = 'ALL'
+  `;
+  const params = [req.query.conferenceId || 1];
+
+  if (userRole) {
+    query += ` OR target_role = ?`;
+    params.push(userRole);
+  }
+  if (userId) {
+    query += ` OR target_user_id = ?`;
+    params.push(userId);
+  }
+  query += `) ORDER BY created_at DESC`;
+
+  const [r] = await pool.query(query, params);
   res.json(r);
 }));
 
@@ -2606,18 +2627,25 @@ app.get('/api/admin/notices',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(
 app.post('/api/admin/notices',auth,roles('ADMIN','SUPER_ADMIN'),[body('title').notEmpty(),body('message').notEmpty()],validate,asyncRoute(async(req,res)=>{
   const conferenceId = req.body.conferenceId || 1;
   const type = req.body.type || 'GENERAL';
-  const [r]=await pool.query('INSERT INTO notices(conference_id,title,message,type,target_role,target_user_id) VALUES(?,?,?,?,?,?)',
-    [conferenceId, req.body.title, req.body.message, type, req.body.target_role||null, req.body.target_user_id||null]);
+  const targetRole = (req.body.target_role && req.body.target_role.trim() !== '' && req.body.target_role !== 'ALL') ? req.body.target_role.trim() : null;
+  const targetUserId = req.body.target_user_id || null;
+
+  const [r] = await pool.query(
+    'INSERT INTO notices(conference_id,title,message,type,target_role,target_user_id) VALUES(?,?,?,?,?,?)',
+    [conferenceId, req.body.title, req.body.message, type, targetRole, targetUserId]
+  );
   
-  await createAndSendNotification({
+  const notif = await createAndSendNotification({
     conference_id: conferenceId,
     title: req.body.title,
     message: req.body.message,
     type: type,
-    user_id: req.body.target_user_id || null
+    target_role: targetRole,
+    user_id: targetUserId,
+    metadata: { notice_id: r.insertId }
   });
 
-  created(res,{id:r.insertId},'Notice published');
+  created(res,{id:r.insertId, ...notif},'Notice published');
 }));
 
 app.post('/api/admin/broadcast',auth,roles('ADMIN','SUPER_ADMIN'),[body('title').notEmpty(),body('message').notEmpty()],validate,asyncRoute(async(req,res)=>{

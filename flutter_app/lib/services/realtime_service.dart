@@ -16,30 +16,48 @@ class RealtimeSyncService {
   IO.Socket? _socket;
   Timer? _pollingTimer;
   bool _initialized = false;
+  final Set<String> _knownNoticeIds = <String>{};
+  bool _firstFetchDone = false;
 
   void triggerSync() {
     syncNotifier.value++;
-    calculateUnreadCount();
+    calculateUnreadCount(notifyOnNew: true);
   }
 
   void updateUnreadCount(int count) {
     unreadNotifCountNotifier.value = count;
   }
 
-  Future<void> calculateUnreadCount() async {
+  Future<void> calculateUnreadCount({bool notifyOnNew = false}) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final seenIds = (prefs.getStringList('seen_notice_ids') ?? []).toSet();
       final res = await ApiService.get('/notices');
       if (res is List) {
         int unread = 0;
+        Map<String, dynamic>? newestUnseen;
+
         for (final item in res) {
           final idStr = item['id']?.toString() ?? '';
-          if (idStr.isNotEmpty && !seenIds.contains(idStr)) {
-            unread++;
+          if (idStr.isNotEmpty) {
+            final isSeen = seenIds.contains(idStr);
+            if (!isSeen) {
+              unread++;
+              // If this is a new notice arrived while app was open
+              if (notifyOnNew && _firstFetchDone && !_knownNoticeIds.contains(idStr)) {
+                newestUnseen ??= Map<String, dynamic>.from(item);
+              }
+            }
+            _knownNoticeIds.add(idStr);
           }
         }
+
+        _firstFetchDone = true;
         unreadNotifCountNotifier.value = unread;
+
+        if (newestUnseen != null) {
+          lastNotificationNotifier.value = newestUnseen;
+        }
       }
     } catch (_) {}
   }
@@ -52,6 +70,7 @@ class RealtimeSyncService {
         final idStr = item['id']?.toString() ?? '';
         if (idStr.isNotEmpty) {
           seenIds.add(idStr);
+          _knownNoticeIds.add(idStr);
         }
       }
       await prefs.setStringList('seen_notice_ids', seenIds.toList());
@@ -89,7 +108,7 @@ class RealtimeSyncService {
 
     _initSocket();
     _startPolling();
-    calculateUnreadCount();
+    calculateUnreadCount(notifyOnNew: false);
   }
 
   Future<void> _initSocket() async {
@@ -116,11 +135,12 @@ class RealtimeSyncService {
         if (userId != null) {
           _socket?.emit('join_user', userId);
         }
-        _socket?.emit('join_conference', 1);
+        _socket?.emit('join_conference', ConferenceService.activeConferenceId);
         triggerSync();
       });
 
       _socket?.on('conference_updated', (_) => triggerSync());
+      
       _socket?.on('sessions_updated', (data) {
         if (data is Map && data['title'] != null) {
           lastNotificationNotifier.value = {
@@ -133,22 +153,49 @@ class RealtimeSyncService {
         }
         triggerSync();
       });
+
       _socket?.on('speakers_updated', (_) => triggerSync());
       _socket?.on('notices_updated', (_) => triggerSync());
+
       _socket?.on('new_notice', (data) {
         if (data is Map) {
-          lastNotificationNotifier.value = Map<String, dynamic>.from(data);
+          final map = Map<String, dynamic>.from(data);
+          final idStr = map['id']?.toString() ?? '';
+          if (idStr.isNotEmpty) {
+            _knownNoticeIds.add(idStr);
+          }
+          lastNotificationNotifier.value = map;
           unreadNotifCountNotifier.value++;
         }
         triggerSync();
       });
+
       _socket?.on('notification_received', (data) {
         if (data is Map) {
-          lastNotificationNotifier.value = Map<String, dynamic>.from(data);
+          final map = Map<String, dynamic>.from(data);
+          final idStr = map['id']?.toString() ?? '';
+          if (idStr.isNotEmpty) {
+            _knownNoticeIds.add(idStr);
+          }
+          lastNotificationNotifier.value = map;
           unreadNotifCountNotifier.value++;
         }
         triggerSync();
       });
+
+      _socket?.on('new_notification', (data) {
+        if (data is Map) {
+          final map = Map<String, dynamic>.from(data);
+          final idStr = map['id']?.toString() ?? '';
+          if (idStr.isNotEmpty) {
+            _knownNoticeIds.add(idStr);
+          }
+          lastNotificationNotifier.value = map;
+          unreadNotifCountNotifier.value++;
+        }
+        triggerSync();
+      });
+
       _socket?.on('profile_updated', (_) => triggerSync());
       _socket?.on('attendance_updated', (_) => triggerSync());
       _socket?.on('new_scan', (_) => triggerSync());
@@ -162,8 +209,8 @@ class RealtimeSyncService {
 
   void _startPolling() {
     _pollingTimer?.cancel();
-    _pollingTimer = Timer.periodic(const Duration(seconds: 15), (_) {
-      triggerSync();
+    _pollingTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      calculateUnreadCount(notifyOnNew: true);
     });
   }
 

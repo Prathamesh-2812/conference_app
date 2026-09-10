@@ -3699,6 +3699,10 @@ class NoticesScreen extends StatefulWidget {
 }
 
 class _NoticesScreenState extends State<NoticesScreen> {
+  String _selectedCategory = 'ALL';
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -3711,6 +3715,7 @@ class _NoticesScreenState extends State<NoticesScreen> {
 
   @override
   void dispose() {
+    _searchController.dispose();
     RealtimeSyncService.instance.syncNotifier.removeListener(_onSync);
     super.dispose();
   }
@@ -3747,6 +3752,8 @@ class _NoticesScreenState extends State<NoticesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final conference = ConferenceScope.of(context);
+
     return SafeArea(
       top: false,
       child: Column(
@@ -3754,203 +3761,317 @@ class _NoticesScreenState extends State<NoticesScreen> {
           const Header(title: 'Notices & Announcements'),
           Expanded(
             child: RefreshIndicator(
-              color: maroon,
+              color: conference.primaryColor,
               onRefresh: () async {
                 setState(() {});
-                await Future.delayed(const Duration(milliseconds: 500));
+                await RealtimeSyncService.instance.calculateUnreadCount();
+                await Future.delayed(const Duration(milliseconds: 400));
               },
               child: FutureBuilder(
                 future: ApiService.get('/notices'),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator(color: maroon));
+                    return Center(child: CircularProgressIndicator(color: conference.primaryColor));
                   }
 
                   if (snapshot.hasError) {
-                    return const Center(child: Text('Unable to load notices'));
-                  }
-
-                  final data = snapshot.data is List ? snapshot.data as List : <dynamic>[];
-
-                  // Mark notices as seen so unread count clears automatically
-                  if (data.isNotEmpty) {
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      RealtimeSyncService.instance.markNoticesAsSeen(data);
-                    });
-                  }
-
-                  if (data.isEmpty) {
-                    return ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      children: const [
-                        SizedBox(height: 120),
-                        Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.notifications_none, size: 54, color: muted),
-                              SizedBox(height: 12),
-                              Text(
-                                'No Announcements Yet',
-                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: slate),
-                              ),
-                              SizedBox(height: 4),
-                              Text('Check back later for live event updates', style: TextStyle(color: muted)),
-                            ],
-                          ),
-                        ),
-                      ],
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.error_outline, size: 48, color: Colors.redAccent),
+                          const SizedBox(height: 12),
+                          const Text('Unable to load notices', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          const SizedBox(height: 8),
+                          ElevatedButton(
+                            onPressed: () => setState(() {}),
+                            style: ElevatedButton.styleFrom(backgroundColor: conference.primaryColor),
+                            child: const Text('Retry', style: TextStyle(color: Colors.white)),
+                          )
+                        ],
+                      ),
                     );
                   }
 
-                  return ListView.builder(
+                  final allData = snapshot.data is List ? snapshot.data as List : <dynamic>[];
+
+                  // Mark notices as seen so unread count clears automatically
+                  if (allData.isNotEmpty) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      RealtimeSyncService.instance.markNoticesAsSeen(allData);
+                    });
+                  }
+
+                  // Apply Filter & Search
+                  final filteredData = allData.where((item) {
+                    final type = (item['type']?.toString() ?? 'GENERAL').toUpperCase();
+                    final isUrgent = item['priority'] == 'URGENT' || type == 'URGENT';
+                    
+                    if (_selectedCategory == 'URGENT' && !isUrgent) return false;
+                    if (_selectedCategory == 'SCHEDULE' && !type.contains('SCHEDULE') && !type.contains('SESSION')) return false;
+                    if (_selectedCategory == 'VENUE' && !type.contains('VENUE') && !type.contains('HALL')) return false;
+                    if (_selectedCategory == 'TRANSPORT' && !type.contains('TRANSPORT') && !type.contains('TRAVEL')) return false;
+                    if (_selectedCategory == 'GENERAL' && (isUrgent || type.contains('SCHEDULE') || type.contains('VENUE') || type.contains('TRANSPORT'))) return false;
+
+                    if (_searchQuery.isNotEmpty) {
+                      final q = _searchQuery.toLowerCase();
+                      final title = (item['title']?.toString() ?? '').toLowerCase();
+                      final message = (item['message']?.toString() ?? '').toLowerCase();
+                      if (!title.contains(q) && !message.contains(q)) return false;
+                    }
+                    return true;
+                  }).toList();
+
+                  return ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 30),
-                    itemCount: data.length + 1,
-                    itemBuilder: (context, index) {
-                      if (index == 0) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12, left: 4, right: 4),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: maroon.withOpacity(0.08),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Text(
-                                  '${data.length} Updates Available',
-                                  style: const TextStyle(
-                                    color: maroon,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w800,
-                                  ),
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 40),
+                    children: [
+                      // Search Bar
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: Colors.grey.shade300, width: 0.8),
+                        ),
+                        child: TextField(
+                          controller: _searchController,
+                          onChanged: (v) => setState(() => _searchQuery = v.trim()),
+                          decoration: InputDecoration(
+                            hintText: 'Search announcements...',
+                            hintStyle: const TextStyle(fontSize: 13.5, color: muted),
+                            prefixIcon: const Icon(Icons.search, size: 20, color: muted),
+                            suffixIcon: _searchQuery.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear, size: 18, color: muted),
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      setState(() => _searchQuery = '');
+                                    },
+                                  )
+                                : null,
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
+
+                      // Category Filter Chips
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.only(bottom: 14),
+                        child: Row(
+                          children: [
+                            _buildFilterChip('ALL', 'All Updates (${allData.length})', conference.primaryColor),
+                            const SizedBox(width: 8),
+                            _buildFilterChip('URGENT', '🚨 Urgent', const Color(0xFFDC2626)),
+                            const SizedBox(width: 8),
+                            _buildFilterChip('SCHEDULE', '📅 Schedule', const Color(0xFF2563EB)),
+                            const SizedBox(width: 8),
+                            _buildFilterChip('VENUE', '📍 Venue', const Color(0xFFD97706)),
+                            const SizedBox(width: 8),
+                            _buildFilterChip('TRANSPORT', '🚗 Transport', const Color(0xFF0D9488)),
+                            const SizedBox(width: 8),
+                            _buildFilterChip('GENERAL', '📢 General', conference.primaryColor),
+                          ],
+                        ),
+                      ),
+
+                      // Header Row
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12, left: 2, right: 2),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: conference.primaryColor.withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                '${filteredData.length} Announcements',
+                                style: TextStyle(
+                                  color: conference.primaryColor,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
                                 ),
                               ),
-                              const Spacer(),
-                              TextButton.icon(
-                                icon: const Icon(Icons.done_all, size: 16, color: maroon),
-                                label: const Text(
-                                  'Mark all seen',
-                                  style: TextStyle(color: maroon, fontSize: 12, fontWeight: FontWeight.bold),
-                                ),
-                                onPressed: () {
-                                  RealtimeSyncService.instance.markAllAsRead();
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('All notices marked as read'),
-                                      duration: Duration(seconds: 1),
-                                      backgroundColor: maroon,
-                                    ),
-                                  );
-                                },
+                            ),
+                            const Spacer(),
+                            TextButton.icon(
+                              icon: Icon(Icons.done_all, size: 16, color: conference.primaryColor),
+                              label: Text(
+                                'Mark all read',
+                                style: TextStyle(color: conference.primaryColor, fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                              onPressed: () {
+                                RealtimeSyncService.instance.markAllAsRead();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: const Text('All notices marked as read'),
+                                    duration: const Duration(seconds: 1),
+                                    backgroundColor: conference.primaryColor,
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      if (filteredData.isEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(vertical: 60),
+                          alignment: Alignment.center,
+                          child: Column(
+                            children: [
+                              Icon(Icons.notifications_none_rounded, size: 56, color: Colors.grey.shade400),
+                              const SizedBox(height: 14),
+                              const Text(
+                                'No Announcements Found',
+                                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: slate),
+                              ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'Check back later for live conference updates',
+                                style: TextStyle(color: muted, fontSize: 13),
                               ),
                             ],
                           ),
-                        );
-                      }
+                        )
+                      else
+                        ...filteredData.map((item) {
+                          final isUrgent = item['priority'] == 'URGENT' || (item['type']?.toString().toUpperCase() == 'URGENT');
+                          final noticeType = item['type']?.toString().toUpperCase() ?? 'GENERAL';
+                          final noticeColor = _getNoticeColor(noticeType, isUrgent);
+                          final noticeIcon = _getNoticeIcon(noticeType, isUrgent);
+                          final createdAtStr = formatSessionDate(item['created_at']);
 
-                      final item = data[index - 1];
-                      final isUrgent = item['priority'] == 'URGENT' || (item['type']?.toString().toUpperCase() == 'URGENT');
-                      final noticeType = item['type']?.toString().toUpperCase() ?? 'EVENT NOTICE';
-                      final noticeColor = _getNoticeColor(noticeType, isUrgent);
-                      final noticeIcon = _getNoticeIcon(noticeType, isUrgent);
-                      final createdAtStr = formatSessionDate(item['created_at']);
-
-                      return Card(
-                        elevation: 0,
-                        margin: const EdgeInsets.only(bottom: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
-                          side: BorderSide(
-                            color: isUrgent ? const Color(0xFFFCA5A5) : Colors.grey.shade200,
-                            width: isUrgent ? 1.5 : 1.2,
-                          ),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(18),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.center,
+                          return Card(
+                            elevation: isUrgent ? 2 : 0,
+                            margin: const EdgeInsets.only(bottom: 14),
+                            shadowColor: isUrgent ? Colors.red.withOpacity(0.15) : Colors.transparent,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              side: BorderSide(
+                                color: isUrgent ? const Color(0xFFFCA5A5) : Colors.grey.shade200,
+                                width: isUrgent ? 1.5 : 1.2,
+                              ),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(18),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: noticeColor.withOpacity(0.12),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Icon(
-                                      noticeIcon,
-                                      color: noticeColor,
-                                      size: 20,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          '${item['title'] ?? 'Announcement'}',
-                                          style: const TextStyle(
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: noticeColor.withOpacity(0.12),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Icon(
+                                          noticeIcon,
+                                          color: noticeColor,
+                                          size: 20,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              '${item['title'] ?? 'Announcement'}',
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w900,
+                                                fontSize: 15.5,
+                                                color: slate,
+                                                height: 1.2,
+                                              ),
+                                            ),
+                                            if (createdAtStr.isNotEmpty) ...[
+                                              const SizedBox(height: 3),
+                                              Text(
+                                                createdAtStr,
+                                                style: const TextStyle(
+                                                  fontSize: 11,
+                                                  color: muted,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                                        decoration: BoxDecoration(
+                                          color: noticeColor.withOpacity(0.12),
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(color: noticeColor.withOpacity(0.35)),
+                                        ),
+                                        child: Text(
+                                          isUrgent ? 'URGENT' : noticeType,
+                                          style: TextStyle(
+                                            color: noticeColor,
+                                            fontSize: 9.5,
                                             fontWeight: FontWeight.w900,
-                                            fontSize: 16,
-                                            color: slate,
-                                            height: 1.2,
+                                            letterSpacing: 0.4,
                                           ),
                                         ),
-                                        if (createdAtStr.isNotEmpty) ...[
-                                          const SizedBox(height: 3),
-                                          Text(
-                                            createdAtStr,
-                                            style: const TextStyle(
-                                              fontSize: 11.5,
-                                              color: muted,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
-                                    decoration: BoxDecoration(
-                                      color: noticeColor.withOpacity(0.12),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: noticeColor.withOpacity(0.35)),
-                                    ),
-                                    child: Text(
-                                      isUrgent ? 'URGENT' : noticeType,
-                                      style: TextStyle(
-                                        color: noticeColor,
-                                        fontSize: 9.5,
-                                        fontWeight: FontWeight.w900,
-                                        letterSpacing: 0.4,
                                       ),
-                                    ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    '${item['message'] ?? ''}',
+                                    style: const TextStyle(fontSize: 13.5, color: Color(0xFF334155), height: 1.45),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 12),
-                              Text(
-                                '${item['message'] ?? ''}',
-                                style: const TextStyle(fontSize: 14, color: Color(0xFF334155), height: 1.45),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
+                            ),
+                          );
+                        }),
+                    ],
                   );
                 },
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String key, String label, Color color) {
+    final isSelected = _selectedCategory == key;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedCategory = key),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? color : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? color : Colors.grey.shade300,
+            width: isSelected ? 1.5 : 1,
+          ),
+          boxShadow: isSelected
+              ? [BoxShadow(color: color.withOpacity(0.25), blurRadius: 6, offset: const Offset(0, 2))]
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+            color: isSelected ? Colors.white : const Color(0xFF475569),
+          ),
+        ),
       ),
     );
   }
