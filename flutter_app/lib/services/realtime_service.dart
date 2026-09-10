@@ -12,6 +12,7 @@ class RealtimeSyncService {
   final ValueNotifier<int> syncNotifier = ValueNotifier<int>(0);
   final ValueNotifier<Map<String, dynamic>?> lastNotificationNotifier = ValueNotifier<Map<String, dynamic>?>(null);
   final ValueNotifier<int> unreadNotifCountNotifier = ValueNotifier<int>(0);
+  final ValueNotifier<Set<String>> seenIdsNotifier = ValueNotifier<Set<String>>(<String>{});
   
   IO.Socket? _socket;
   Timer? _pollingTimer;
@@ -32,6 +33,8 @@ class RealtimeSyncService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final seenIds = (prefs.getStringList('seen_notice_ids') ?? []).toSet();
+      seenIdsNotifier.value = seenIds;
+
       final res = await ApiService.get('/notices');
       if (res is List) {
         int unread = 0;
@@ -74,6 +77,7 @@ class RealtimeSyncService {
         }
       }
       await prefs.setStringList('seen_notice_ids', seenIds.toList());
+      seenIdsNotifier.value = Set<String>.from(seenIds);
       unreadNotifCountNotifier.value = 0;
     } catch (_) {}
   }

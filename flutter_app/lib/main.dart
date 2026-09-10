@@ -1032,167 +1032,169 @@ class Header extends StatelessWidget {
     final enrolledCount = ConferenceService.enrolledConferences.length;
 
     return Container(
-      padding: EdgeInsets.fromLTRB(20, topInset + 10, 20, 16),
+      padding: EdgeInsets.fromLTRB(16, topInset + 8, 16, 14),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [conference.primaryColor, darkMaroon],
+          colors: [conference.primaryColor, const Color(0xFF4A0E17)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(22)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15),
+            color: Colors.black.withOpacity(0.18),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              if (Navigator.canPop(c))
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: IconButton(
-                    icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 18),
-                    onPressed: () => Navigator.maybePop(c),
-                  ),
+          if (Navigator.canPop(c))
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 18),
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                onPressed: () => Navigator.maybePop(c),
+              ),
+            ),
+          Container(
+            width: 42,
+            height: 42,
+            padding: const EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
                 ),
-              Container(
-                width: 48,
-                height: 48,
-                padding: const EdgeInsets.all(1.5),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                ),
-                child: ClipOval(
-                  child: Image.asset(
-                    'assets/images/logo.png',
-                    fit: BoxFit.contain,
-                    filterQuality: FilterQuality.high,
-                    errorBuilder: (_, __, ___) => Icon(
-                      Icons.school,
-                      color: conference.primaryColor,
-                      size: 28,
-                    ),
-                  ),
+              ],
+            ),
+            child: ClipOval(
+              child: Image.asset(
+                'assets/images/logo.png',
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
+                errorBuilder: (_, __, ___) => Icon(
+                  Icons.school,
+                  color: conference.primaryColor,
+                  size: 24,
                 ),
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Row(
                   children: [
-                    Text(
-                      conference.shortName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.2,
+                    Flexible(
+                      child: Text(
+                        conference.shortName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFFF1F5F9),
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: gold.withOpacity(0.25),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: gold.withOpacity(0.5), width: 0.8),
-                          ),
-                          child: Text(
-                            title,
-                            style: const TextStyle(
-                              color: Color(0xFFFFF8E7),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
+                    const SizedBox(width: 6),
+                    GestureDetector(
+                      onTap: () => _showConferencePickerModal(c),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.white38, width: 0.6),
                         ),
-                        GestureDetector(
-                          onTap: () => _showConferencePickerModal(c),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.25),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: Colors.white54, width: 0.8),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.swap_horiz, color: Colors.white, size: 10),
+                            const SizedBox(width: 3),
+                            Text(
+                              enrolledCount > 1 ? 'Switch ($enrolledCount)' : 'Switch',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.arrow_drop_down_circle_outlined, color: Colors.white, size: 12),
-                                const SizedBox(width: 4),
-                                Text(
-                                  enrolledCount > 1 ? 'Conferences ($enrolledCount) ▾' : 'My Conferences ▾',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ],
                 ),
-              ),
-              if (trailing != null)
-                trailing!
-              else
-                ValueListenableBuilder<int>(
-                  valueListenable: RealtimeSyncService.instance.unreadNotifCountNotifier,
-                  builder: (context, unreadCount, _) {
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.18),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white24, width: 0.8),
-                      ),
-                      child: IconButton(
-                        icon: Badge(
-                          isLabelVisible: unreadCount > 0,
-                          label: Text(
-                            '$unreadCount',
-                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white),
-                          ),
-                          backgroundColor: const Color(0xFFDC2626),
-                          child: const Icon(Icons.notifications_outlined, color: Colors.white, size: 21),
-                        ),
-                        tooltip: 'Notices & Live Alerts',
-                        onPressed: () {
-                          RealtimeSyncService.instance.markAllAsRead();
-                          Navigator.push(
-                            c,
-                            MaterialPageRoute(
-                              builder: (_) => const AppShell(
-                                child: Scaffold(
-                                  backgroundColor: Colors.white,
-                                  body: NoticesScreen(),
-                                ),
+              ],
+            ),
+          ),
+          if (trailing != null)
+            trailing!
+          else
+            ValueListenableBuilder<int>(
+              valueListenable: RealtimeSyncService.instance.unreadNotifCountNotifier,
+              builder: (context, unreadCount, _) {
+                return Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.18),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white30, width: 0.8),
+                  ),
+                  child: IconButton(
+                    icon: Badge.count(
+                      count: unreadCount,
+                      isLabelVisible: unreadCount > 0,
+                      backgroundColor: const Color(0xFFEF4444),
+                      textStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white),
+                      child: const Icon(Icons.notifications_outlined, color: Colors.white, size: 22),
+                    ),
+                    tooltip: 'Notices & Live Alerts',
+                    onPressed: () {
+                      if (title == 'Notices & Announcements') {
+                        RealtimeSyncService.instance.markAllAsRead();
+                      } else {
+                        Navigator.push(
+                          c,
+                          MaterialPageRoute(
+                            builder: (_) => const AppShell(
+                              child: Scaffold(
+                                backgroundColor: Colors.white,
+                                body: NoticesScreen(),
                               ),
                             ),
-                          );
-                        },
-                      ),
-                    );
-                  },
-                ),
-            ],
-          ),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                );
+              },
+            ),
         ],
       ),
     );
@@ -3702,6 +3704,8 @@ class _NoticesScreenState extends State<NoticesScreen> {
   String _selectedCategory = 'ALL';
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
+  Set<String> _unseenOnArrival = {};
+  bool _evaluatedUnseen = false;
 
   @override
   void initState() {
@@ -3721,7 +3725,7 @@ class _NoticesScreenState extends State<NoticesScreen> {
   }
 
   Color _getNoticeColor(String? type, bool isUrgent) {
-    if (isUrgent) return const Color(0xFFDC2626);
+    if (isUrgent) return const Color(0xFFE11D48);
     final t = (type ?? '').toUpperCase();
     if (t.contains('SCHEDULE') || t.contains('SESSION') || t.contains('TIME')) {
       return const Color(0xFF2563EB);
@@ -3739,15 +3743,103 @@ class _NoticesScreenState extends State<NoticesScreen> {
     if (isUrgent) return Icons.warning_amber_rounded;
     final t = (type ?? '').toUpperCase();
     if (t.contains('SCHEDULE') || t.contains('SESSION')) {
-      return Icons.calendar_month_outlined;
+      return Icons.event_note_rounded;
     } else if (t.contains('TRANSPORT') || t.contains('TRAVEL')) {
-      return Icons.directions_car_outlined;
+      return Icons.directions_car_rounded;
     } else if (t.contains('VENUE') || t.contains('HALL') || t.contains('HOTEL')) {
-      return Icons.location_on_outlined;
+      return Icons.location_on_rounded;
     } else if (t.contains('REGISTRATION') || t.contains('CERTIFICATE')) {
-      return Icons.verified_outlined;
+      return Icons.verified_user_rounded;
     }
-    return Icons.notifications_active_outlined;
+    return Icons.campaign_rounded;
+  }
+
+  void _showNoticeDetailModal(BuildContext context, Map<String, dynamic> item, Color color, IconData icon, bool isUrgent) {
+    final title = item['title']?.toString() ?? 'Notice';
+    final message = item['message']?.toString() ?? '';
+    final type = item['type']?.toString().toUpperCase() ?? 'GENERAL';
+    final dateStr = formatSessionDate(item['created_at']);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: color.withOpacity(0.12), shape: BoxShape.circle),
+                  child: Icon(icon, color: color, size: 24),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: color.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: color.withOpacity(0.3)),
+                        ),
+                        child: Text(
+                          isUrgent ? '🚨 URGENT' : type,
+                          style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                      if (dateStr.isNotEmpty) ...[
+                        const SizedBox(height: 3),
+                        Text(dateStr, style: const TextStyle(fontSize: 11.5, color: muted)),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: slate),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              style: const TextStyle(fontSize: 14.5, color: Color(0xFF334155), height: 1.55),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: color,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Close', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -3763,9 +3855,11 @@ class _NoticesScreenState extends State<NoticesScreen> {
             child: RefreshIndicator(
               color: conference.primaryColor,
               onRefresh: () async {
-                setState(() {});
+                setState(() {
+                  _evaluatedUnseen = false;
+                });
                 await RealtimeSyncService.instance.calculateUnreadCount();
-                await Future.delayed(const Duration(milliseconds: 400));
+                await Future.delayed(const Duration(milliseconds: 300));
               },
               child: FutureBuilder(
                 future: ApiService.get('/notices'),
@@ -3795,8 +3889,15 @@ class _NoticesScreenState extends State<NoticesScreen> {
 
                   final allData = snapshot.data is List ? snapshot.data as List : <dynamic>[];
 
-                  // Mark notices as seen so unread count clears automatically
-                  if (allData.isNotEmpty) {
+                  // Capture unseen notices for highlight on first render, then mark as seen
+                  if (!_evaluatedUnseen && allData.isNotEmpty) {
+                    _evaluatedUnseen = true;
+                    final seenIds = RealtimeSyncService.instance.seenIdsNotifier.value;
+                    _unseenOnArrival = allData
+                        .where((item) => !seenIds.contains(item['id']?.toString() ?? ''))
+                        .map((item) => item['id']?.toString() ?? '')
+                        .toSet();
+
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       RealtimeSyncService.instance.markNoticesAsSeen(allData);
                     });
@@ -3824,7 +3925,7 @@ class _NoticesScreenState extends State<NoticesScreen> {
 
                   return ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 40),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 40),
                     children: [
                       // Search Bar
                       Container(
@@ -3832,14 +3933,14 @@ class _NoticesScreenState extends State<NoticesScreen> {
                         decoration: BoxDecoration(
                           color: const Color(0xFFF1F5F9),
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: Colors.grey.shade300, width: 0.8),
+                          border: Border.all(color: Colors.grey.shade200, width: 1),
                         ),
                         child: TextField(
                           controller: _searchController,
                           onChanged: (v) => setState(() => _searchQuery = v.trim()),
                           decoration: InputDecoration(
-                            hintText: 'Search announcements...',
-                            hintStyle: const TextStyle(fontSize: 13.5, color: muted),
+                            hintText: 'Search notices & updates...',
+                            hintStyle: const TextStyle(fontSize: 13, color: muted),
                             prefixIcon: const Icon(Icons.search, size: 20, color: muted),
                             suffixIcon: _searchQuery.isNotEmpty
                                 ? IconButton(
@@ -3862,9 +3963,9 @@ class _NoticesScreenState extends State<NoticesScreen> {
                         padding: const EdgeInsets.only(bottom: 14),
                         child: Row(
                           children: [
-                            _buildFilterChip('ALL', 'All Updates (${allData.length})', conference.primaryColor),
+                            _buildFilterChip('ALL', 'All (${allData.length})', conference.primaryColor),
                             const SizedBox(width: 8),
-                            _buildFilterChip('URGENT', '🚨 Urgent', const Color(0xFFDC2626)),
+                            _buildFilterChip('URGENT', '🚨 Urgent', const Color(0xFFE11D48)),
                             const SizedBox(width: 8),
                             _buildFilterChip('SCHEDULE', '📅 Schedule', const Color(0xFF2563EB)),
                             const SizedBox(width: 8),
@@ -3897,6 +3998,20 @@ class _NoticesScreenState extends State<NoticesScreen> {
                                 ),
                               ),
                             ),
+                            if (_unseenOnArrival.isNotEmpty) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFDC2626),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  '${_unseenOnArrival.length} New',
+                                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900),
+                                ),
+                              ),
+                            ],
                             const Spacer(),
                             TextButton.icon(
                               icon: Icon(Icons.done_all, size: 16, color: conference.primaryColor),
@@ -3906,6 +4021,9 @@ class _NoticesScreenState extends State<NoticesScreen> {
                               ),
                               onPressed: () {
                                 RealtimeSyncService.instance.markAllAsRead();
+                                setState(() {
+                                  _unseenOnArrival.clear();
+                                });
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: const Text('All notices marked as read'),
@@ -3946,91 +4064,144 @@ class _NoticesScreenState extends State<NoticesScreen> {
                           final noticeColor = _getNoticeColor(noticeType, isUrgent);
                           final noticeIcon = _getNoticeIcon(noticeType, isUrgent);
                           final createdAtStr = formatSessionDate(item['created_at']);
+                          final isNew = _unseenOnArrival.contains(item['id']?.toString() ?? '');
 
-                          return Card(
-                            elevation: isUrgent ? 2 : 0,
-                            margin: const EdgeInsets.only(bottom: 14),
-                            shadowColor: isUrgent ? Colors.red.withOpacity(0.15) : Colors.transparent,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(18),
-                              side: BorderSide(
-                                color: isUrgent ? const Color(0xFFFCA5A5) : Colors.grey.shade200,
-                                width: isUrgent ? 1.5 : 1.2,
+                          return GestureDetector(
+                            onTap: () => _showNoticeDetailModal(context, Map<String, dynamic>.from(item), noticeColor, noticeIcon, isUrgent),
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              decoration: BoxDecoration(
+                                color: isNew ? noticeColor.withOpacity(0.04) : Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: isNew
+                                      ? noticeColor.withOpacity(0.4)
+                                      : isUrgent
+                                          ? const Color(0xFFFCA5A5)
+                                          : Colors.grey.shade200,
+                                  width: isNew || isUrgent ? 1.4 : 1,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.04),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
                               ),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(18),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    crossAxisAlignment: CrossAxisAlignment.center,
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(8),
-                                        decoration: BoxDecoration(
-                                          color: noticeColor.withOpacity(0.12),
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: Icon(
-                                          noticeIcon,
-                                          color: noticeColor,
-                                          size: 20,
-                                        ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      left: BorderSide(
+                                        color: isUrgent ? const Color(0xFFDC2626) : noticeColor,
+                                        width: 4.5,
                                       ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              '${item['title'] ?? 'Announcement'}',
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.w900,
-                                                fontSize: 15.5,
-                                                color: slate,
-                                                height: 1.2,
-                                              ),
+                                    ),
+                                  ),
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        crossAxisAlignment: CrossAxisAlignment.center,
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.all(8),
+                                            decoration: BoxDecoration(
+                                              color: noticeColor.withOpacity(0.12),
+                                              shape: BoxShape.circle,
                                             ),
-                                            if (createdAtStr.isNotEmpty) ...[
-                                              const SizedBox(height: 3),
-                                              Text(
-                                                createdAtStr,
-                                                style: const TextStyle(
-                                                  fontSize: 11,
-                                                  color: muted,
-                                                  fontWeight: FontWeight.w600,
+                                            child: Icon(
+                                              noticeIcon,
+                                              color: noticeColor,
+                                              size: 19,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  '${item['title'] ?? 'Announcement'}',
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.w900,
+                                                    fontSize: 15.5,
+                                                    color: slate,
+                                                    height: 1.2,
+                                                  ),
+                                                ),
+                                                if (createdAtStr.isNotEmpty) ...[
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    createdAtStr,
+                                                    style: const TextStyle(
+                                                      fontSize: 11,
+                                                      color: muted,
+                                                      fontWeight: FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              if (isNew)
+                                                Container(
+                                                  margin: const EdgeInsets.only(right: 6),
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+                                                  decoration: BoxDecoration(
+                                                    gradient: const LinearGradient(
+                                                      colors: [Color(0xFFEF4444), Color(0xFFDC2626)],
+                                                    ),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                  ),
+                                                  child: const Text(
+                                                    'NEW',
+                                                    style: TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 9,
+                                                      fontWeight: FontWeight.w900,
+                                                      letterSpacing: 0.5,
+                                                    ),
+                                                  ),
+                                                ),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                                decoration: BoxDecoration(
+                                                  color: noticeColor.withOpacity(0.12),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  border: Border.all(color: noticeColor.withOpacity(0.3)),
+                                                ),
+                                                child: Text(
+                                                  isUrgent ? 'URGENT' : noticeType,
+                                                  style: TextStyle(
+                                                    color: noticeColor,
+                                                    fontSize: 9.5,
+                                                    fontWeight: FontWeight.w900,
+                                                    letterSpacing: 0.3,
+                                                  ),
                                                 ),
                                               ),
                                             ],
-                                          ],
-                                        ),
-                                      ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
-                                        decoration: BoxDecoration(
-                                          color: noticeColor.withOpacity(0.12),
-                                          borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(color: noticeColor.withOpacity(0.35)),
-                                        ),
-                                        child: Text(
-                                          isUrgent ? 'URGENT' : noticeType,
-                                          style: TextStyle(
-                                            color: noticeColor,
-                                            fontSize: 9.5,
-                                            fontWeight: FontWeight.w900,
-                                            letterSpacing: 0.4,
                                           ),
-                                        ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 10),
+                                      Text(
+                                        '${item['message'] ?? ''}',
+                                        style: const TextStyle(fontSize: 13.5, color: Color(0xFF334155), height: 1.45),
+                                        maxLines: 4,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    '${item['message'] ?? ''}',
-                                    style: const TextStyle(fontSize: 13.5, color: Color(0xFF334155), height: 1.45),
-                                  ),
-                                ],
+                                ),
                               ),
                             ),
                           );
