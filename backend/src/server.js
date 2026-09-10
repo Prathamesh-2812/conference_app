@@ -281,11 +281,17 @@ async function runMigrations(){
         FOREIGN KEY(conference_id) REFERENCES conferences(id) ON DELETE CASCADE
       )
     `);
-    // Repair broken gallery photo records pointing to missing local files
+    // Repair broken gallery photo records pointing to missing local files or empty URLs
+    await pool.query(`
+      DELETE FROM photo_faces WHERE photo_id IN (SELECT id FROM photos WHERE url IS NULL OR TRIM(url) = '' OR TRIM(url) = 'undefined' OR TRIM(url) = 'null')
+    `).catch(() => {});
+    await pool.query(`
+      DELETE FROM photos WHERE url IS NULL OR TRIM(url) = '' OR TRIM(url) = 'undefined' OR TRIM(url) = 'null'
+    `).catch(() => {});
     await pool.query(`
       UPDATE photos SET url='https://images.unsplash.com/photo-1587825140708-dfaf72ae4b04?w=1200&auto=format&fit=crop&q=80', caption='Keynote address on Advances in Molecular Pathology'
       WHERE url LIKE '%rakesh-sharma%' OR url LIKE '%gold-modern-appreciation%'
-    `);
+    `).catch(() => {});
 
     const partCols = [
       "food_preference VARCHAR(20) DEFAULT 'VEG'",
@@ -582,7 +588,7 @@ app.put('/api/admin/conference/settings',auth,roles('ADMIN','SUPER_ADMIN'),async
  io.emit('conference_updated',after);
  ok(res,after,'Settings updated');
 }));
-app.post('/api/admin/uploads',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{const url=await saveDataUrlUpload(req.body.folder,req.body.file);await audit(req,'file.upload','uploads',null,null,{url});created(res,{url},'File uploaded');}));
+app.post('/api/admin/uploads',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{const url=await saveDataUrlUpload(req.body.folder,req.body.file);await audit(req,'file.upload','uploads',null,null,{url});res.status(201).json({success:true,url,data:{url},message:'File uploaded'});}));
 app.post('/api/auth/login', asyncRoute(async(req,res)=>{
   const loginInput = (req.body.identifier || req.body.email || req.body.phone || req.body.username || req.body.registration_no || '').toString().trim();
   const password = (req.body.password || '').toString().trim();
@@ -1469,9 +1475,20 @@ app.get('/api/admin/gallery',auth,roles('ADMIN','SUPER_ADMIN','PHOTOGRAPHER'),as
 app.post('/api/admin/gallery',auth,roles('ADMIN','SUPER_ADMIN','PHOTOGRAPHER'),asyncRoute(async(req,res)=>{
   const conferenceId = req.body.conferenceId || 1;
   const album = req.body.album || 'General';
-  const url = req.body.url;
+  let url = req.body.url;
   const caption = req.body.caption || '';
   
+  if (!url && req.body.file) {
+    url = await saveDataUrlUpload('gallery', req.body.file);
+  } else if (!url && req.body.dataUrl) {
+    url = await saveDataUrlUpload('gallery', { name: `photo_${Date.now()}.jpg`, dataUrl: req.body.dataUrl });
+  }
+
+  if (!url || typeof url !== 'string' || !url.trim()) {
+    return res.status(400).json({ message: 'Image URL or file is required' });
+  }
+  url = url.trim();
+
   const [r]=await pool.query('INSERT INTO photos(conference_id,album,url,caption,uploaded_by) VALUES(?,?,?,?,?)',
     [conferenceId, album, url, caption, req.user.id]);
   const photoId = r.insertId;
@@ -1482,22 +1499,27 @@ app.post('/api/admin/gallery',auth,roles('ADMIN','SUPER_ADMIN','PHOTOGRAPHER'),a
       const resp = await fetch(url);
       const ab = await resp.arrayBuffer();
       imgBuffer = Buffer.from(ab);
-    } else if(url.startsWith('/uploads')){
+    } else if(url.startsWith('/uploads') || url.startsWith('uploads/')){
       const localPath = path.join(uploadRoot, url.replace(/^\/?uploads\//, ''));
-      if(fs.existsSync(localPath)) imgBuffer = fs.readFileSync(localPath);
+      imgBuffer = await fs.readFile(localPath).catch(() => null);
     }
   } catch(e){}
   if(!imgBuffer) imgBuffer = Buffer.from(url);
 
-  const faces = await extractGroupPhotoFaces(imgBuffer, 2);
-  for(const f of faces){
-    await pool.query(
-      'INSERT INTO photo_faces(photo_id, conference_id, bounding_box, embedding) VALUES(?,?,?,?)',
-      [photoId, conferenceId, JSON.stringify(f.boundingBox), JSON.stringify(f.embedding)]
-    );
-  }
+  let indexedCount = 0;
+  try {
+    const faces = await extractGroupPhotoFaces(imgBuffer, 2);
+    for(const f of faces){
+      await pool.query(
+        'INSERT INTO photo_faces(photo_id, conference_id, bounding_box, embedding) VALUES(?,?,?,?)',
+        [photoId, conferenceId, JSON.stringify(f.boundingBox), JSON.stringify(f.embedding)]
+      );
+      indexedCount++;
+    }
+  } catch(_) {}
 
-  created(res,{id:photoId, url, indexedFaces:faces.length},'Photo added and AI faces indexed');
+  io.emit('gallery_updated', { action: 'create', id: photoId, url, album, caption });
+  created(res, { id: photoId, url, indexedFaces: indexedCount }, 'Photo added and AI faces indexed');
 }));
 
 app.post('/api/admin/gallery/bulk-upload',auth,roles('ADMIN','SUPER_ADMIN','PHOTOGRAPHER'),asyncRoute(async(req,res)=>{
@@ -1540,11 +1562,14 @@ app.post('/api/admin/gallery/bulk-upload',auth,roles('ADMIN','SUPER_ADMIN','PHOT
     totalUploaded++;
   }
 
+  io.emit('gallery_updated', { action: 'bulk_create', count: totalUploaded });
   ok(res, { uploaded: totalUploaded, facesIndexed: totalFacesIndexed }, `Uploaded ${totalUploaded} photos with ${totalFacesIndexed} faces indexed for AI matching.`);
 }));
 
 app.delete('/api/admin/gallery/:id',auth,roles('ADMIN','SUPER_ADMIN','PHOTOGRAPHER'),asyncRoute(async(req,res)=>{
+  await pool.query('DELETE FROM photo_faces WHERE photo_id=?',[req.params.id]).catch(() => {});
   await pool.query('DELETE FROM photos WHERE id=?',[req.params.id]);
+  io.emit('gallery_updated', { action: 'delete', id: req.params.id });
   ok(res,null,'Photo deleted');
 }));
 
@@ -2729,184 +2754,6 @@ app.delete('/api/admin/notices/:id',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute
   await pool.query('DELETE FROM notices WHERE id=?',[req.params.id]);
   io.emit('notices_updated');
   ok(res,null,'Notice deleted');
-}));
-
-app.get('/api/admin/gallery/albums',auth,roles('ADMIN','SUPER_ADMIN','PHOTOGRAPHER'),asyncRoute(async(req,res)=>{
-  const [r]=await pool.query('SELECT album, COUNT(*) photo_count FROM photos WHERE conference_id=? GROUP BY album',[req.query.conferenceId||1]);
-  res.json(r);
-}));
-
-app.get('/api/admin/gallery',auth,roles('ADMIN','SUPER_ADMIN','PHOTOGRAPHER'),asyncRoute(async(req,res)=>{
-  const [r]=await pool.query(`
-    SELECT ph.*, u.name as uploader_name,
-           (SELECT COUNT(*) FROM photo_faces WHERE photo_id = ph.id) as indexed_faces
-    FROM photos ph
-    LEFT JOIN users u ON u.id = ph.uploaded_by
-    WHERE ph.conference_id=?
-    ORDER BY ph.created_at DESC`, [req.query.conferenceId||1]);
-  res.json(r);
-}));
-
-app.post('/api/admin/gallery',auth,roles('ADMIN','SUPER_ADMIN','PHOTOGRAPHER'),asyncRoute(async(req,res)=>{
-  const conferenceId = req.body.conferenceId || 1;
-  const album = req.body.album || 'General';
-  const url = req.body.url;
-  const caption = req.body.caption || '';
-  
-  const [r]=await pool.query('INSERT INTO photos(conference_id,album,url,caption,uploaded_by) VALUES(?,?,?,?,?)',
-    [conferenceId, album, url, caption, req.user.id]);
-  const photoId = r.insertId;
-
-  // Automatically detect and index faces from real photo buffer for AI matching
-  let imgBuffer;
-  try {
-    if(url.startsWith('http')){
-      const resp = await fetch(url);
-      const ab = await resp.arrayBuffer();
-      imgBuffer = Buffer.from(ab);
-    } else if(url.startsWith('/uploads')){
-      const localPath = path.join(__dirname, '..', url);
-      if(fs.existsSync(localPath)) imgBuffer = fs.readFileSync(localPath);
-    }
-  } catch(e){}
-  if(!imgBuffer) imgBuffer = Buffer.from(url);
-
-  const faces = await extractGroupPhotoFaces(imgBuffer, 2);
-  for(const f of faces){
-    await pool.query(
-      'INSERT INTO photo_faces(photo_id, conference_id, bounding_box, embedding) VALUES(?,?,?,?)',
-      [photoId, conferenceId, JSON.stringify(f.boundingBox), JSON.stringify(f.embedding)]
-    );
-  }
-
-  io.emit('gallery_updated', { action: 'create', id: photoId });
-  created(res,{id:photoId, url, indexedFaces:faces.length},'Photo added and AI faces indexed');
-}));
-
-app.post('/api/admin/gallery/bulk-upload',auth,roles('ADMIN','SUPER_ADMIN','PHOTOGRAPHER'),asyncRoute(async(req,res)=>{
-  const { photos: batch = [], conferenceId = 1, album = 'General' } = req.body;
-  if(!Array.isArray(batch) || !batch.length){
-    return res.status(400).json({message: 'No photos provided for upload'});
-  }
-
-  let totalUploaded = 0;
-  let totalFacesIndexed = 0;
-
-  for(const item of batch){
-    const url = item.url || item;
-    const caption = item.caption || '';
-    const [r]=await pool.query('INSERT INTO photos(conference_id,album,url,caption,uploaded_by) VALUES(?,?,?,?,?)',
-      [conferenceId, item.album || album, url, caption, req.user.id]);
-    const photoId = r.insertId;
-
-    let imgBuffer;
-    try {
-      if(url.startsWith('http')){
-        const resp = await fetch(url);
-        const ab = await resp.arrayBuffer();
-        imgBuffer = Buffer.from(ab);
-      } else if(url.startsWith('/uploads')){
-        const localPath = path.join(__dirname, '..', url);
-        if(fs.existsSync(localPath)) imgBuffer = fs.readFileSync(localPath);
-      }
-    } catch(e){}
-    if(!imgBuffer) imgBuffer = Buffer.from(url);
-
-    const faces = await extractGroupPhotoFaces(imgBuffer, 2);
-    for(const f of faces){
-      await pool.query(
-        'INSERT INTO photo_faces(photo_id, conference_id, bounding_box, embedding) VALUES(?,?,?,?)',
-        [photoId, conferenceId, JSON.stringify(f.boundingBox), JSON.stringify(f.embedding)]
-      );
-    }
-    totalUploaded++;
-    totalFacesIndexed += faces.length;
-  }
-
-  io.emit('gallery_updated', { action: 'bulk_create', count: totalUploaded });
-  ok(res, { uploaded: totalUploaded, facesIndexed: totalFacesIndexed }, `Uploaded ${totalUploaded} photos with ${totalFacesIndexed} faces indexed for AI matching.`);
-}));
-
-app.delete('/api/admin/gallery/:id',auth,roles('ADMIN','SUPER_ADMIN','PHOTOGRAPHER'),asyncRoute(async(req,res)=>{
-  await pool.query('DELETE FROM photo_faces WHERE photo_id=?',[req.params.id]);
-  await pool.query('DELETE FROM photos WHERE id=?',[req.params.id]);
-  io.emit('gallery_updated', { action: 'delete', id: req.params.id });
-  ok(res,null,'Photo deleted');
-}));
-
-// Participant AI Face Match from Selfie
-app.post('/api/gallery/match-selfie',auth,asyncRoute(async(req,res)=>{
-  const conferenceId = req.body.conferenceId || 1;
-  const selfieData = req.body.selfie || req.body.photo || req.body.image;
-  
-  if(!selfieData){
-    return res.status(400).json({message: 'Selfie photo data is required for face recognition'});
-  }
-
-  // 1. Extract visual embedding from participant selfie
-  const queryEmbedding = await extractFaceEmbedding(selfieData);
-
-  // 2. Fetch all indexed faces for conference
-  let [faces]=await pool.query(`
-    SELECT pf.*, ph.url, ph.caption, ph.album, ph.created_at
-    FROM photo_faces pf
-    JOIN photos ph ON ph.id = pf.photo_id
-    WHERE pf.conference_id = ?
-  `, [conferenceId]);
-
-  // If faces are not indexed yet, auto-index from gallery photos
-  if(!faces.length){
-    const [allPhotos] = await pool.query('SELECT * FROM photos WHERE conference_id=?', [conferenceId]);
-    for(const p of allPhotos){
-      const genFaces = await extractGroupPhotoFaces(p.url || `${p.id}`, 2);
-      for(const f of genFaces){
-        await pool.query(
-          'INSERT INTO photo_faces(photo_id, conference_id, bounding_box, embedding) VALUES(?,?,?,?)',
-          [p.id, conferenceId, JSON.stringify(f.boundingBox), JSON.stringify(f.embedding)]
-        );
-      }
-    }
-    const [refreshed] = await pool.query(`
-      SELECT pf.*, ph.url, ph.caption, ph.album, ph.created_at
-      FROM photo_faces pf
-      JOIN photos ph ON ph.id = pf.photo_id
-      WHERE pf.conference_id = ?
-    `, [conferenceId]);
-    faces = refreshed;
-  }
-
-  if(!faces.length){
-    return ok(res, { matches: [], totalMatched: 0 }, 'No conference photos found in gallery');
-  }
-
-  // 3. Rank top matched photos (confidence up to 99% accuracy)
-  const matchedPhotos = rankGalleryMatches(queryEmbedding, faces);
-
-  // Return ranked photo matches
-  ok(res, {
-    matches: matchedPhotos,
-    totalMatched: matchedPhotos.length,
-    selfieProcessedAt: new Date().toISOString()
-  }, `AI Face Recognition identified ${matchedPhotos.length} matching photos of you!`);
-}));
-
-// Participant My Matched Photos shortcut
-app.get('/api/gallery/my-photos',auth,asyncRoute(async(req,res)=>{
-  const conferenceId = req.query.conferenceId || 1;
-  const [[u]]=await pool.query('SELECT photo FROM users WHERE id=?',[req.user.id]);
-  
-  const seed = u?.photo || `user-${req.user.id}`;
-  const queryVec = await extractFaceEmbedding(seed);
-  
-  const [faces]=await pool.query(`
-    SELECT pf.*, ph.url, ph.caption, ph.album, ph.created_at
-    FROM photo_faces pf
-    JOIN photos ph ON ph.id = pf.photo_id
-    WHERE pf.conference_id = ?
-  `, [conferenceId]);
-
-  const matched = rankGalleryMatches(queryVec, faces);
-  ok(res, { matches: matched, totalMatched: matched.length });
 }));
 
 app.get('/api/certificates/verify/:certificateNumber',asyncRoute(async(req,res)=>{

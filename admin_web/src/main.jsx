@@ -3283,22 +3283,31 @@ function Gallery({tab, notify}){
 }
 
 function PhotoModal({onSave,onClose,notify}){
-  const[v,set]=formState({album:'Keynote Sessions'});
-  const[busy,setBusy]=useState(false);
+  const[album,setAlbum]=useState('Keynote Sessions');
+  const[url,setUrl]=useState('');
+  const[caption,setCaption]=useState('');
+  const[fileData,setFileData]=useState(null);
   const[preview,setPreview]=useState('');
+  const[busy,setBusy]=useState(false);
 
-  const upload=async(file)=>{
+  const handleFileChange=async(file)=>{
     if(!file)return;
     const reader=new FileReader();
     reader.onload=async()=>{
-      setPreview(reader.result);
+      const dataUrl=reader.result;
+      setPreview(dataUrl);
+      setFileData({name:file.name,dataUrl});
       setBusy(true);
       try{
-        const data=await req('/admin/uploads',{method:'POST',body:JSON.stringify({folder:'gallery',file:{name:file.name,dataUrl:reader.result}})});
-        set('url',data.url);
-        notify('Photo uploaded and optimized');
+        const uploadRes=await req('/admin/uploads',{
+          method:'POST',
+          body:JSON.stringify({folder:'gallery',file:{name:file.name,dataUrl}})
+        });
+        const uploadedUrl=uploadRes.data?.url||uploadRes.url;
+        setUrl(uploadedUrl);
+        notify('Photo uploaded & normalized');
       }catch(err){
-        alert('Upload failed: ' + err.message);
+        alert('Upload failed: '+err.message);
       }finally{
         setBusy(false);
       }
@@ -3308,6 +3317,26 @@ function PhotoModal({onSave,onClose,notify}){
 
   const commonAlbums = ['Keynote Sessions', 'Workshops & CMEs', 'Inauguration Ceremony', 'Delegate Networking', 'Cultural Night', 'Award Ceremony', 'General'];
 
+  const handleSave = async () => {
+    if(!url && !preview && !fileData){
+      alert('Please select an image file to upload');
+      return;
+    }
+    setBusy(true);
+    try{
+      await onSave({
+        album,
+        url: url || preview,
+        file: fileData,
+        caption: caption || `Conference ${album} moment`
+      });
+    }catch(e){
+      alert(e.message);
+    }finally{
+      setBusy(false);
+    }
+  };
+
   return <div className="modal-overlay">
     <div className="modal" style={{maxWidth:'540px'}}>
       <div className="modal-header">
@@ -3316,7 +3345,7 @@ function PhotoModal({onSave,onClose,notify}){
       </div>
       <div className="modal-body">
         <div className="formgrid">
-          <Field label="Album Name" value={v.album} onChange={x=>set('album',x)}/>
+          <Field label="Album Name" value={album} onChange={setAlbum}/>
           <div style={{display:'flex',gap:'6px',flexWrap:'wrap',marginTop:'-6px',marginBottom:'8px'}}>
             {commonAlbums.map(alb => (
               <button
@@ -3327,11 +3356,11 @@ function PhotoModal({onSave,onClose,notify}){
                   padding:'3px 8px',
                   borderRadius:'12px',
                   border:'1px solid #cbd5e1',
-                  background: v.album === alb ? '#8C1119' : '#f8fafc',
-                  color: v.album === alb ? '#fff' : '#475569',
+                  background: album === alb ? '#8C1119' : '#f8fafc',
+                  color: album === alb ? '#fff' : '#475569',
                   cursor:'pointer'
                 }}
-                onClick={()=>set('album', alb)}
+                onClick={()=>setAlbum(alb)}
               >
                 {alb}
               </button>
@@ -3341,19 +3370,19 @@ function PhotoModal({onSave,onClose,notify}){
           <label className="field uploadfield">
             <span>Select Image File</span>
             <div>
-              <input value={v.url||''} onChange={e=>{set('url',e.target.value);setPreview(e.target.value);}} placeholder="URL or select file"/>
+              <input value={url||''} onChange={e=>{setUrl(e.target.value);setPreview(e.target.value);}} placeholder="URL or choose image"/>
               <label className="uploadBtn">
-                <Upload size={16}/> Browse
-                <input type="file" accept="image/*" onChange={e=>upload(e.target.files?.[0])}/>
+                <Upload size={16}/> Choose Photo
+                <input type="file" accept="image/*" onChange={e=>handleFileChange(e.target.files?.[0])}/>
               </label>
             </div>
           </label>
 
-          {(preview || v.url) && (
+          {(preview || url) && (
             <div style={{gridColumn:'1 / -1',textAlign:'center',padding:'10px',background:'#f8fafc',borderRadius:'10px',border:'1px solid #e2e8f0'}}>
               <div style={{fontSize:'12px',color:'#64748b',marginBottom:'6px',fontWeight:600}}>Image Preview</div>
               <img
-                src={preview ? (preview.startsWith('data:') ? preview : resolveMediaUrl(preview)) : resolveMediaUrl(v.url)}
+                src={preview ? (preview.startsWith('data:') ? preview : resolveMediaUrl(preview)) : resolveMediaUrl(url)}
                 alt="Upload Preview"
                 style={{maxHeight:'180px',maxWidth:'100%',borderRadius:'8px',objectFit:'contain',boxShadow:'0 2px 8px rgba(0,0,0,0.1)'}}
                 onError={(e)=>{e.target.src='https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800'}}
@@ -3361,18 +3390,15 @@ function PhotoModal({onSave,onClose,notify}){
             </div>
           )}
 
-          <Field label="Caption / Description" value={v.caption} onChange={x=>set('caption',x)}/>
+          <Field label="Caption / Description" value={caption} onChange={setCaption}/>
         </div>
       </div>
       <div className="modal-footer">
         <button onClick={onClose} disabled={busy}>Cancel</button>
         <button
           className="primary"
-          disabled={busy || !v.url}
-          onClick={async()=>{
-            setBusy(true);
-            try{await onSave(v)}catch(e){alert(e.message)}finally{setBusy(false)}
-          }}
+          disabled={busy || (!url && !preview && !fileData)}
+          onClick={handleSave}
         >
           {busy ? 'Optimizing & Indexing Faces...' : 'Save & Index Faces'}
         </button>
@@ -3383,7 +3409,7 @@ function PhotoModal({onSave,onClose,notify}){
 
 function BulkPhotoModal({onSave,onClose,notify}){
   const[album,setAlbum]=useState('Delegate Networking');
-  const[mode,setMode]=useState('FILES'); // 'FILES' or 'URLS'
+  const[mode,setMode]=useState('FILES');
   const[urls,setUrls]=useState('');
   const[selectedFiles,setSelectedFiles]=useState([]);
   const[busy,setBusy]=useState(false);
@@ -3423,7 +3449,6 @@ function BulkPhotoModal({onSave,onClose,notify}){
       return;
     }
 
-    // Multiple Files Upload Mode
     if (!selectedFiles.length) {
       alert('Please select at least 1 photo file to upload.');
       return;
@@ -3452,8 +3477,10 @@ function BulkPhotoModal({onSave,onClose,notify}){
           })
         });
 
+        const finalUrl = uploadRes.data?.url || uploadRes.url || dataUrl;
+
         uploadedPhotosList.push({
-          url: uploadRes.url,
+          url: finalUrl,
           caption: `${album} - photo ${i + 1}`
         });
       }
