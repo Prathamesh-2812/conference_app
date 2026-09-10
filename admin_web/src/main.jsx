@@ -3285,36 +3285,333 @@ function Gallery({tab, notify}){
 function PhotoModal({onSave,onClose,notify}){
   const[v,set]=formState({album:'Keynote Sessions'});
   const[busy,setBusy]=useState(false);
+  const[preview,setPreview]=useState('');
+
   const upload=async(file)=>{
     if(!file)return;
     const reader=new FileReader();
     reader.onload=async()=>{
-      const data=await req('/admin/uploads',{method:'POST',body:JSON.stringify({folder:'gallery',file:{name:file.name,dataUrl:reader.result}})});
-      set('url',data.url);
-      notify('File uploaded');
+      setPreview(reader.result);
+      setBusy(true);
+      try{
+        const data=await req('/admin/uploads',{method:'POST',body:JSON.stringify({folder:'gallery',file:{name:file.name,dataUrl:reader.result}})});
+        set('url',data.url);
+        notify('Photo uploaded and optimized');
+      }catch(err){
+        alert('Upload failed: ' + err.message);
+      }finally{
+        setBusy(false);
+      }
     };
     reader.readAsDataURL(file);
   };
-  return <div className="modal-overlay"><div className="modal"><div className="modal-header"><h3>Upload Conference Photo</h3><button className="close" onClick={onClose}>&times;</button></div><div className="modal-body"><div className="formgrid">
-    <Field label="Album Name" value={v.album} onChange={x=>set('album',x)}/>
-    <label className="field uploadfield"><span>Select Image</span><div><input value={v.url||''} onChange={e=>set('url',e.target.value)} placeholder="URL or choose file"/><label className="uploadBtn"><Upload size={16}/>Browse<input type="file" accept="image/*" onChange={e=>upload(e.target.files?.[0])}/></label></div></label>
-    <Field label="Caption / Description" value={v.caption} onChange={x=>set('caption',x)}/>
-  </div></div><div className="modal-footer"><button onClick={onClose}>Cancel</button><button className="primary" disabled={busy || !v.url} onClick={async()=>{setBusy(true);try{await onSave(v)}finally{setBusy(false)}}}>{busy?'Indexing AI Faces...':'Save & Index Faces'}</button></div></div></div>
+
+  const commonAlbums = ['Keynote Sessions', 'Workshops & CMEs', 'Inauguration Ceremony', 'Delegate Networking', 'Cultural Night', 'Award Ceremony', 'General'];
+
+  return <div className="modal-overlay">
+    <div className="modal" style={{maxWidth:'540px'}}>
+      <div className="modal-header">
+        <h3>Upload Conference Photo</h3>
+        <button className="close" onClick={onClose}>&times;</button>
+      </div>
+      <div className="modal-body">
+        <div className="formgrid">
+          <Field label="Album Name" value={v.album} onChange={x=>set('album',x)}/>
+          <div style={{display:'flex',gap:'6px',flexWrap:'wrap',marginTop:'-6px',marginBottom:'8px'}}>
+            {commonAlbums.map(alb => (
+              <button
+                key={alb}
+                type="button"
+                style={{
+                  fontSize:'11px',
+                  padding:'3px 8px',
+                  borderRadius:'12px',
+                  border:'1px solid #cbd5e1',
+                  background: v.album === alb ? '#8C1119' : '#f8fafc',
+                  color: v.album === alb ? '#fff' : '#475569',
+                  cursor:'pointer'
+                }}
+                onClick={()=>set('album', alb)}
+              >
+                {alb}
+              </button>
+            ))}
+          </div>
+
+          <label className="field uploadfield">
+            <span>Select Image File</span>
+            <div>
+              <input value={v.url||''} onChange={e=>{set('url',e.target.value);setPreview(e.target.value);}} placeholder="URL or select file"/>
+              <label className="uploadBtn">
+                <Upload size={16}/> Browse
+                <input type="file" accept="image/*" onChange={e=>upload(e.target.files?.[0])}/>
+              </label>
+            </div>
+          </label>
+
+          {(preview || v.url) && (
+            <div style={{gridColumn:'1 / -1',textAlign:'center',padding:'10px',background:'#f8fafc',borderRadius:'10px',border:'1px solid #e2e8f0'}}>
+              <div style={{fontSize:'12px',color:'#64748b',marginBottom:'6px',fontWeight:600}}>Image Preview</div>
+              <img
+                src={preview ? (preview.startsWith('data:') ? preview : resolveMediaUrl(preview)) : resolveMediaUrl(v.url)}
+                alt="Upload Preview"
+                style={{maxHeight:'180px',maxWidth:'100%',borderRadius:'8px',objectFit:'contain',boxShadow:'0 2px 8px rgba(0,0,0,0.1)'}}
+                onError={(e)=>{e.target.src='https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800'}}
+              />
+            </div>
+          )}
+
+          <Field label="Caption / Description" value={v.caption} onChange={x=>set('caption',x)}/>
+        </div>
+      </div>
+      <div className="modal-footer">
+        <button onClick={onClose} disabled={busy}>Cancel</button>
+        <button
+          className="primary"
+          disabled={busy || !v.url}
+          onClick={async()=>{
+            setBusy(true);
+            try{await onSave(v)}catch(e){alert(e.message)}finally{setBusy(false)}
+          }}
+        >
+          {busy ? 'Optimizing & Indexing Faces...' : 'Save & Index Faces'}
+        </button>
+      </div>
+    </div>
+  </div>;
 }
 
 function BulkPhotoModal({onSave,onClose,notify}){
-  const[album,setAlbum]=useState('Delegate Networking'),[urls,setUrls]=useState(''),[busy,setBusy]=useState(false);
-  const handleBulkSubmit=async()=>{
-    const list=urls.split('\n').map(u=>u.trim()).filter(Boolean).map(url=>({url,caption:`Conference ${album} snapshot`}));
-    if(!list.length){alert('Please enter at least 1 image URL (one per line)');return}
-    setBusy(true);
-    try{await onSave(list,album)}finally{setBusy(false)}
+  const[album,setAlbum]=useState('Delegate Networking');
+  const[mode,setMode]=useState('FILES'); // 'FILES' or 'URLS'
+  const[urls,setUrls]=useState('');
+  const[selectedFiles,setSelectedFiles]=useState([]);
+  const[busy,setBusy]=useState(false);
+  const[progressText,setProgressText]=useState('');
+
+  const commonAlbums = ['Keynote Sessions', 'Workshops & CMEs', 'Inauguration Ceremony', 'Delegate Networking', 'Cultural Night', 'Award Ceremony'];
+
+  const handleFileSelection = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    const fileObjects = files.map((file, idx) => ({
+      id: `${Date.now()}_${idx}`,
+      file,
+      name: file.name,
+      size: (file.size / (1024 * 1024)).toFixed(2) + ' MB',
+      preview: URL.createObjectURL(file)
+    }));
+
+    setSelectedFiles(prev => [...prev, ...fileObjects]);
   };
-  return <div className="modal-overlay"><div className="modal"><div className="modal-header"><h3>Photographer Bulk Upload</h3><button className="close" onClick={onClose}>&times;</button></div><div className="modal-body"><div className="formgrid">
-    <Field label="Target Album" value={album} onChange={setAlbum}/>
-    <Field textarea label="Paste Image URLs (One URL per line)" value={urls} onChange={setUrls}/>
-    <small style={{color:'#64748b'}}>AI Face Recognition will automatically scan and index attendee faces across all uploaded photos.</small>
-  </div></div><div className="modal-footer"><button onClick={onClose}>Cancel</button><button className="primary" disabled={busy} onClick={handleBulkSubmit}>{busy?'Uploading & Indexing...':'Start AI Batch Indexing'}</button></div></div></div>
+
+  const removeFile = (id) => {
+    setSelectedFiles(prev => prev.filter(f => f.id !== id));
+  };
+
+  const handleBulkSubmit = async () => {
+    if (mode === 'URLS') {
+      const list = urls.split('\n').map(u => u.trim()).filter(Boolean).map(url => ({ url, caption: `Conference ${album} snapshot` }));
+      if (!list.length) { alert('Please enter at least 1 image URL'); return; }
+      setBusy(true);
+      try {
+        await onSave(list, album);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
+    // Multiple Files Upload Mode
+    if (!selectedFiles.length) {
+      alert('Please select at least 1 photo file to upload.');
+      return;
+    }
+
+    setBusy(true);
+    const uploadedPhotosList = [];
+
+    try {
+      for (let i = 0; i < selectedFiles.length; i++) {
+        const item = selectedFiles[i];
+        setProgressText(`Uploading photo ${i + 1} of ${selectedFiles.length}...`);
+
+        const dataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(item.file);
+        });
+
+        const uploadRes = await req('/admin/uploads', {
+          method: 'POST',
+          body: JSON.stringify({
+            folder: 'gallery',
+            file: { name: item.name, dataUrl }
+          })
+        });
+
+        uploadedPhotosList.push({
+          url: uploadRes.url,
+          caption: `${album} - photo ${i + 1}`
+        });
+      }
+
+      setProgressText('Indexing attendee faces with AI recognition...');
+      await onSave(uploadedPhotosList, album);
+    } catch (err) {
+      alert('Batch upload error: ' + err.message);
+    } finally {
+      setBusy(false);
+      setProgressText('');
+    }
+  };
+
+  return <div className="modal-overlay">
+    <div className="modal" style={{maxWidth:'640px'}}>
+      <div className="modal-header">
+        <h3>Photographer Multi-Photo Batch Upload</h3>
+        <button className="close" onClick={onClose}>&times;</button>
+      </div>
+      <div className="modal-body">
+        <div className="formgrid">
+          <Field label="Target Album" value={album} onChange={setAlbum}/>
+          <div style={{display:'flex',gap:'6px',flexWrap:'wrap',marginTop:'-6px',marginBottom:'10px'}}>
+            {commonAlbums.map(alb => (
+              <button
+                key={alb}
+                type="button"
+                style={{
+                  fontSize:'11px',
+                  padding:'3px 8px',
+                  borderRadius:'12px',
+                  border:'1px solid #cbd5e1',
+                  background: album === alb ? '#8C1119' : '#f8fafc',
+                  color: album === alb ? '#fff' : '#475569',
+                  cursor:'pointer'
+                }}
+                onClick={()=>setAlbum(alb)}
+              >
+                {alb}
+              </button>
+            ))}
+          </div>
+
+          <div style={{display:'flex',gap:'8px',marginBottom:'14px'}}>
+            <button
+              type="button"
+              style={{
+                flex:1,
+                padding:'8px 12px',
+                borderRadius:'8px',
+                border:'1px solid var(--border)',
+                background: mode === 'FILES' ? '#8C1119' : '#f8fafc',
+                color: mode === 'FILES' ? '#fff' : '#334155',
+                fontWeight:600,
+                fontSize:'13px',
+                cursor:'pointer'
+              }}
+              onClick={()=>setMode('FILES')}
+            >
+              📁 Choose Photo Files from Gallery ({selectedFiles.length})
+            </button>
+            <button
+              type="button"
+              style={{
+                flex:1,
+                padding:'8px 12px',
+                borderRadius:'8px',
+                border:'1px solid var(--border)',
+                background: mode === 'URLS' ? '#8C1119' : '#f8fafc',
+                color: mode === 'URLS' ? '#fff' : '#334155',
+                fontWeight:600,
+                fontSize:'13px',
+                cursor:'pointer'
+              }}
+              onClick={()=>setMode('URLS')}
+            >
+              🔗 Paste Image URLs
+            </button>
+          </div>
+
+          {mode === 'FILES' ? (
+            <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
+              <div
+                style={{
+                  border:'2px dashed #cbd5e1',
+                  borderRadius:'12px',
+                  padding:'24px 16px',
+                  textAlign:'center',
+                  background:'#f8fafc',
+                  cursor:'pointer',
+                  transition:'all 0.2s ease'
+                }}
+                onClick={() => document.getElementById('bulk-gallery-input').click()}
+              >
+                <Upload size={36} color="#8C1119" style={{marginBottom:'8px'}} />
+                <h4 style={{margin:'0 0 4px 0',fontSize:'15px'}}>Click to Select Multiple Photos</h4>
+                <p style={{margin:0,fontSize:'12.5px',color:'#64748b'}}>Select multiple JPG, PNG, WEBP photos from your computer or phone gallery.</p>
+                <input
+                  id="bulk-gallery-input"
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  style={{display:'none'}}
+                  onChange={handleFileSelection}
+                />
+              </div>
+
+              {selectedFiles.length > 0 && (
+                <div>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
+                    <strong style={{fontSize:'13px',color:'#1e293b'}}>Selected Photos ({selectedFiles.length})</strong>
+                    <button
+                      type="button"
+                      style={{color:'#ef4444',border:'none',background:'transparent',fontSize:'12px',cursor:'pointer',padding:0}}
+                      onClick={()=>setSelectedFiles([])}
+                    >
+                      Clear All
+                    </button>
+                  </div>
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(90px, 1fr))',gap:'8px',maxHeight:'200px',overflowY:'auto',padding:'4px'}}>
+                    {selectedFiles.map(item => (
+                      <div key={item.id} style={{position:'relative',borderRadius:'8px',overflow:'hidden',height:'80px',border:'1px solid #e2e8f0',background:'#000'}}>
+                        <img src={item.preview} alt={item.name} style={{width:'100%',height:'100%',objectFit:'cover'}} />
+                        <button
+                          type="button"
+                          onClick={()=>removeFile(item.id)}
+                          style={{position:'absolute',top:'2px',right:'2px',background:'rgba(0,0,0,0.7)',color:'#fff',border:'none',borderRadius:'50%',width:'18px',height:'18px',fontSize:'11px',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',padding:0}}
+                        >
+                          &times;
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <Field textarea label="Paste Image URLs (One URL per line)" value={urls} onChange={setUrls}/>
+          )}
+
+          {busy && progressText && (
+            <div style={{padding:'10px 14px',background:'#ecfdf5',color:'#047857',borderRadius:'8px',fontSize:'13px',fontWeight:600,display:'flex',alignItems:'center',gap:'8px'}}>
+              <span style={{display:'inline-block',animation:'spin 1s linear infinite'}}>⏳</span> {progressText}
+            </div>
+          )}
+
+          <small style={{color:'#64748b'}}>AI Face Recognition automatically scans and indexes attendee faces across all uploaded photos for instant selfie face match.</small>
+        </div>
+      </div>
+      <div className="modal-footer">
+        <button onClick={onClose} disabled={busy}>Cancel</button>
+        <button className="primary" disabled={busy || (mode==='FILES' ? !selectedFiles.length : !urls.trim())} onClick={handleBulkSubmit}>
+          {busy ? (progressText || 'Uploading & Indexing...') : `Upload ${mode==='FILES' && selectedFiles.length ? selectedFiles.length + ' Photos' : '& Index Faces'}`}
+        </button>
+      </div>
+    </div>
+  </div>;
 }
 
 function FeedbackView({tab, notify}){

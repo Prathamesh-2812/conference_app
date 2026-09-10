@@ -369,27 +369,122 @@ async function getConference(conferenceId=1){
   const [[settings]]=await pool.query('SELECT * FROM conference_settings WHERE conference_id=?',[conferenceId]);
   return {id:conference.id,name:conference.name,shortName:conference.short_name,description:conference.description,welcomeMessage:conference.welcome_message,aboutConference:conference.about_conference,startDate:conference.start_date,endDate:conference.end_date,registrationStartDate:conference.registration_start_date,registrationEndDate:conference.registration_end_date,contactPerson:conference.contact_person,contactPhone:conference.contact_phone,contactEmail:conference.contact_email,website:conference.website,organizer:conference.organizer,hostInstitution:conference.host_institution,theme:conference.theme,status:conference.status,active:conference.active,venue:{id:venue?.id||null,name:venue?.name||conference.venue,address:venue?.address||conference.address,city:venue?.city,state:venue?.state,country:venue?.country,pincode:venue?.pincode,latitude:venue?.latitude,longitude:venue?.longitude,googleMapsUrl:venue?.google_maps_url,parkingInformation:venue?.parking_information,directions:venue?.directions,contactNumber:venue?.contact_number},branding:{logoUrl:branding?.conference_logo||conference.logo_url,organizerLogoUrl:branding?.organizer_logo,bannerUrl:branding?.banner||conference.banner_url,splashScreenUrl:branding?.splash_screen,faviconUrl:branding?.favicon,primaryColor:branding?.primary_color,secondaryColor:branding?.secondary_color,accentColor:branding?.accent_color,backgroundColor:branding?.background_color},settings:{enableRegistration:!!settings?.enable_registration,enableChat:!!settings?.enable_chat,enableGallery:!!settings?.enable_gallery,enableAttendance:!!settings?.enable_attendance,enableQr:!!settings?.enable_qr,enablePushNotifications:!!settings?.enable_push_notifications,enableCertificates:!!settings?.enable_certificates,enablePolls:!!settings?.enable_polls,enableFeedback:!!settings?.enable_feedback}};
 }
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ extended: true, limit: '100mb' }));
+app.use(morgan('dev'));
+app.use('/uploads', express.static(uploadRoot));
+app.use('/app', express.static(flutterWebRoot));
+app.use('/admin', express.static(adminWebDist));
+
+app.use('/api', rateLimit({ windowMs: 15 * 60 * 1000, max: 1000, standardHeaders: true, legacyHeaders: false }));
+
+app.get('/', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>MAPCON 2026 - Conference Portal</title>
+      <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+        body { background: #FCFAF5; color: #1e293b; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+        .card { background: #ffffff; max-width: 520px; width: 100%; border-radius: 20px; box-shadow: 0 20px 40px -15px rgba(140, 17, 25, 0.12), 0 0 1px 1px rgba(200, 164, 90, 0.2); border-top: 6px solid #8C1119; overflow: hidden; text-align: center; padding: 36px 28px; }
+        .logo-badge { width: 70px; height: 70px; background: linear-gradient(135deg, #8C1119, #5C0008); color: #C8A45A; border-radius: 18px; display: inline-flex; align-items: center; justify-content: center; font-size: 32px; font-weight: 800; margin-bottom: 16px; box-shadow: 0 10px 20px rgba(140, 17, 25, 0.25); }
+        h1 { font-size: 26px; color: #8C1119; font-weight: 800; margin-bottom: 6px; letter-spacing: -0.5px; }
+        p.sub { font-size: 14px; color: #64748b; margin-bottom: 28px; line-height: 1.5; }
+        .btn-group { display: flex; flex-direction: column; gap: 14px; }
+        .btn { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 16px 20px; border-radius: 14px; text-decoration: none; font-weight: 700; font-size: 15px; transition: all 0.2s ease; border: none; cursor: pointer; }
+        .btn-primary { background: linear-gradient(135deg, #8C1119, #A91D22); color: #ffffff; box-shadow: 0 8px 18px rgba(140, 17, 25, 0.25); }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 24px rgba(140, 17, 25, 0.35); }
+        .btn-secondary { background: #ffffff; color: #8C1119; border: 2px solid #8C1119; }
+        .btn-secondary:hover { background: #FCFAF5; transform: translateY(-2px); }
+        .footer { margin-top: 32px; font-size: 12px; color: #94a3b8; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="logo-badge">M</div>
+        <h1>MAPCON 2026</h1>
+        <p class="sub">47th Annual Conference of Maharashtra Chapter of IAPM<br>Department of Pathology, DY Patil Medical College, Kolhapur</p>
+        <div class="btn-group">
+          <a href="/app/" class="btn btn-primary">📱 Open Delegate Web App</a>
+          <a href="/admin/" class="btn btn-secondary">⚙️ Open Admin Control Room</a>
+        </div>
+        <div class="footer">Hosted at Hotel Sayaji & DYP Medical College, Kolhapur &bull; 2026</div>
+      </div>
+    </body>
+    </html>
+  `);
+});
+
+const bool=v=>v==='true'||v===true||v===1||v==='1';
+const emptyStr=v=>v===undefined||v===null?'':String(v).trim();
+function ok(res,data,message='OK'){return res.json({status:200,message,data});}
+function created(res,data,message='Created'){return res.status(201).json({status:201,message,data});}
+function toClientConference(conference,venue,branding,settings){
+  return {id:conference.id,name:conference.name,shortName:conference.short_name,description:conference.description,welcomeMessage:conference.welcome_message,aboutConference:conference.about_conference,startDate:conference.start_date,endDate:conference.end_date,registrationStartDate:conference.registration_start_date,registrationEndDate:conference.registration_end_date,contactPerson:conference.contact_person,contactPhone:conference.contact_phone,contactEmail:conference.contact_email,website:conference.website,organizer:conference.organizer,hostInstitution:conference.host_institution,theme:conference.theme,status:conference.status,active:conference.active,venue:{id:venue?.id||null,name:venue?.name||conference.venue,address:venue?.address||conference.address,city:venue?.city,state:venue?.state,country:venue?.country,pincode:venue?.pincode,latitude:venue?.latitude,longitude:venue?.longitude,googleMapsUrl:venue?.google_maps_url,parkingInformation:venue?.parking_information,directions:venue?.directions,contactNumber:venue?.contact_number},branding:{logoUrl:branding?.conference_logo||conference.logo_url,organizerLogoUrl:branding?.organizer_logo,bannerUrl:branding?.banner||conference.banner_url,splashScreenUrl:branding?.splash_screen,faviconUrl:branding?.favicon,primaryColor:branding?.primary_color,secondaryColor:branding?.secondary_color,accentColor:branding?.accent_color,backgroundColor:branding?.background_color},settings:{enableRegistration:!!settings?.enable_registration,enableChat:!!settings?.enable_chat,enableGallery:!!settings?.enable_gallery,enableAttendance:!!settings?.enable_attendance,enableQr:!!settings?.enable_qr,enablePushNotifications:!!settings?.enable_push_notifications,enableCertificates:!!settings?.enable_certificates,enablePolls:!!settings?.enable_polls,enableFeedback:!!settings?.enable_feedback}};
+}
 function emptyToNull(v){return v===''?null:v}
 function normalizeValues(obj){return Object.fromEntries(Object.entries(obj).map(([k,v])=>[k,emptyToNull(v)]))}
-async function saveDataUrlUpload(folder,file){
-  if(!file?.dataUrl||!file?.name)throw Object.assign(new Error('File data is required'),{status:400});
-  const m=String(file.dataUrl).match(/^data:((?:image\/(?:png|jpe?g|webp|gif)|video\/(?:mp4|webm|quicktime|x-msvideo|ogg)|application\/pdf));base64,(.+)$/i);
-  if(!m)throw Object.assign(new Error('Unsupported file format. Upload JPG, PNG, WEBP, MP4, WEBM or PDF'),{status:422});
-  const mimeType=m[1].toLowerCase();
-  const mimeExtMap={
-    'image/png':'png','image/jpeg':'jpg','image/jpg':'jpg','image/webp':'webp','image/gif':'gif',
-    'video/mp4':'mp4','video/webm':'webm','video/quicktime':'mov','video/x-msvideo':'avi','video/ogg':'ogv',
-    'application/pdf':'pdf'
-  };
-  const ext=mimeExtMap[mimeType]||'bin';
-  const buffer=Buffer.from(m[2],'base64');
-  if(buffer.length>50*1024*1024)throw Object.assign(new Error('File size must be 50 MB or less'),{status:422});
-  const safeFolder=String(folder||'conference').replace(/[^a-z0-9_-]/gi,'').toLowerCase()||'conference';
-  const dir=path.join(uploadRoot,safeFolder);
-  await fs.mkdir(dir,{recursive:true});
-  const base=path.basename(file.name,path.extname(file.name)).replace(/[^a-z0-9_-]/gi,'-').toLowerCase()||'upload';
-  const filename=`${Date.now()}-${base}.${ext}`;
-  await fs.writeFile(path.join(dir,filename),buffer);
+async function saveDataUrlUpload(folder, file) {
+  if (!file?.dataUrl || !file?.name) throw Object.assign(new Error('File data is required'), { status: 400 });
+  const rawStr = String(file.dataUrl);
+  let base64Data = '';
+  let mimeType = '';
+
+  const dataUriMatch = rawStr.match(/^data:([^;]+);base64,(.+)$/is);
+  if (dataUriMatch) {
+    mimeType = dataUriMatch[1].toLowerCase().trim();
+    base64Data = dataUriMatch[2].trim();
+  } else {
+    base64Data = rawStr.replace(/^data:[^;]+;base64,/i, '').trim();
+  }
+
+  if (!base64Data) {
+    throw Object.assign(new Error('Invalid or empty file data'), { status: 400 });
+  }
+
+  let buffer;
+  try {
+    buffer = Buffer.from(base64Data, 'base64');
+  } catch (e) {
+    throw Object.assign(new Error('Failed to decode base64 file data'), { status: 422 });
+  }
+
+  if (buffer.length > 50 * 1024 * 1024) {
+    throw Object.assign(new Error('File size must be 50 MB or less'), { status: 422 });
+  }
+
+  const origExt = path.extname(file.name || '').replace(/^\./, '').toLowerCase();
+  const safeFolder = String(folder || 'conference').replace(/[^a-z0-9_-]/gi, '').toLowerCase() || 'conference';
+  const dir = path.join(uploadRoot, safeFolder);
+  await fs.mkdir(dir, { recursive: true });
+  const base = path.basename(file.name, path.extname(file.name)).replace(/[^a-z0-9_-]/gi, '-').toLowerCase() || 'upload';
+
+  let finalBuffer = buffer;
+  let finalExt = origExt || 'jpg';
+
+  // If it's an image, normalize with sharp: auto-rotate by EXIF, convert to standard sRGB colorspace, optimize
+  const isImage = mimeType.startsWith('image/') || ['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif', 'avif'].includes(origExt);
+  if (isImage) {
+    try {
+      finalBuffer = await sharp(buffer)
+        .rotate() // Auto-orient based on EXIF tag from smartphone camera
+        .toColorspace('srgb') // Fix color space and prevent black/corrupt render
+        .resize({ width: 2400, height: 2400, fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 90, progressive: true })
+        .toBuffer();
+      finalExt = 'jpg';
+    } catch (sharpErr) {
+      console.warn('Sharp image normalization fallback:', sharpErr.message);
+      finalBuffer = buffer;
+      finalExt = origExt || 'jpg';
+    }
+  }
+
+  const filename = `${Date.now()}-${base}.${finalExt}`;
+  await fs.writeFile(path.join(dir, filename), finalBuffer);
   return `/uploads/${safeFolder}/${filename}`;
 }
 
@@ -560,17 +655,33 @@ app.post('/api/auth/login', asyncRoute(async(req,res)=>{
   const u = rows[0];
 
   let isValid = await bcrypt.compare(password, u.password_hash);
-  if(!isValid) {
-    // Check fallback default passwords ('Demo@123', 'changeme')
+  let loggedInWithDefault = false;
+
+  if (!isValid) {
+    // 1. Check if password is user's phone number
+    if (u.phone && (password === u.phone || password === String(u.phone).replace(/[^0-9]/g, ''))) {
+      isValid = true;
+      loggedInWithDefault = true;
+    }
+    // 2. Check fallback default passwords ('Demo@123', 'changeme')
     const isDefaultHash = (await bcrypt.compare('changeme', u.password_hash)) || (await bcrypt.compare('Demo@123', u.password_hash));
     if (isDefaultHash && (password === 'Demo@123' || password === 'changeme')) {
       isValid = true;
+      loggedInWithDefault = true;
+    }
+  } else {
+    // If password hash was originally set to phone number or Demo@123
+    if (u.phone && (password === u.phone || password === String(u.phone).replace(/[^0-9]/g, ''))) {
+      loggedInWithDefault = true;
+    }
+    if (password === 'Demo@123' || password === 'changeme') {
+      loggedInWithDefault = true;
     }
   }
 
-  if(!isValid) return res.status(401).json({message:'Invalid credentials'});
+  if (!isValid) return res.status(401).json({message: 'Invalid credentials'});
 
-  await pool.query('UPDATE users SET last_login_at=NOW() WHERE id=?',[u.id]);
+  await pool.query('UPDATE users SET last_login_at=NOW() WHERE id=?', [u.id]);
   
   const [enrolledConfs] = await pool.query(`
     SELECT c.*, p.id as participant_id, p.registration_no, p.category, p.status as participant_status
@@ -580,24 +691,26 @@ app.post('/api/auth/login', asyncRoute(async(req,res)=>{
     ORDER BY c.start_date DESC
   `, [u.id]);
 
+  const mustChange = Boolean(u.must_change_password) || loggedInWithDefault;
+
   const secret = process.env.JWT_SECRET || 'conference-app-secret-jwt-key-2026';
-  const token = jwt.sign({id:u.id, name:u.name, email:u.email, role:u.role}, secret, {expiresIn:'7d'});
+  const token = jwt.sign({id: u.id, name: u.name, email: u.email, role: u.role}, secret, {expiresIn: '7d'});
   res.json({
     token, 
-    user:{
-      id:u.id, 
-      name:u.name, 
-      email:u.email, 
-      phone:u.phone, 
-      role:u.role, 
+    user: {
+      id: u.id, 
+      name: u.name, 
+      email: u.email, 
+      phone: u.phone, 
+      role: u.role, 
       last_login_at: new Date(), 
-      mustChangePassword: !!u.must_change_password
+      mustChangePassword: mustChange
     },
     enrolledConferences: enrolledConfs
   });
 }));
 
-app.post('/api/auth/change-password', auth, [body('newPassword').isLength({min:4})], validate, asyncRoute(async(req,res)=>{
+app.post('/api/auth/change-password', auth, [body('newPassword').isLength({min: 4})], validate, asyncRoute(async(req, res) => {
   const newHash = await bcrypt.hash(req.body.newPassword, 10);
   await pool.query('UPDATE users SET password_hash=?, must_change_password=0 WHERE id=?', [newHash, req.user.id]);
   ok(res, {success: true}, 'Password changed successfully');
@@ -877,7 +990,7 @@ app.post('/api/admin/participants',auth,roles('ADMIN','SUPER_ADMIN'),[
   body('name').notEmpty()
 ],validate,asyncRoute(async(req,res)=>{
   const conferenceId=req.body.conferenceId||1;
-  const password=req.body.password||'Demo@123';
+  const password=req.body.password || req.body.phone || 'Demo@123';
   const passwordHash=await bcrypt.hash(password,10);
   
   const [existing]=await pool.query('SELECT id FROM users WHERE email=? LIMIT 1',[req.body.email]);
@@ -888,7 +1001,7 @@ app.post('/api/admin/participants',auth,roles('ADMIN','SUPER_ADMIN'),[
       [req.body.name, req.body.phone||null, req.body.designation||null, req.body.university||null, req.body.bloodGroup||req.body.blood_group||null, req.body.photo||null, userId]);
   } else {
     const [uRes]=await pool.query(
-      'INSERT INTO users(name, email, password_hash, phone, role, designation, university, blood_group, photo) VALUES(?,?,?,?,?,?,?,?,?)',
+      'INSERT INTO users(name, email, password_hash, phone, role, designation, university, blood_group, photo, must_change_password) VALUES(?,?,?,?,?,?,?,?,?,1)',
       [req.body.name, req.body.email, passwordHash, req.body.phone||null, req.body.role||'PARTICIPANT', req.body.designation||null, req.body.university||null, req.body.bloodGroup||req.body.blood_group||null, req.body.photo||null]
     );
     userId=uRes.insertId;
@@ -1099,10 +1212,12 @@ app.post('/api/admin/participants/bulk-import',auth,roles('ADMIN','SUPER_ADMIN')
           WHERE id = ?
         `, [name, phone||null, email||null, designation, university, bloodGroup, uid]);
       } else {
-        // Create new user
+        // Create new user with phone number as default password
+        const userPass = phone || 'Demo@123';
+        const userHash = await bcrypt.hash(userPass, 10);
         const [uRes] = await pool.query(
           'INSERT INTO users(name,email,password_hash,phone,role,designation,university,blood_group,must_change_password) VALUES(?,?,?,?,?,?,?,?,1)',
-          [name, email || `user_${Date.now()}_${Math.floor(Math.random()*1000)}@conference.local`, defaultHash, phone||null, 'PARTICIPANT', designation, university, bloodGroup]
+          [name, email || `user_${Date.now()}_${Math.floor(Math.random()*1000)}@conference.local`, userHash, phone||null, 'PARTICIPANT', designation, university, bloodGroup]
         );
         uid = uRes.insertId;
       }

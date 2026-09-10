@@ -622,7 +622,8 @@ class _LoginScreenState extends State<LoginScreen> {
 }
 
 class ForcedPasswordChangeDialog extends StatefulWidget {
-  const ForcedPasswordChangeDialog({super.key});
+  final bool isForced;
+  const ForcedPasswordChangeDialog({super.key, this.isForced = true});
 
   @override
   State<ForcedPasswordChangeDialog> createState() => _ForcedPasswordChangeDialogState();
@@ -631,8 +632,17 @@ class ForcedPasswordChangeDialog extends StatefulWidget {
 class _ForcedPasswordChangeDialogState extends State<ForcedPasswordChangeDialog> {
   final newPassCtrl = TextEditingController();
   final confirmPassCtrl = TextEditingController();
+  bool obscureNew = true;
+  bool obscureConfirm = true;
   bool busy = false;
   String? errorMsg;
+
+  @override
+  void dispose() {
+    newPassCtrl.dispose();
+    confirmPassCtrl.dispose();
+    super.dispose();
+  }
 
   Future<void> submitNewPassword() async {
     final newPass = newPassCtrl.text.trim();
@@ -658,7 +668,7 @@ class _ForcedPasswordChangeDialogState extends State<ForcedPasswordChangeDialog>
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Password updated successfully! Welcome to the app.'),
+            content: Text('Password updated successfully!'),
             backgroundColor: Colors.green,
           ),
         );
@@ -676,19 +686,24 @@ class _ForcedPasswordChangeDialogState extends State<ForcedPasswordChangeDialog>
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
-      onWillPop: () async => false,
+      onWillPop: () async => !widget.isForced,
       child: AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
-          children: const [
-            Icon(Icons.lock_reset, color: maroon, size: 28),
-            SizedBox(width: 10),
+          children: [
+            const Icon(Icons.lock_reset, color: maroon, size: 28),
+            const SizedBox(width: 10),
             Expanded(
               child: Text(
-                'Change Default Password',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: slate),
+                widget.isForced ? 'Change Default Password' : 'Change Password',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: slate),
               ),
             ),
+            if (!widget.isForced)
+              IconButton(
+                icon: const Icon(Icons.close, color: muted, size: 20),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
           ],
         ),
         content: SingleChildScrollView(
@@ -696,27 +711,37 @@ class _ForcedPasswordChangeDialogState extends State<ForcedPasswordChangeDialog>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
-                'Your account was created with a default password. Please choose a new password before proceeding.',
-                style: TextStyle(fontSize: 13, color: muted),
+              Text(
+                widget.isForced
+                    ? 'Your account was initialized with a default password (mobile number). Please set your personal password before continuing.'
+                    : 'Enter your new password below to update your account login credentials.',
+                style: const TextStyle(fontSize: 13, color: muted),
               ),
               const SizedBox(height: 16),
               TextField(
                 controller: newPassCtrl,
-                obscureText: true,
+                obscureText: obscureNew,
                 decoration: InputDecoration(
                   labelText: 'New Password',
                   prefixIcon: const Icon(Icons.lock_outline, color: maroon),
+                  suffixIcon: IconButton(
+                    icon: Icon(obscureNew ? Icons.visibility_off : Icons.visibility, color: muted),
+                    onPressed: () => setState(() => obscureNew = !obscureNew),
+                  ),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: confirmPassCtrl,
-                obscureText: true,
+                obscureText: obscureConfirm,
                 decoration: InputDecoration(
                   labelText: 'Confirm New Password',
                   prefixIcon: const Icon(Icons.lock_outline, color: maroon),
+                  suffixIcon: IconButton(
+                    icon: Icon(obscureConfirm ? Icons.visibility_off : Icons.visibility, color: muted),
+                    onPressed: () => setState(() => obscureConfirm = !obscureConfirm),
+                  ),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),
@@ -728,20 +753,22 @@ class _ForcedPasswordChangeDialogState extends State<ForcedPasswordChangeDialog>
           ),
         ),
         actions: [
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: maroon,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              onPressed: busy ? null : submitNewPassword,
-              child: busy
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Text('Update & Continue', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+          if (!widget.isForced)
+            TextButton(
+              onPressed: busy ? null : () => Navigator.of(context).pop(),
+              child: const Text('Cancel', style: TextStyle(color: muted, fontWeight: FontWeight.w600)),
             ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: maroon,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: busy ? null : submitNewPassword,
+            child: busy
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : Text(widget.isForced ? 'Update & Continue' : 'Update Password', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
           ),
         ],
       ),
@@ -5655,6 +5682,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  void _showChangePasswordDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => const ForcedPasswordChangeDialog(isForced: false),
+    );
+  }
+
   @override
   Widget build(BuildContext c) => SafeArea(
         top: false,
@@ -5769,12 +5803,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     border: Border.all(color: Colors.white, width: 2.5),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black.withOpacity(0.25),
+                                        color: Colors.black.withOpacity(0.2),
                                         blurRadius: 6,
+                                        offset: const Offset(0, 2),
                                       ),
                                     ],
                                   ),
-                                  child: const Icon(Icons.camera_alt, color: Colors.white, size: 16),
+                                  child: const Icon(Icons.camera_alt, color: Colors.white, size: 18),
                                 ),
                               ),
                             ),
@@ -5783,23 +5818,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(height: 14),
                       Text(
-                        x['name'] ?? '',
+                        x['name']?.toString() ?? 'Conference Delegate',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: slate),
+                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: slate),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 4),
                       Text(
-                        x['email'] ?? '',
+                        x['email']?.toString() ?? '',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(color: muted, fontSize: 13.5),
+                        style: const TextStyle(color: muted, fontSize: 13, fontWeight: FontWeight.w500),
+                      ),
+                      const SizedBox(height: 8),
+                      Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: maroon.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: maroon.withOpacity(0.2)),
+                          ),
+                          child: Text(
+                            (x['role']?.toString() ?? 'DELEGATE').toUpperCase(),
+                            style: const TextStyle(color: maroon, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.8),
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 12),
                       Center(
                         child: OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(
                             foregroundColor: maroon,
-                            side: const BorderSide(color: maroon, width: 1.5),
-                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                            side: const BorderSide(color: maroon, width: 1.2),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                           ),
                           icon: const Icon(Icons.edit_outlined, size: 16),
@@ -5840,7 +5890,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           'Departure Time': formatSingleTime(x['departure_time']),
                         },
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 14),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: maroon,
+                          side: const BorderSide(color: maroon, width: 1.5),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: _showChangePasswordDialog,
+                        icon: const Icon(Icons.lock_reset, color: maroon),
+                        label: const Text('Reset / Change Password', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      ),
+                      const SizedBox(height: 12),
                       OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.red.shade700,
