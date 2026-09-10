@@ -31,7 +31,8 @@ app.use(helmet({
   contentSecurityPolicy: false
 }));
 app.use(cors({ origin: true, credentials: true }));
-app.use(express.json({ limit: '12mb' }));
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 app.use(morgan('dev'));
 app.use('/uploads', express.static(uploadRoot));
 app.use('/app', express.static(flutterWebRoot));
@@ -369,64 +370,6 @@ async function getConference(conferenceId=1){
   const [[settings]]=await pool.query('SELECT * FROM conference_settings WHERE conference_id=?',[conferenceId]);
   return {id:conference.id,name:conference.name,shortName:conference.short_name,description:conference.description,welcomeMessage:conference.welcome_message,aboutConference:conference.about_conference,startDate:conference.start_date,endDate:conference.end_date,registrationStartDate:conference.registration_start_date,registrationEndDate:conference.registration_end_date,contactPerson:conference.contact_person,contactPhone:conference.contact_phone,contactEmail:conference.contact_email,website:conference.website,organizer:conference.organizer,hostInstitution:conference.host_institution,theme:conference.theme,status:conference.status,active:conference.active,venue:{id:venue?.id||null,name:venue?.name||conference.venue,address:venue?.address||conference.address,city:venue?.city,state:venue?.state,country:venue?.country,pincode:venue?.pincode,latitude:venue?.latitude,longitude:venue?.longitude,googleMapsUrl:venue?.google_maps_url,parkingInformation:venue?.parking_information,directions:venue?.directions,contactNumber:venue?.contact_number},branding:{logoUrl:branding?.conference_logo||conference.logo_url,organizerLogoUrl:branding?.organizer_logo,bannerUrl:branding?.banner||conference.banner_url,splashScreenUrl:branding?.splash_screen,faviconUrl:branding?.favicon,primaryColor:branding?.primary_color,secondaryColor:branding?.secondary_color,accentColor:branding?.accent_color,backgroundColor:branding?.background_color},settings:{enableRegistration:!!settings?.enable_registration,enableChat:!!settings?.enable_chat,enableGallery:!!settings?.enable_gallery,enableAttendance:!!settings?.enable_attendance,enableQr:!!settings?.enable_qr,enablePushNotifications:!!settings?.enable_push_notifications,enableCertificates:!!settings?.enable_certificates,enablePolls:!!settings?.enable_polls,enableFeedback:!!settings?.enable_feedback}};
 }
-app.use(express.json({ limit: '100mb' }));
-app.use(express.urlencoded({ extended: true, limit: '100mb' }));
-app.use(morgan('dev'));
-app.use('/uploads', express.static(uploadRoot));
-app.use('/app', express.static(flutterWebRoot));
-app.use('/admin', express.static(adminWebDist));
-
-app.use('/api', rateLimit({ windowMs: 15 * 60 * 1000, max: 1000, standardHeaders: true, legacyHeaders: false }));
-
-app.get('/', (req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>MAPCON 2026 - Conference Portal</title>
-      <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
-        body { background: #FCFAF5; color: #1e293b; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
-        .card { background: #ffffff; max-width: 520px; width: 100%; border-radius: 20px; box-shadow: 0 20px 40px -15px rgba(140, 17, 25, 0.12), 0 0 1px 1px rgba(200, 164, 90, 0.2); border-top: 6px solid #8C1119; overflow: hidden; text-align: center; padding: 36px 28px; }
-        .logo-badge { width: 70px; height: 70px; background: linear-gradient(135deg, #8C1119, #5C0008); color: #C8A45A; border-radius: 18px; display: inline-flex; align-items: center; justify-content: center; font-size: 32px; font-weight: 800; margin-bottom: 16px; box-shadow: 0 10px 20px rgba(140, 17, 25, 0.25); }
-        h1 { font-size: 26px; color: #8C1119; font-weight: 800; margin-bottom: 6px; letter-spacing: -0.5px; }
-        p.sub { font-size: 14px; color: #64748b; margin-bottom: 28px; line-height: 1.5; }
-        .btn-group { display: flex; flex-direction: column; gap: 14px; }
-        .btn { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 16px 20px; border-radius: 14px; text-decoration: none; font-weight: 700; font-size: 15px; transition: all 0.2s ease; border: none; cursor: pointer; }
-        .btn-primary { background: linear-gradient(135deg, #8C1119, #A91D22); color: #ffffff; box-shadow: 0 8px 18px rgba(140, 17, 25, 0.25); }
-        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 24px rgba(140, 17, 25, 0.35); }
-        .btn-secondary { background: #ffffff; color: #8C1119; border: 2px solid #8C1119; }
-        .btn-secondary:hover { background: #FCFAF5; transform: translateY(-2px); }
-        .footer { margin-top: 32px; font-size: 12px; color: #94a3b8; }
-      </style>
-    </head>
-    <body>
-      <div class="card">
-        <div class="logo-badge">M</div>
-        <h1>MAPCON 2026</h1>
-        <p class="sub">47th Annual Conference of Maharashtra Chapter of IAPM<br>Department of Pathology, DY Patil Medical College, Kolhapur</p>
-        <div class="btn-group">
-          <a href="/app/" class="btn btn-primary">📱 Open Delegate Web App</a>
-          <a href="/admin/" class="btn btn-secondary">⚙️ Open Admin Control Room</a>
-        </div>
-        <div class="footer">Hosted at Hotel Sayaji & DYP Medical College, Kolhapur &bull; 2026</div>
-      </div>
-    </body>
-    </html>
-  `);
-});
-
-const bool=v=>v==='true'||v===true||v===1||v==='1';
-const emptyStr=v=>v===undefined||v===null?'':String(v).trim();
-function ok(res,data,message='OK'){return res.json({status:200,message,data});}
-function created(res,data,message='Created'){return res.status(201).json({status:201,message,data});}
-function toClientConference(conference,venue,branding,settings){
-  return {id:conference.id,name:conference.name,shortName:conference.short_name,description:conference.description,welcomeMessage:conference.welcome_message,aboutConference:conference.about_conference,startDate:conference.start_date,endDate:conference.end_date,registrationStartDate:conference.registration_start_date,registrationEndDate:conference.registration_end_date,contactPerson:conference.contact_person,contactPhone:conference.contact_phone,contactEmail:conference.contact_email,website:conference.website,organizer:conference.organizer,hostInstitution:conference.host_institution,theme:conference.theme,status:conference.status,active:conference.active,venue:{id:venue?.id||null,name:venue?.name||conference.venue,address:venue?.address||conference.address,city:venue?.city,state:venue?.state,country:venue?.country,pincode:venue?.pincode,latitude:venue?.latitude,longitude:venue?.longitude,googleMapsUrl:venue?.google_maps_url,parkingInformation:venue?.parking_information,directions:venue?.directions,contactNumber:venue?.contact_number},branding:{logoUrl:branding?.conference_logo||conference.logo_url,organizerLogoUrl:branding?.organizer_logo,bannerUrl:branding?.banner||conference.banner_url,splashScreenUrl:branding?.splash_screen,faviconUrl:branding?.favicon,primaryColor:branding?.primary_color,secondaryColor:branding?.secondary_color,accentColor:branding?.accent_color,backgroundColor:branding?.background_color},settings:{enableRegistration:!!settings?.enable_registration,enableChat:!!settings?.enable_chat,enableGallery:!!settings?.enable_gallery,enableAttendance:!!settings?.enable_attendance,enableQr:!!settings?.enable_qr,enablePushNotifications:!!settings?.enable_push_notifications,enableCertificates:!!settings?.enable_certificates,enablePolls:!!settings?.enable_polls,enableFeedback:!!settings?.enable_feedback}};
-}
-function emptyToNull(v){return v===''?null:v}
-function normalizeValues(obj){return Object.fromEntries(Object.entries(obj).map(([k,v])=>[k,emptyToNull(v)]))}
 async function saveDataUrlUpload(folder, file) {
   if (!file?.dataUrl || !file?.name) throw Object.assign(new Error('File data is required'), { status: 400 });
   const rawStr = String(file.dataUrl);
