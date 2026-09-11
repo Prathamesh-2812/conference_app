@@ -1786,21 +1786,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     onTap: () => go(context, const SpeakersScreen()),
                   ),
                   CardButton(
-                    icon: Icons.face_retouching_natural,
-                    title: 'AI Smart Photo Gallery',
-                    subtitle: 'Find your photos with AI selfie face match',
-                    trailingBadge: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: gold.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: gold),
-                      ),
-                      child: const Text(
-                        'AI POWERED',
-                        style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w900, color: darkMaroon),
-                      ),
-                    ),
+                    icon: Icons.photo_library_rounded,
+                    title: 'Photo Gallery',
+                    subtitle: 'View conference photos & event moments',
                     onTap: () => go(context, const GalleryScreen()),
                   ),
                   CardButton(
@@ -3383,7 +3371,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                       const SizedBox(width: 8),
                       const Expanded(
                         child: Text(
-                          'HYBRID & ONLINE ATTENDANCE (ZOOM)',
+                          'HYBRID & ONLINE LIVE STREAM (ZOOM)',
                           style: TextStyle(
                             fontSize: 11.5,
                             fontWeight: FontWeight.w900,
@@ -3455,7 +3443,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             Row(
               children: [
                 Expanded(
@@ -3466,29 +3454,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    icon: const Icon(Icons.qr_code_2_rounded, size: 20),
-                    label: const Text('Speaker: Present Session QR', style: TextStyle(fontWeight: FontWeight.bold)),
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      _showSpeakerSessionQrModal(context, session);
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: slate,
-                      side: BorderSide(color: Colors.grey.shade300),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
                     icon: const Icon(Icons.alarm_add_rounded, size: 18),
-                    label: const Text('Set Session Reminder', style: TextStyle(fontWeight: FontWeight.w600)),
+                    label: const Text('Set Session Reminder', style: TextStyle(fontWeight: FontWeight.bold)),
                     onPressed: () {
                       Navigator.pop(ctx);
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -3504,107 +3471,6 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             ),
             const SizedBox(height: 10),
           ],
-        ),
-      ),
-    );
-  }
-
-  void _showSpeakerSessionQrModal(BuildContext context, dynamic session) {
-    final title = session['title'] ?? 'Session Attendance';
-    final hallName = session['hall_name'] ?? 'Hall A';
-    final speakerName = session['speaker_name'] ?? 'Faculty Speaker';
-    final sessionId = session['id'] ?? 1;
-    final qrData = 'MAPCON2026-SESSION-$sessionId-1';
-
-    showDialog(
-      context: context,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(color: maroon.withOpacity(0.1), shape: BoxShape.circle),
-                    child: const Icon(Icons.qr_code_scanner_rounded, color: maroon, size: 22),
-                  ),
-                  const SizedBox(width: 10),
-                  const Expanded(
-                    child: Text(
-                      'Speaker Attendance QR',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: slate),
-                    ),
-                  ),
-                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: maroon),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '📍 $hallName • Speaker: $speakerName',
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 13, color: muted, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 18),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: maroon.withOpacity(0.3), width: 2),
-                  boxShadow: [
-                    BoxShadow(color: maroon.withOpacity(0.08), blurRadius: 16, offset: const Offset(0, 4)),
-                  ],
-                ),
-                child: QrImageView(
-                  data: qrData,
-                  version: QrVersions.auto,
-                  size: 200,
-                  foregroundColor: darkMaroon,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.info_outline, color: maroon, size: 18),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Project or display this QR code to delegates in the hall. Attendees scan this with their app to mark verified attendance.',
-                        style: TextStyle(fontSize: 11.5, color: slate, height: 1.3),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: maroon,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size.fromHeight(44),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Close QR Display', style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
         ),
       ),
     );
@@ -4795,7 +4661,7 @@ class _NoticesScreenState extends State<NoticesScreen> {
 }
 
 // ----------------------------------------------------
-// GALLERY SCREEN (AI FACE RECOGNITION + PHOTOS)
+// PHOTO GALLERY SCREEN
 // ----------------------------------------------------
 class GalleryScreen extends StatefulWidget {
   const GalleryScreen({super.key});
@@ -4804,135 +4670,18 @@ class GalleryScreen extends StatefulWidget {
   State<GalleryScreen> createState() => _GalleryScreenState();
 }
 
-class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  final ImagePicker _picker = ImagePicker();
-  bool _isMatching = false;
-  List<dynamic> _matchedPhotos = [];
+class _GalleryScreenState extends State<GalleryScreen> {
   String _activeAlbum = 'ALL';
+  int _refreshKey = 0;
 
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-    _loadInitialMatchedPhotos();
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadInitialMatchedPhotos() async {
-    try {
-      final res = await ApiService.get('/gallery/my-photos');
-      List<dynamic> list = [];
-      if (res is Map) {
-        if (res['data'] is Map && res['data']['matches'] is List) {
-          list = res['data']['matches'] as List;
-        } else if (res['matches'] is List) {
-          list = res['matches'] as List;
-        } else if (res['data'] is List) {
-          list = res['data'] as List;
-        }
-      } else if (res is List) {
-        list = res;
-      }
-      if (mounted && list.isNotEmpty) {
-        setState(() => _matchedPhotos = list);
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _scanFaceAndFindPhotos(ImageSource source) async {
-    try {
-      String? base64Image;
-
-      // Use live webcam video capture on web when user taps Take Selfie
-      if (source == ImageSource.camera && kIsWeb) {
-        final capturedDataUrl = await captureWebcamSelfie(context);
-        if (capturedDataUrl == null || capturedDataUrl.isEmpty) {
-          return; // User cancelled or closed webcam
-        }
-        base64Image = capturedDataUrl;
-      } else {
-        final XFile? photo = await _picker.pickImage(
-          source: source,
-          maxWidth: 1024,
-          maxHeight: 1024,
-          imageQuality: 85,
-        );
-
-        if (photo == null) return;
-
-        final bytes = await photo.readAsBytes();
-        base64Image = 'data:image/jpeg;base64,${base64Encode(bytes)}';
-      }
-
-      setState(() {
-        _isMatching = true;
-      });
-
-      final res = await ApiService.post('/gallery/match-selfie', {
-        'conferenceId': ConferenceService.activeConferenceId,
-        'selfie': base64Image,
-      });
-
-      List<dynamic> matched = [];
-      if (res is Map) {
-        if (res['data'] is Map && res['data']['matches'] is List) {
-          matched = res['data']['matches'] as List;
-        } else if (res['matches'] is List) {
-          matched = res['matches'] as List;
-        } else if (res['data'] is List) {
-          matched = res['data'] as List;
-        }
-      } else if (res is List) {
-        matched = res;
-      }
-
-      setState(() {
-        _matchedPhotos = matched;
-        _isMatching = false;
-      });
-
-      if (mounted) {
-        if (matched.isNotEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('AI Face Recognition found ${matched.length} photos of you!'),
-              backgroundColor: maroon,
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No matching photos found in the conference gallery.'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      setState(() => _isMatching = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Matching error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
-  void _openPhotoViewer(BuildContext context, dynamic photo, {bool isMatched = false}) {
+  void _openPhotoViewer(BuildContext context, dynamic photo) {
     final photoUrl = resolveMediaUrl(photo['url']);
     final caption = photo['caption'] ?? 'Conference Moment';
     final album = photo['album'] ?? 'General';
-    final confidence = isMatched ? (photo['confidencePercent'] ?? '95% Match') : null;
 
     showDialog(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.9),
+      barrierColor: Colors.black.withOpacity(0.92),
       builder: (ctx) => Dialog(
         backgroundColor: Colors.transparent,
         insetPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 24),
@@ -4985,27 +4734,6 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
                           style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                         ),
                       ),
-                      if (confidence != null) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.green.shade700,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.face_retouching_natural, color: Colors.white, size: 13),
-                              const SizedBox(width: 4),
-                              Text(
-                                '$confidence',
-                                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -5042,443 +4770,198 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
       top: false,
       child: Column(
         children: [
-          const Header(title: 'Gallery & AI Match'),
-          Container(
-            color: Colors.white,
-            child: TabBar(
-              controller: _tabController,
-              labelColor: maroon,
-              unselectedLabelColor: muted,
-              indicatorColor: maroon,
-              indicatorWeight: 3,
-              labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5),
-              tabs: const [
-                Tab(
-                  icon: Icon(Icons.face_retouching_natural),
-                  text: 'Find My Photos',
-                ),
-                Tab(
-                  icon: Icon(Icons.photo_library_outlined),
-                  text: 'All Photos',
-                ),
-              ],
-            ),
-          ),
+          const Header(title: 'Photo Gallery'),
           Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildAiSelfieTab(),
-                _buildAllPhotosTab(),
-              ],
+            child: RefreshIndicator(
+              color: maroon,
+              onRefresh: () async {
+                setState(() => _refreshKey++);
+              },
+              child: FutureBuilder(
+                key: ValueKey(_refreshKey),
+                future: ApiService.get('/gallery'),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator(color: maroon));
+                  }
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.photo_library_outlined, size: 48, color: muted),
+                            const SizedBox(height: 12),
+                            const Text('Unable to load conference gallery', style: TextStyle(fontWeight: FontWeight.bold, color: slate)),
+                            const SizedBox(height: 12),
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(backgroundColor: maroon, foregroundColor: Colors.white),
+                              icon: const Icon(Icons.refresh, size: 16),
+                              label: const Text('Retry'),
+                              onPressed: () => setState(() => _refreshKey++),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+
+                  final photos = snapshot.data is List ? (snapshot.data as List) : [];
+                  if (photos.isEmpty) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.photo_library_outlined, size: 64, color: Colors.grey.shade300),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'No Conference Photos Yet',
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: slate),
+                            ),
+                            const SizedBox(height: 6),
+                            const Text(
+                              'Photos uploaded by the event organizers will appear here.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontSize: 13, color: muted),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+
+                  final distinctAlbums = {'ALL', ...photos.map((p) => (p['album'] ?? 'General').toString())}.toList();
+                  final filtered = _activeAlbum == 'ALL'
+                      ? photos
+                      : photos.where((p) => (p['album'] ?? 'General') == _activeAlbum).toList();
+
+                  return Column(
+                    children: [
+                      Container(
+                        height: 48,
+                        margin: const EdgeInsets.symmetric(vertical: 8),
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          itemCount: distinctAlbums.length,
+                          itemBuilder: (context, idx) {
+                            final album = distinctAlbums[idx];
+                            final isSelected = _activeAlbum == album;
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: ChoiceChip(
+                                label: Text(album),
+                                selected: isSelected,
+                                selectedColor: maroon,
+                                backgroundColor: const Color(0xFFF1F5F9),
+                                labelStyle: TextStyle(
+                                  color: isSelected ? Colors.white : slate,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                  fontSize: 12,
+                                ),
+                                onSelected: (_) => setState(() => _activeAlbum = album),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      Expanded(
+                        child: GridView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 10,
+                            mainAxisSpacing: 10,
+                            childAspectRatio: 0.9,
+                          ),
+                          itemCount: filtered.length,
+                          itemBuilder: (context, index) {
+                            final item = filtered[index];
+                            final url = resolveMediaUrl(item['url']);
+                            final caption = item['caption'] ?? 'Conference moment';
+                            final album = item['album'] ?? 'General';
+
+                            return GestureDetector(
+                              onTap: () => _openPhotoViewer(context, item),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(14),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.05),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                clipBehavior: Clip.antiAlias,
+                                child: Stack(
+                                  children: [
+                                    Positioned.fill(
+                                      child: Image.network(
+                                        url,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, __, ___) => Container(
+                                          color: Colors.grey.shade200,
+                                          child: const Icon(Icons.broken_image, color: Colors.grey),
+                                        ),
+                                      ),
+                                    ),
+                                    Positioned(
+                                      top: 8,
+                                      left: 8,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withOpacity(0.65),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          album,
+                                          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                    ),
+                                    Positioned(
+                                      bottom: 0,
+                                      left: 0,
+                                      right: 0,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
+                                            begin: Alignment.topCenter,
+                                            end: Alignment.bottomCenter,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          caption,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
             ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildAiSelfieTab() {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF8C1119), Color(0xFF5B0A0F)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                color: maroon.withOpacity(0.25),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.camera_enhance, color: gold, size: 28),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'AI Face Recognition Search',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 17),
-                        ),
-                        Text(
-                          'Take a quick selfie to find all your conference photos',
-                          style: TextStyle(color: Color(0xFFF1E5D1), fontSize: 12.5),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              if (_isMatching)
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    child: Column(
-                      children: [
-                        CircularProgressIndicator(color: gold),
-                        SizedBox(height: 10),
-                        Text(
-                          'Scanning conference photos with AI...',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              else
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: gold,
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        icon: const Icon(Icons.camera_alt, size: 18),
-                        label: const Text('Take Selfie', style: TextStyle(fontWeight: FontWeight.w800)),
-                        onPressed: () => _scanFaceAndFindPhotos(ImageSource.camera),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          side: const BorderSide(color: Colors.white70),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        icon: const Icon(Icons.photo_library, size: 18),
-                        label: const Text('Choose Photo', style: TextStyle(fontWeight: FontWeight.w800)),
-                        onPressed: () => _scanFaceAndFindPhotos(ImageSource.gallery),
-                      ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Your Matched Photos (${_matchedPhotos.length})',
-              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: slate),
-            ),
-            if (_matchedPhotos.isNotEmpty)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.green.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.green.shade200),
-                ),
-                child: Text(
-                  'AI Verified',
-                  style: TextStyle(color: Colors.green.shade800, fontWeight: FontWeight.bold, fontSize: 11),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        if (_matchedPhotos.isEmpty && !_isMatching)
-          Container(
-            padding: const EdgeInsets.all(32),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.shade200),
-            ),
-            child: Column(
-              children: [
-                Icon(Icons.face_unlock_outlined, size: 52, color: Colors.grey.shade400),
-                const SizedBox(height: 12),
-                const Text(
-                  'No matched photos found yet',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: slate),
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Tap "Take Selfie" above to let AI scan all conference pictures for your face.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13, color: muted),
-                ),
-              ],
-            ),
-          )
-        else
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              childAspectRatio: 0.85,
-            ),
-            itemCount: _matchedPhotos.length,
-            itemBuilder: (context, index) {
-              final item = _matchedPhotos[index];
-              final url = resolveMediaUrl(item['url']);
-              final caption = item['caption'] ?? 'Conference moment';
-              final confidence = item['confidencePercent'] ?? '94% Match';
-
-              return GestureDetector(
-                onTap: () => _openPhotoViewer(context, item, isMatched: true),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.06),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                        child: Image.network(
-                          url,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            color: Colors.grey.shade200,
-                            child: const Icon(Icons.broken_image, color: Colors.grey),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: confidence.contains('Exact') 
-                                ? const Color(0xFF047857) 
-                                : const Color(0xFF1E293B).withOpacity(0.85),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: confidence.contains('Exact') ? Colors.greenAccent : gold.withOpacity(0.7),
-                              width: 1.2,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                confidence.contains('Exact') ? Icons.check_circle : Icons.auto_awesome,
-                                color: confidence.contains('Exact') ? Colors.greenAccent : gold,
-                                size: 12,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                confidence,
-                                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                            ),
-                          ),
-                          child: Text(
-                            caption,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-      ],
-    );
-  }
-
-  Widget _buildAllPhotosTab() {
-    return FutureBuilder(
-      future: ApiService.get('/gallery'),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(color: maroon));
-        }
-        if (snapshot.hasError) {
-          return const Center(child: Text('Unable to load conference gallery'));
-        }
-
-        final photos = snapshot.data is List ? (snapshot.data as List) : [];
-        if (photos.isEmpty) {
-          return const Center(child: Text('No conference photos uploaded yet'));
-        }
-
-        final distinctAlbums = {'ALL', ...photos.map((p) => (p['album'] ?? 'General').toString())}.toList();
-        final filtered = _activeAlbum == 'ALL'
-            ? photos
-            : photos.where((p) => p['album'] == _activeAlbum).toList();
-
-        return Column(
-          children: [
-            Container(
-              height: 48,
-              margin: const EdgeInsets.symmetric(vertical: 8),
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                itemCount: distinctAlbums.length,
-                itemBuilder: (context, idx) {
-                  final album = distinctAlbums[idx];
-                  final isSelected = _activeAlbum == album;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text(album),
-                      selected: isSelected,
-                      selectedColor: maroon,
-                      backgroundColor: const Color(0xFFF1F5F9),
-                      labelStyle: TextStyle(
-                        color: isSelected ? Colors.white : slate,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                        fontSize: 12,
-                      ),
-                      onSelected: (_) => setState(() => _activeAlbum = album),
-                    ),
-                  );
-                },
-              ),
-            ),
-            Expanded(
-              child: GridView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 10,
-                  mainAxisSpacing: 10,
-                  childAspectRatio: 0.9,
-                ),
-                itemCount: filtered.length,
-                itemBuilder: (context, index) {
-                  final item = filtered[index];
-                  final url = resolveMediaUrl(item['url']);
-                  final caption = item['caption'] ?? 'Conference moment';
-                  final album = item['album'] ?? 'General';
-
-                  return GestureDetector(
-                    onTap: () => _openPhotoViewer(context, item, isMatched: false),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(14),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: Stack(
-                        children: [
-                          Positioned.fill(
-                            child: Image.network(
-                              url,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
-                                color: Colors.grey.shade200,
-                                child: const Icon(Icons.broken_image, color: Colors.grey),
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            top: 8,
-                            left: 8,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.65),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                album,
-                                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            bottom: 0,
-                            left: 0,
-                            right: 0,
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                ),
-                              ),
-                              child: Text(
-                                caption,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        );
-      },
     );
   }
 }
@@ -5614,7 +5097,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
           if (_messages.isEmpty) {
             _messages = [
               {
-                'body': 'Welcome to MAPCON 2026! How can I assist you with sessions, accommodation, meals, or certificates today?',
+                'body': 'Welcome to MAPCON 2026! How can I assist you with sessions, accommodation, photo gallery, or certificates today?',
                 'is_me': false,
                 'created_at': DateTime.now().toIso8601String(),
               }
@@ -5727,7 +5210,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 children: [
                   _SuggestionChip('📅 Schedule', () => _sendMessage('What is the schedule for today?')),
                   _SuggestionChip('🏨 Hotel Sayaji', () => _sendMessage('Tell me about Hotel Sayaji and room info')),
-                  _SuggestionChip('🍽️ Meals', () => _sendMessage('What are the meal timings and dining venues?')),
+                  _SuggestionChip('📸 Photo Gallery', () => _sendMessage('Where can I see the conference photo gallery?')),
                   _SuggestionChip('📜 Certificate', () => _sendMessage('How do I download my certificate?')),
                   _SuggestionChip('📍 Venue Map', () => _sendMessage('Where is the conference venue?')),
                 ],
@@ -6969,563 +6452,6 @@ class DutiesScreen extends StatelessWidget {
       );
 }
 
-// ----------------------------------------------------
-// ATTENDANCE SCREEN (Live Session QR Scanner & History)
-// ----------------------------------------------------
-class AttendanceScreen extends StatefulWidget {
-  const AttendanceScreen({super.key});
-  @override
-  State<AttendanceScreen> createState() => _AttendanceScreenState();
-}
-
-class _AttendanceScreenState extends State<AttendanceScreen> {
-  int _refreshKey = 0;
-  bool _isMarking = false;
-
-  Future<List<dynamic>> _loadAttendance() async {
-    final res = await ApiService.get('/me/attendance');
-    return res is List ? res : <dynamic>[];
-  }
-
-  Future<void> _scanSessionQr() async {
-    final scannedCode = await scanQrCodeWithCamera(context);
-    if (scannedCode != null && scannedCode.trim().isNotEmpty) {
-      await _markAttendanceByQr(scannedCode.trim());
-    }
-  }
-
-  Future<void> _markAttendanceByQr(String qrToken) async {
-    setState(() => _isMarking = true);
-    try {
-      final res = await ApiService.post('/attendance/mark-self', {
-        'qrToken': qrToken,
-      });
-
-      if (mounted) {
-        setState(() {
-          _isMarking = false;
-          _refreshKey++;
-        });
-
-        final data = res is Map && res['data'] is Map ? res['data'] : <dynamic, dynamic>{};
-        final sessionTitle = data['sessionTitle'] ?? 'Session Verified';
-        final speakerName = data['speakerName'] ?? '';
-        final hallName = data['hallName'] ?? '';
-
-        showDialog(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(color: Colors.green.shade50, shape: BoxShape.circle),
-                  child: const Icon(Icons.check_circle_rounded, color: Colors.green, size: 54),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Attendance Verified! 🎉',
-                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: slate),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  sessionTitle,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: maroon),
-                ),
-                if (hallName.isNotEmpty || speakerName.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    '📍 $hallName ${speakerName.isNotEmpty ? '• Speaker: $speakerName' : ''}',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 12.5, color: muted, fontWeight: FontWeight.w600),
-                  ),
-                ],
-                const SizedBox(height: 8),
-                const Text(
-                  'Your presence in the hall has been recorded successfully.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 12.5, color: muted),
-                ),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: maroon,
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size.fromHeight(44),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Great!', style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isMarking = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Attendance Verification Failed: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(
-          title: const Text('Session Attendance', style: TextStyle(fontWeight: FontWeight.bold)),
-          backgroundColor: maroon,
-          foregroundColor: Colors.white,
-        ),
-        body: FutureBuilder<List<dynamic>>(
-          key: ValueKey(_refreshKey),
-          future: _loadAttendance(),
-          builder: (c, s) {
-            if (s.connectionState == ConnectionState.waiting && !_isMarking) {
-              return const Center(child: CircularProgressIndicator(color: maroon));
-            }
-            final list = s.data ?? [];
-
-            return ListView(
-              padding: const EdgeInsets.all(18),
-              children: [
-                // Scan QR Card
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [maroon, darkMaroon],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(22),
-                    boxShadow: [
-                      BoxShadow(color: maroon.withOpacity(0.25), blurRadius: 16, offset: const Offset(0, 6)),
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      const Icon(Icons.qr_code_scanner_rounded, color: gold, size: 48),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Scan Speaker\'s Session QR',
-                        style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900),
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'Scan the QR code displayed by the speaker or chairperson on the hall screen to verify attendance.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white70, fontSize: 12.5, height: 1.35),
-                      ),
-                      const SizedBox(height: 18),
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: gold,
-                          foregroundColor: darkMaroon,
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        ),
-                        icon: const Icon(Icons.camera_alt_rounded, size: 18),
-                        label: const Text('Scan Session QR Code', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13.5)),
-                        onPressed: _scanSessionQr,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 22),
-
-                // Attendance Status Header
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('VERIFIED ATTENDANCE HISTORY', style: TextStyle(letterSpacing: 1.1, color: muted, fontWeight: FontWeight.w900, fontSize: 12.5)),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(10)),
-                      child: Text('${list.length} Sessions Attended', style: TextStyle(color: Colors.green.shade800, fontSize: 11.5, fontWeight: FontWeight.bold)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-
-                if (list.isEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(32),
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: Colors.grey.shade200)),
-                    child: const Column(
-                      children: [
-                        Icon(Icons.event_busy_rounded, size: 42, color: muted),
-                        SizedBox(height: 10),
-                        Text('No sessions attended yet', style: TextStyle(fontWeight: FontWeight.w800, color: slate)),
-                        SizedBox(height: 4),
-                        Text('Scan the Speaker\'s QR in the session hall to record your attendance.', textAlign: TextAlign.center, style: TextStyle(color: muted, fontSize: 12.5)),
-                      ],
-                    ),
-                  )
-                else
-                  ...list.map((item) => Card(
-                        elevation: 0,
-                        margin: const EdgeInsets.only(bottom: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          side: BorderSide(color: Colors.grey.shade200),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(color: Colors.green.shade50, shape: BoxShape.circle),
-                                child: const Icon(Icons.check_circle, color: Colors.green, size: 24),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(item['title'] ?? 'Conference Session', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5, color: slate)),
-                                    const SizedBox(height: 4),
-                                    Text('📅 ${item['session_date'] ?? ''} • 🕒 ${item['start_time'] ?? ''}', style: const TextStyle(color: muted, fontSize: 12.5)),
-                                    const SizedBox(height: 2),
-                                    const Text('Verified Attendee ✓', style: TextStyle(color: Colors.green, fontSize: 11.5, fontWeight: FontWeight.bold)),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      )),
-              ],
-            );
-          },
-        ),
-      );
-}
-
-// ----------------------------------------------------
-// MEALS & CATERING SCREEN (Live API & Digital Vouchers)
-// ----------------------------------------------------
-class MealsScreen extends StatefulWidget {
-  const MealsScreen({super.key});
-  @override
-  State<MealsScreen> createState() => _MealsScreenState();
-}
-
-class _MealsScreenState extends State<MealsScreen> {
-  String _selectedDay = 'ALL';
-  int _refreshKey = 0;
-
-  Future<List<dynamic>> _loadMeals() async {
-    final res = await ApiService.get('/meals');
-    return res is List ? res : <dynamic>[];
-  }
-
-  IconData _getMealIcon(String type) {
-    switch (type.toUpperCase()) {
-      case 'BREAKFAST':
-        return Icons.free_breakfast_rounded;
-      case 'LUNCH':
-        return Icons.lunch_dining_rounded;
-      case 'TEA':
-        return Icons.local_cafe_rounded;
-      case 'DINNER':
-        return Icons.dinner_dining_rounded;
-      default:
-        return Icons.restaurant_rounded;
-    }
-  }
-
-  void _showMealVoucher(BuildContext context, dynamic meal) {
-    final type = meal['meal_type'] ?? 'Meal';
-    final location = meal['location'] ?? 'Hotel Sayaji Dining Hall';
-    final timeStr = formatTimeRange(meal['start_time'], meal['end_time']);
-    final dateStr = formatSessionDate(meal['meal_date']);
-    final mealId = meal['id'];
-    final qrData = 'MAPCON2026-MEAL-$mealId';
-
-    showDialog(
-      context: context,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(color: maroon.withOpacity(0.1), shape: BoxShape.circle),
-                    child: Icon(_getMealIcon(type), color: maroon, size: 22),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('$type Digital Pass', style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w900, color: slate)),
-                        const Text('MAPCON 2026 Delegate Voucher', style: TextStyle(fontSize: 11.5, color: muted)),
-                      ],
-                    ),
-                  ),
-                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: gold.withOpacity(0.5), width: 2),
-                  boxShadow: [
-                    BoxShadow(color: maroon.withOpacity(0.08), blurRadius: 16, offset: const Offset(0, 4)),
-                  ],
-                ),
-                child: QrImageView(
-                  data: qrData,
-                  version: QrVersions.auto,
-                  size: 190,
-                  foregroundColor: darkMaroon,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                '📍 $location',
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: maroon),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '📅 $dateStr • 🕒 $timeStr',
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 12.5, color: slate, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 18),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: maroon,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size.fromHeight(44),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: () async {
-                  Navigator.pop(ctx);
-                  try {
-                    await ApiService.post('/meals/$mealId/scan', {});
-                    setState(() => _refreshKey++);
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('$type coupon verified!'), backgroundColor: maroon),
-                      );
-                    }
-                  } catch (_) {}
-                },
-                child: const Text('Redeem & Close', style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(
-          title: const Text('Meals & Dining Schedule', style: TextStyle(fontWeight: FontWeight.bold)),
-          backgroundColor: maroon,
-          foregroundColor: Colors.white,
-        ),
-        body: Column(
-          children: [
-            // Day Filter Tabs
-            Container(
-              height: 50,
-              color: Colors.white,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                children: [
-                  _DayTab('All Meals', 'ALL', _selectedDay == 'ALL', () => setState(() => _selectedDay = 'ALL')),
-                  _DayTab('Day 1 (02 Oct)', '2026-10-02', _selectedDay == '2026-10-02', () => setState(() => _selectedDay == '2026-10-02')),
-                  _DayTab('Day 2 (03 Oct)', '2026-10-03', _selectedDay == '2026-10-03', () => setState(() => _selectedDay == '2026-10-03')),
-                  _DayTab('Day 3 (04 Oct)', '2026-10-04', _selectedDay == '2026-10-04', () => setState(() => _selectedDay == '2026-10-04')),
-                ],
-              ),
-            ),
-            const Divider(height: 1, color: Color(0xFFE2E8F0)),
-
-            // Meals List
-            Expanded(
-              child: FutureBuilder<List<dynamic>>(
-                key: ValueKey(_refreshKey),
-                future: _loadMeals(),
-                builder: (c, s) {
-                  if (s.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator(color: maroon));
-                  }
-                  final allMeals = s.data ?? [];
-                  final meals = _selectedDay == 'ALL'
-                      ? allMeals
-                      : allMeals.where((m) => m['meal_date'] == _selectedDay).toList();
-
-                  if (meals.isEmpty) {
-                    return const Center(child: Text('No meals scheduled for this day'));
-                  }
-
-                  return ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: meals.length,
-                    itemBuilder: (ctx, i) {
-                      final m = meals[i];
-                      final type = m['meal_type'] ?? 'Meal';
-                      final location = m['location'] ?? 'Hotel Sayaji Dining Hall';
-                      final timeStr = formatTimeRange(m['start_time'], m['end_time']);
-                      final dateStr = formatSessionDate(m['meal_date']);
-                      final isRedeemed = m['is_redeemed'] == 1 || m['is_redeemed'] == true;
-                      final icon = _getMealIcon(type);
-
-                      return Card(
-                        elevation: 0,
-                        margin: const EdgeInsets.only(bottom: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
-                          side: BorderSide(color: isRedeemed ? Colors.green.shade200 : Colors.grey.shade200, width: 1.2),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: isRedeemed ? Colors.green.shade50 : maroon.withOpacity(0.08),
-                                      borderRadius: BorderRadius.circular(14),
-                                    ),
-                                    child: Icon(icon, color: isRedeemed ? Colors.green : maroon, size: 28),
-                                  ),
-                                  const SizedBox(width: 14),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Text(
-                                              type,
-                                              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: slate),
-                                            ),
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                              decoration: BoxDecoration(
-                                                color: isRedeemed ? Colors.green.shade50 : Colors.amber.shade50,
-                                                borderRadius: BorderRadius.circular(8),
-                                              ),
-                                              child: Text(
-                                                isRedeemed ? 'Redeemed ✓' : 'Available',
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: isRedeemed ? Colors.green.shade800 : Colors.amber.shade900,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Row(
-                                          children: [
-                                            const Icon(Icons.access_time, size: 13, color: muted),
-                                            const SizedBox(width: 4),
-                                            Text(timeStr, style: const TextStyle(color: slate, fontWeight: FontWeight.w700, fontSize: 12.5)),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Row(
-                                          children: [
-                                            const Icon(Icons.location_on_outlined, size: 13, color: maroon),
-                                            const SizedBox(width: 4),
-                                            Expanded(
-                                              child: Text(
-                                                location,
-                                                style: const TextStyle(fontSize: 12, color: muted),
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const Divider(height: 20),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text('📅 $dateStr', style: const TextStyle(fontSize: 12, color: muted, fontWeight: FontWeight.w600)),
-                                  ElevatedButton.icon(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: maroon,
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                    ),
-                                    icon: const Icon(Icons.qr_code_rounded, size: 16),
-                                    label: const Text('Show Meal Pass', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                                    onPressed: () => _showMealVoucher(context, m),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      );
-}
-
-class _DayTab extends StatelessWidget {
-  final String label, value;
-  final bool isSelected;
-  final VoidCallback onTap;
-  const _DayTab(this.label, this.value, this.isSelected, this.onTap);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: ChoiceChip(
-        label: Text(label, style: TextStyle(color: isSelected ? Colors.white : slate, fontWeight: FontWeight.bold, fontSize: 12)),
-        selected: isSelected,
-        selectedColor: maroon,
-        backgroundColor: Colors.grey.shade100,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide.none),
-        onSelected: (_) => onTap(),
-      ),
-    );
-  }
-}
 
 class DigitalIdScreen extends StatelessWidget {
   const DigitalIdScreen({super.key});
