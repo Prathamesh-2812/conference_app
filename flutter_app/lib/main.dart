@@ -1233,6 +1233,8 @@ class CardButton extends StatelessWidget {
   final String title, subtitle;
   final VoidCallback onTap;
   final Widget? trailingBadge;
+  final Color? iconColor;
+  final Color? iconBgColor;
 
   const CardButton({
     super.key,
@@ -1241,11 +1243,16 @@ class CardButton extends StatelessWidget {
     required this.subtitle,
     required this.onTap,
     this.trailingBadge,
+    this.iconColor,
+    this.iconBgColor,
   });
 
   @override
   Widget build(BuildContext c) {
     final conference = ConferenceScope.of(c);
+    final effectiveColor = iconColor ?? conference.primaryColor;
+    final effectiveBg = iconBgColor ?? conference.primaryColor.withOpacity(0.08);
+
     return Card(
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 12),
@@ -1264,10 +1271,12 @@ class CardButton extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: conference.primaryColor.withOpacity(0.08),
+                  color: effectiveBg,
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(icon, color: conference.primaryColor, size: 24),
+                child: Center(
+                  child: Icon(icon, color: effectiveColor, size: 24),
+                ),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -1623,6 +1632,53 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  Map<String, dynamic>? _userProfile;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserProfile();
+    RealtimeSyncService.instance.syncNotifier.addListener(_loadUserProfile);
+  }
+
+  @override
+  void dispose() {
+    RealtimeSyncService.instance.syncNotifier.removeListener(_loadUserProfile);
+    super.dispose();
+  }
+
+  Future<void> _loadUserProfile() async {
+    try {
+      final res = await ApiService.get('/me/profile');
+      if (res is Map && mounted) {
+        setState(() {
+          _userProfile = Map<String, dynamic>.from(res);
+        });
+      }
+    } catch (_) {}
+  }
+
+  bool get _isHybridUser {
+    if (_userProfile == null) return false;
+    final category = (_userProfile?['category'] ?? '').toString().toLowerCase();
+    final role = (_userProfile?['role'] ?? '').toString().toUpperCase();
+    final modeOfTravel = (_userProfile?['mode_of_travel'] ?? '').toString().toLowerCase();
+
+    // Admins and organizers can always view
+    if (role == 'ADMIN' || role == 'ORGANIZER' || role == 'SUPERADMIN') return true;
+
+    // Check if user is registered for Online / Hybrid mode
+    if (category.contains('online') || category.contains('hybrid') || category.contains('virtual') || category.contains('remote')) {
+      return true;
+    }
+    if (modeOfTravel.contains('online') || modeOfTravel.contains('hybrid') || modeOfTravel.contains('virtual') || modeOfTravel.contains('remote')) {
+      return true;
+    }
+    if (role == 'ONLINE' || role == 'HYBRID') return true;
+
+    return false;
+  }
+
   void go(BuildContext context, Widget page) {
     Navigator.push(
       context,
@@ -1642,6 +1698,7 @@ class _HomeScreenState extends State<HomeScreen> {
         color: maroon,
         onRefresh: () async {
           RealtimeSyncService.instance.triggerSync();
+          await _loadUserProfile();
           await Future.delayed(const Duration(milliseconds: 600));
         },
         child: SingleChildScrollView(
@@ -1748,31 +1805,34 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  CardButton(
-                    icon: Icons.videocam_rounded,
-                    title: 'Hybrid & Online Stage (Zoom)',
-                    subtitle: 'Live video stream, Zoom webinars & sessions',
-                    trailingBadge: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF2563EB).withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFF2563EB).withOpacity(0.6)),
+                  if (_isHybridUser)
+                    CardButton(
+                      icon: Icons.videocam_rounded,
+                      iconColor: const Color(0xFF2563EB),
+                      iconBgColor: const Color(0xFF2563EB).withOpacity(0.12),
+                      title: 'Hybrid & Online Stage (Zoom)',
+                      subtitle: 'Live video stream, Zoom webinars & sessions',
+                      trailingBadge: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF2563EB).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF2563EB).withOpacity(0.6)),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.fiber_manual_record, size: 8, color: Color(0xFF2563EB)),
+                            SizedBox(width: 4),
+                            Text(
+                              'ZOOM LIVE',
+                              style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w900, color: Color(0xFF1E40AF)),
+                            ),
+                          ],
+                        ),
                       ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.fiber_manual_record, size: 8, color: Color(0xFF2563EB)),
-                          SizedBox(width: 4),
-                          Text(
-                            'ZOOM LIVE',
-                            style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w900, color: Color(0xFF1E40AF)),
-                          ),
-                        ],
-                      ),
+                      onTap: () => go(context, const VirtualStageScreen()),
                     ),
-                    onTap: () => go(context, const VirtualStageScreen()),
-                  ),
                   CardButton(
                     icon: Icons.calendar_month,
                     title: 'Event Schedule',
