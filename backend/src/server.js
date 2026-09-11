@@ -739,6 +739,21 @@ app.get('/api/me/conferences', auth, asyncRoute(async(req, res) => {
   ok(res, confs, 'Enrolled conferences retrieved');
 }));
 
+app.get('/api/me/profile', auth, asyncRoute(async(req, res) => {
+  const conferenceId = req.query.conferenceId || 1;
+  const [[u]] = await pool.query(`
+    SELECT u.id, u.name, u.email, u.phone, u.role, u.designation, u.university, u.blood_group, u.photo,
+           p.id as participant_id, p.registration_no, p.category, p.mode_of_travel, p.status as participant_status
+    FROM users u
+    LEFT JOIN participants p ON p.user_id = u.id AND p.conference_id = ?
+    WHERE u.id = ?
+    LIMIT 1
+  `, [conferenceId, req.user.id]);
+  
+  if (!u) return res.status(404).json({ message: 'User not found' });
+  ok(res, u, 'Profile retrieved');
+}));
+
 app.get('/api/conferences',asyncRoute(async(req,res)=>{
   const [r]=await pool.query('SELECT * FROM conferences ORDER BY start_date DESC');
   res.json(r);
