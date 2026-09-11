@@ -378,6 +378,10 @@ async function runMigrations(){
           address = 'Old Pune-Bangalore Highway, Kawala Naka, Kolhapur, Maharashtra 416001'
         WHERE id = 1;
       `);
+    } catch(confErr) {
+      console.warn("Conference auto-update notice:", confErr.message);
+    }
+
     try {
       await pool.query(`
         CREATE TABLE IF NOT EXISTS conference_streams (
@@ -905,6 +909,9 @@ app.delete('/api/admin/sliders/:id', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncR
   const [[slide]] = await pool.query('SELECT conference_id FROM main_sliders WHERE id = ?', [req.params.id]);
   await pool.query('DELETE FROM main_sliders WHERE id = ?', [req.params.id]);
   io.emit('sliders_updated', { conferenceId: slide?.conference_id });
+  ok(res, null, 'Slider deleted');
+}));
+
 // HYBRID & LIVE STREAM (ZOOM) ENDPOINTS
 app.get('/api/stream/settings', asyncRoute(async(req, res) => {
   const conferenceId = req.query.conferenceId || 1;
