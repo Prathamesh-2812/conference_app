@@ -378,8 +378,29 @@ async function runMigrations(){
           address = 'Old Pune-Bangalore Highway, Kawala Naka, Kolhapur, Maharashtra 416001'
         WHERE id = 1;
       `);
-    } catch(confErr) {
-      console.warn("Conference auto-update notice:", confErr.message);
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS conference_streams (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          conference_id INT NOT NULL UNIQUE,
+          zoom_link TEXT,
+          meeting_id VARCHAR(100) DEFAULT '845 1294 8123',
+          passcode VARCHAR(100) DEFAULT 'MAPCON2026',
+          stream_platform VARCHAR(50) DEFAULT 'ZOOM',
+          is_live TINYINT(1) DEFAULT 1,
+          stream_instructions TEXT,
+          stream_title VARCHAR(255) DEFAULT 'MAPCON 2026 Hybrid & Online Main Stage',
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          FOREIGN KEY(conference_id) REFERENCES conferences(id) ON DELETE CASCADE
+        )
+      `);
+      await pool.query(`
+        INSERT INTO conference_streams (conference_id, zoom_link, meeting_id, passcode, stream_platform, is_live, stream_instructions, stream_title)
+        VALUES (1, 'https://zoom.us/j/84512948123?pwd=MAPCON2026HYBRID', '845 1294 8123', 'MAPCON2026', 'ZOOM', 1, 'Please join the session 5-10 minutes prior to schedule. Keep your microphone muted during presentations and use the Q&A box for asking questions.', 'MAPCON 2026 Hybrid & Online Main Stage')
+        ON DUPLICATE KEY UPDATE conference_id = conference_id
+      `).catch(() => {});
+    } catch(streamErr) {
+      console.warn("Stream table migration notice:", streamErr.message);
     }
   }catch(err){
     console.log('Migration check:', err.message);
@@ -884,8 +905,97 @@ app.delete('/api/admin/sliders/:id', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncR
   const [[slide]] = await pool.query('SELECT conference_id FROM main_sliders WHERE id = ?', [req.params.id]);
   await pool.query('DELETE FROM main_sliders WHERE id = ?', [req.params.id]);
   io.emit('sliders_updated', { conferenceId: slide?.conference_id });
-  ok(res, null, 'Slider deleted');
+// HYBRID & LIVE STREAM (ZOOM) ENDPOINTS
+app.get('/api/stream/settings', asyncRoute(async(req, res) => {
+  const conferenceId = req.query.conferenceId || 1;
+  const [[stream]] = await pool.query('SELECT * FROM conference_streams WHERE conference_id = ? LIMIT 1', [conferenceId]);
+  if (!stream) {
+    return ok(res, {
+      zoom_link: 'https://zoom.us/j/84512948123?pwd=MAPCON2026HYBRID',
+      meeting_id: '845 1294 8123',
+      passcode: 'MAPCON2026',
+      stream_platform: 'ZOOM',
+      is_live: 1,
+      stream_title: 'MAPCON 2026 Hybrid & Online Main Stage',
+      stream_instructions: 'Please join the session 5-10 minutes prior to schedule. Keep your microphone muted during presentations and use the Q&A box for asking questions.'
+    });
+  }
+  ok(res, stream);
 }));
+
+app.get('/api/admin/stream/settings', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncRoute(async(req, res) => {
+  const conferenceId = req.query.conferenceId || 1;
+  const [[stream]] = await pool.query('SELECT * FROM conference_streams WHERE conference_id = ? LIMIT 1', [conferenceId]);
+  if (!stream) {
+    return ok(res, {
+      conference_id: Number(conferenceId),
+      zoom_link: 'https://zoom.us/j/84512948123?pwd=MAPCON2026HYBRID',
+      meeting_id: '845 1294 8123',
+      passcode: 'MAPCON2026',
+      stream_platform: 'ZOOM',
+      is_live: 1,
+      stream_title: 'MAPCON 2026 Hybrid & Online Main Stage',
+      stream_instructions: 'Please join the session 5-10 minutes prior to schedule. Keep your microphone muted during presentations and use the Q&A box for asking questions.'
+    });
+  }
+  ok(res, stream);
+}));
+
+app.put('/api/admin/stream/settings', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncRoute(async(req, res) => {
+  const conferenceId = req.body.conferenceId || 1;
+  const { zoom_link, meeting_id, passcode, stream_platform, is_live, stream_instructions, stream_title } = req.body;
+  const liveVal = is_live === 1 || is_live === true || is_live === '1' ? 1 : 0;
+  await pool.query(`
+    INSERT INTO conference_streams (conference_id, zoom_link, meeting_id, passcode, stream_platform, is_live, stream_instructions, stream_title)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE
+      zoom_link = VALUES(zoom_link),
+      meeting_id = VALUES(meeting_id),
+      passcode = VALUES(passcode),
+      stream_platform = VALUES(stream_platform),
+      is_live = VALUES(is_live),
+      stream_instructions = VALUES(stream_instructions),
+      stream_title = VALUES(stream_title)
+  `, [conferenceId, zoom_link, meeting_id, passcode, stream_platform || 'ZOOM', liveVal, stream_instructions, stream_title]);
+
+  const [[updated]] = await pool.query('SELECT * FROM conference_streams WHERE conference_id = ?', [conferenceId]);
+  io.emit('stream_settings_updated', { conferenceId, stream: updated });
+  ok(res, updated, 'Hybrid stream settings saved successfully');
+}));
+
+app.put('/api/admin/sessions/:id/live-toggle', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncRoute(async(req, res) => {
+  const [[session]] = await pool.query('SELECT id, is_live FROM sessions WHERE id = ?', [req.params.id]);
+  if (!session) return res.status(404).json({ message: 'Session not found' });
+  const newLive = session.is_live ? 0 : 1;
+  await pool.query('UPDATE sessions SET is_live = ? WHERE id = ?', [newLive, req.params.id]);
+  const [[updated]] = await pool.query('SELECT * FROM sessions WHERE id = ?', [req.params.id]);
+  io.emit('session_updated', updated);
+  ok(res, updated, newLive ? 'Session marked as LIVE 🔴' : 'Session live stream ended');
+}));
+
+app.put('/api/admin/participants/:id/toggle-hybrid', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncRoute(async(req, res) => {
+  const [[p]] = await pool.query('SELECT id, category, user_id FROM participants WHERE id = ?', [req.params.id]);
+  if (!p) return res.status(404).json({ message: 'Participant not found' });
+  const isHybrid = (p.category || '').toLowerCase().includes('hybrid') || (p.category || '').toLowerCase().includes('online');
+  const newCategory = isHybrid ? 'Delegate' : 'Hybrid Delegate';
+  await pool.query('UPDATE participants SET category = ? WHERE id = ?', [newCategory, req.params.id]);
+  ok(res, { id: p.id, category: newCategory }, `Participant category changed to ${newCategory}`);
+}));
+
+app.get('/api/admin/participants/hybrid', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncRoute(async(req, res) => {
+  const conferenceId = req.query.conferenceId || 1;
+  const [rows] = await pool.query(`
+    SELECT p.id, p.registration_no, p.category, p.status, p.created_at,
+           u.id as user_id, u.name, u.email, u.phone, u.designation, u.university, u.role
+    FROM participants p
+    JOIN users u ON u.id = p.user_id
+    WHERE p.conference_id = ?
+      AND (LOWER(p.category) LIKE '%hybrid%' OR LOWER(p.category) LIKE '%online%' OR LOWER(p.category) LIKE '%virtual%' OR LOWER(p.category) LIKE '%remote%' OR LOWER(u.role) IN ('hybrid', 'online'))
+    ORDER BY p.id DESC
+  `, [conferenceId]);
+  ok(res, rows, 'Hybrid participants retrieved');
+}));
+
 app.get('/api/admin/liaisons',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
   const [r]=await pool.query('SELECT * FROM liaison_faculty ORDER BY name');
   res.json(r);

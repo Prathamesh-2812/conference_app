@@ -2843,21 +2843,36 @@ class VirtualStageScreen extends StatefulWidget {
 
 class _VirtualStageScreenState extends State<VirtualStageScreen> {
   List<dynamic> _sessions = [];
+  Map<String, dynamic>? _streamSettings;
   bool _loading = true;
   String _selectedFilter = 'ALL';
 
   @override
   void initState() {
     super.initState();
-    _loadSessions();
+    _loadData();
+    RealtimeSyncService.instance.syncNotifier.addListener(_loadData);
   }
 
-  Future<void> _loadSessions() async {
+  @override
+  void dispose() {
+    RealtimeSyncService.instance.syncNotifier.removeListener(_loadData);
+    super.dispose();
+  }
+
+  Future<void> _loadData() async {
     try {
-      final res = await ApiService.get('/sessions');
-      if (res is List && mounted) {
+      final futures = await Future.wait([
+        ApiService.get('/sessions'),
+        ApiService.get('/stream/settings'),
+      ]);
+      final sRes = futures[0];
+      final stRes = futures[1];
+
+      if (mounted) {
         setState(() {
-          _sessions = res;
+          if (sRes is List) _sessions = sRes;
+          if (stRes is Map) _streamSettings = Map<String, dynamic>.from(stRes);
           _loading = false;
         });
         return;
@@ -2898,144 +2913,168 @@ class _VirtualStageScreenState extends State<VirtualStageScreen> {
         ? liveSessions
         : (_selectedFilter == 'STREAMED' ? streamedSessions : _sessions);
 
+    final masterZoom = (_streamSettings?['zoom_link'] ?? 'https://zoom.us/j/84512948123?pwd=MAPCON2026HYBRID').toString().trim();
+    final masterMeetingId = (_streamSettings?['meeting_id'] ?? '845 1294 8123').toString().trim();
+    final masterPasscode = (_streamSettings?['passcode'] ?? 'MAPCON2026').toString().trim();
+    final masterTitle = (_streamSettings?['stream_title'] ?? 'MAPCON 2026 Hybrid & Online Main Stage').toString().trim();
+    final masterInstructions = (_streamSettings?['stream_instructions'] ?? 'Live broadcast for Hybrid & Online registered delegates with interactive audio, video & Q&A.').toString().trim();
+    final masterIsLive = _streamSettings == null ? true : (_streamSettings?['is_live'] == 1 || _streamSettings?['is_live'] == true || _streamSettings?['is_live'] == '1');
+
     return Scaffold(
-      backgroundColor: cream,
+      backgroundColor: const Color(0xFF0F172A),
       appBar: AppBar(
-        title: const Text(
-          'Hybrid & Online Live Stage',
-          style: TextStyle(fontWeight: FontWeight.w800, color: Colors.white, fontSize: 17),
-        ),
-        backgroundColor: maroon,
+        backgroundColor: const Color(0xFF1E293B),
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Hybrid & Online Stage', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 17)),
+            Text('Zoom Live Stream & Webcasts', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+          ],
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: Colors.white),
             onPressed: () {
               setState(() => _loading = true);
-              _loadSessions();
+              _loadData();
             },
           ),
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: maroon))
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                // Top Live Broadcast Banner Card
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(22),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 16, offset: const Offset(0, 6)),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF2563EB),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: const Row(
-                              children: [
-                                Icon(Icons.videocam_rounded, color: Colors.white, size: 14),
-                                SizedBox(width: 5),
-                                Text(
-                                  'ZOOM LIVE STAGE',
-                                  style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w900, letterSpacing: 0.8),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFDC2626),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: const Row(
-                              children: [
-                                Icon(Icons.fiber_manual_record, size: 8, color: Colors.white),
-                                SizedBox(width: 4),
-                                Text(
-                                  'ONLINE ACCESS',
-                                  style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w900),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF2563EB)))
+          : RefreshIndicator(
+              onRefresh: _loadData,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  // Main Zoom Broadcast Box
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                      const SizedBox(height: 14),
-                      const Text(
-                        'MAPCON 2026 Virtual Stage',
-                        style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: -0.3),
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'Live broadcast for Hybrid & Online registered delegates with interactive audio, video & Q&A.',
-                        style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, height: 1.4),
-                      ),
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF334155).withOpacity(0.6),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: const Color(0xFF475569)),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFF334155), width: 1.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF2563EB).withOpacity(0.18),
+                          blurRadius: 20,
+                          offset: const Offset(0, 8),
                         ),
-                        child: Column(
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text('Default Meeting ID:', style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 12.5, fontWeight: FontWeight.w600)),
-                                Text('845 1294 8123', style: TextStyle(color: gold, fontSize: 13, fontWeight: FontWeight.w900, fontFamily: 'monospace')),
-                              ],
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF2563EB).withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: const Color(0xFF2563EB)),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.videocam_rounded, color: Color(0xFF60A5FA), size: 16),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'ZOOM LIVE STAGE',
+                                    style: TextStyle(
+                                      color: Color(0xFF93C5FD),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                            const Divider(height: 16, color: Color(0xFF475569)),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text('Default Passcode:', style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 12.5, fontWeight: FontWeight.w600)),
-                                const Text('MAPCON2026', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900, fontFamily: 'monospace')),
-                              ],
-                            ),
+                            if (masterIsLive)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.red),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.fiber_manual_record, color: Colors.red, size: 8),
+                                    SizedBox(width: 4),
+                                    Text('LIVE NOW', style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                              ),
                           ],
                         ),
-                      ),
-                      const SizedBox(height: 14),
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2563EB),
-                          foregroundColor: Colors.white,
-                          minimumSize: const Size.fromHeight(46),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          elevation: 0,
+                        const SizedBox(height: 12),
+                        Text(
+                          masterTitle,
+                          style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900),
                         ),
-                        icon: const Icon(Icons.video_call_rounded, size: 22),
-                        label: const Text('Join Main Conference Zoom Room', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
-                        onPressed: () => _joinZoom('https://zoom.us/j/84512948123?pwd=MAPCON2026HYBRID'),
-                      ),
-                    ],
+                        const SizedBox(height: 6),
+                        Text(
+                          masterInstructions,
+                          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13, height: 1.4),
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF334155).withOpacity(0.6),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: const Color(0xFF475569)),
+                          ),
+                          child: Column(
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text('Meeting ID:', style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 12.5, fontWeight: FontWeight.w600)),
+                                  Text(masterMeetingId, style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 13, fontWeight: FontWeight.w900, fontFamily: 'monospace')),
+                                ],
+                              ),
+                              const Divider(height: 16, color: Color(0xFF475569)),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text('Passcode:', style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 12.5, fontWeight: FontWeight.w600)),
+                                  Text(masterPasscode, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900, fontFamily: 'monospace')),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2563EB),
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size.fromHeight(46),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            elevation: 0,
+                          ),
+                          icon: const Icon(Icons.video_call_rounded, size: 22),
+                          label: const Text('Join Main Conference Zoom Room', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+                          onPressed: () => _joinZoom(masterZoom),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
                 const SizedBox(height: 20),
 
                 // Filters
@@ -3196,6 +3235,7 @@ class _VirtualStageScreenState extends State<VirtualStageScreen> {
                 const SizedBox(height: 40),
               ],
             ),
+          ),
     );
   }
 

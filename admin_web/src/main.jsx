@@ -1,6 +1,6 @@
 import React,{useEffect,useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import {Bell,Building2,Bus,CalendarDays,CheckCircle,ChevronDown,FileCheck,Hotel,Image,LayoutDashboard,Lock,LogOut,MapPin,Palette,RefreshCw,Search,Settings,Shield,Upload,Users,QrCode,Maximize2,Minimize2,Printer,Tv,UserCheck,MessageCircle,Send,Share2,Menu,X} from 'lucide-react';
+import {Bell,Building2,Bus,CalendarDays,CheckCircle,ChevronDown,FileCheck,Hotel,Image,LayoutDashboard,Lock,LogOut,MapPin,Palette,RefreshCw,Search,Settings,Shield,Upload,Users,QrCode,Maximize2,Minimize2,Printer,Tv,UserCheck,MessageCircle,Send,Share2,Menu,X,Video,Radio,Copy,ExternalLink} from 'lucide-react';
 import {QRCodeSVG} from 'qrcode.react';
 import * as XLSX from 'xlsx';
 import './style.css';
@@ -51,6 +51,7 @@ const menu=[
   {title:'Participants',icon:Users,children:['All Participants','Add Participant','Import Participants','Registration & Passes','QR Codes']},
   {title:'Speakers',icon:Users,children:['All Speakers','Add Speaker']},
   {title:'Schedule',icon:CalendarDays,children:['Sessions Timeline','Tracks & Halls','Add Session']},
+  {title:'Hybrid & Live Stream',icon:Tv,children:['Zoom Stream Settings','Session Live Controls','Hybrid Attendees']},
   {title:'Accommodation',icon:Hotel,children:['Hotels','Rooms','Room Allocation']},
   {title:'Transport',icon:Bus,children:['Vehicles','Drivers','Transport Assignments']},
   {title:'Notices',icon:Bell,children:['Notices & Announcements','Send Push Notification']},
@@ -215,6 +216,7 @@ function renderPage(tab,conference,setConference,notify,selectedConferenceId){
   if(['Participants','All Participants','Add Participant','Import Participants','Registration & Passes','QR Codes'].includes(tab))return <Participants tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
   if(['Speakers','All Speakers','Add Speaker'].includes(tab))return <Speakers tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
   if(['Schedule','Sessions Timeline','Tracks & Halls','Add Session','Sessions','Tracks','Halls'].includes(tab))return <Schedule tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
+  if(['Hybrid & Live Stream','Zoom Stream Settings','Session Live Controls','Hybrid Attendees'].includes(tab))return <HybridLiveStream tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
   if(['Accommodation','Hotels','Rooms'].includes(tab))return <Hotels tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
   if(tab==='Room Allocation')return <RoomAllocation notify={notify} selectedConferenceId={selectedConferenceId}/>;
   if(['Transport','Vehicles','Drivers'].includes(tab))return <Transport tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
@@ -4152,7 +4154,545 @@ function SystemSettings({notify}){
         <button className="primary" onClick={()=>{localStorage.removeItem('conference_cache');notify('Client cache cleared & synchronized');}}>Clear Client Cache & Resync</button>
       </div>
     </div>
-  </div>
+  </div>;
+}
+
+function HybridLiveStream({tab, notify, selectedConferenceId}){
+  const confId = selectedConferenceId || 1;
+  const [subTab, setSubTab] = useState(tab === 'Session Live Controls' ? 'sessions' : (tab === 'Hybrid Attendees' ? 'attendees' : 'settings'));
+  const [stream, setStream] = useState({
+    stream_title: 'MAPCON 2026 Hybrid & Online Main Stage',
+    zoom_link: 'https://zoom.us/j/84512948123?pwd=MAPCON2026HYBRID',
+    meeting_id: '845 1294 8123',
+    passcode: 'MAPCON2026',
+    stream_platform: 'ZOOM',
+    is_live: 1,
+    stream_instructions: 'Please join the session 5-10 minutes prior to schedule. Keep your microphone muted during presentations and use the Q&A box for asking questions.'
+  });
+  const [sessions, setSessions] = useState([]);
+  const [hybridUsers, setHybridUsers] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
+  const [search, setSearch] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [editSession, setEditSession] = useState(null);
+
+  useEffect(() => {
+    if (tab === 'Session Live Controls') setSubTab('sessions');
+    else if (tab === 'Hybrid Attendees') setSubTab('attendees');
+    else if (tab === 'Zoom Stream Settings' || tab === 'Hybrid & Live Stream') setSubTab('settings');
+  }, [tab]);
+
+  const loadData = async () => {
+    setBusy(true);
+    try {
+      const [sRes, sessRes, hybRes, allPartRes] = await Promise.all([
+        req(`/admin/stream/settings?conferenceId=${confId}`).catch(() => null),
+        req(`/admin/sessions?conferenceId=${confId}`).catch(() => []),
+        req(`/admin/participants/hybrid?conferenceId=${confId}`).catch(() => []),
+        req(`/admin/participants?conferenceId=${confId}`).catch(() => ({ data: [] }))
+      ]);
+      if (sRes && (sRes.data || sRes.zoom_link)) setStream(sRes.data || sRes);
+      setSessions(sessRes || []);
+      setHybridUsers(hybRes.data || hybRes || []);
+      const pList = Array.isArray(allPartRes) ? allPartRes : (allPartRes.data || []);
+      setAllUsers(pList);
+    } catch (_) {}
+    finally { setBusy(false); }
+  };
+
+  useEffect(() => { loadData(); }, [confId]);
+
+  const saveSettings = async (e) => {
+    if (e) e.preventDefault();
+    setBusy(true);
+    try {
+      await req('/admin/stream/settings', {
+        method: 'PUT',
+        body: JSON.stringify({ ...stream, conferenceId: confId })
+      });
+      notify('Zoom live stream settings updated successfully');
+      loadData();
+    } catch (err) {
+      alert('Failed to save settings: ' + err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleSessionLive = async (sessionId) => {
+    try {
+      const res = await req(`/admin/sessions/${sessionId}/live-toggle`, { method: 'PUT' });
+      notify(res.message || 'Session live status toggled');
+      loadData();
+    } catch (err) {
+      alert('Error toggling live status: ' + err.message);
+    }
+  };
+
+  const toggleParticipantHybrid = async (participantId) => {
+    try {
+      const res = await req(`/admin/participants/${participantId}/toggle-hybrid`, { method: 'PUT' });
+      notify(res.message || 'Participant access updated');
+      loadData();
+    } catch (err) {
+      alert('Error updating participant: ' + err.message);
+    }
+  };
+
+  const saveSessionStream = async (v) => {
+    try {
+      await req(`/admin/sessions/${v.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(v)
+      });
+      notify('Session Zoom link updated');
+      setEditSession(null);
+      loadData();
+    } catch (err) {
+      alert('Failed to update session: ' + err.message);
+    }
+  };
+
+  const copyDetails = () => {
+    const text = `MAPCON 2026 Live Zoom Stream:\nURL: ${stream.zoom_link}\nMeeting ID: ${stream.meeting_id}\nPasscode: ${stream.passcode}`;
+    navigator.clipboard.writeText(text);
+    notify('Zoom meeting details copied to clipboard');
+  };
+
+  const filteredSessions = sessions.filter(s => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (s.title || '').toLowerCase().includes(q) || (s.speaker_name || '').toLowerCase().includes(q) || (s.hall_name || '').toLowerCase().includes(q);
+  });
+
+  const filteredAttendees = hybridUsers.filter(u => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q) || (u.registration_no || '').toLowerCase().includes(q) || (u.phone || '').includes(q);
+  });
+
+  return (
+    <div className="panel">
+      <div className="pagehead">
+        <div>
+          <h3>🌐 Hybrid & Online Stream Control Room (Zoom)</h3>
+          <p>Configure Zoom meeting links, toggle live session broadcasts, and manage online/hybrid delegates.</p>
+        </div>
+        <div className="actions" style={{display:'flex', gap:'8px'}}>
+          <button className={subTab==='settings'?'primary':''} onClick={()=>setSubTab('settings')}>
+            ⚙️ Main Zoom Stream
+          </button>
+          <button className={subTab==='sessions'?'primary':''} onClick={()=>setSubTab('sessions')}>
+            🔴 Session Live Controls ({sessions.filter(s=>s.is_live).length} Live)
+          </button>
+          <button className={subTab==='attendees'?'primary':''} onClick={()=>setSubTab('attendees')}>
+            👥 Hybrid Attendees ({hybridUsers.length})
+          </button>
+        </div>
+      </div>
+
+      {subTab === 'settings' && (
+        <div>
+          {/* Top Live Status Card */}
+          <div style={{
+            background: stream.is_live ? 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)' : '#f8fafc',
+            color: stream.is_live ? '#fff' : '#1e293b',
+            border: `2px solid ${stream.is_live ? '#3b82f6' : '#cbd5e1'}`,
+            borderRadius: '16px',
+            padding: '22px',
+            marginBottom: '24px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '16px',
+            boxShadow: stream.is_live ? '0 10px 25px rgba(37,99,235,0.2)' : 'none'
+          }}>
+            <div>
+              <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+                <span className="pill" style={{
+                  background: stream.is_live ? '#dc2626' : '#64748b',
+                  color: '#fff',
+                  fontSize: '12px',
+                  fontWeight: '800',
+                  padding: '4px 10px'
+                }}>
+                  {stream.is_live ? '🔴 BROADCAST ACTIVE (LIVE NOW)' : '⚪ BROADCAST OFFLINE'}
+                </span>
+                <span style={{fontSize:'13px', color: stream.is_live ? '#93c5fd' : '#64748b'}}>
+                  Platform: <b>{stream.stream_platform || 'ZOOM'}</b>
+                </span>
+              </div>
+              <h3 style={{margin:'8px 0 4px', color: stream.is_live ? '#fff' : '#1e293b', fontSize:'20px'}}>
+                {stream.stream_title || 'MAPCON 2026 Main Hybrid Stage'}
+              </h3>
+              <p style={{margin:0, fontSize:'13px', color: stream.is_live ? '#cbd5e1' : '#64748b', maxWidth:'600px'}}>
+                {stream.stream_instructions || 'Live video stream for hybrid delegates and virtual participants.'}
+              </p>
+            </div>
+
+            <div style={{display:'flex', gap:'10px', alignItems:'center'}}>
+              <button
+                style={{
+                  background: stream.is_live ? '#dc2626' : '#16a34a',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '10px',
+                  padding: '10px 18px',
+                  fontWeight: '800',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+                onClick={() => setStream(prev => ({ ...prev, is_live: prev.is_live ? 0 : 1 }))}
+              >
+                {stream.is_live ? '⏹️ Stop Main Stream' : '🔴 Start Main Stream Live'}
+              </button>
+              {stream.zoom_link && (
+                <a
+                  href={stream.zoom_link}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    background: '#2563eb',
+                    color: '#fff',
+                    borderRadius: '10px',
+                    padding: '10px 16px',
+                    fontWeight: '700',
+                    fontSize: '13px',
+                    textDecoration: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <ExternalLink size={16}/> Test Zoom Link
+                </a>
+              )}
+            </div>
+          </div>
+
+          {/* Form Settings */}
+          <form onSubmit={saveSettings} style={{background:'#fff', border:'1px solid #e2e8f0', borderRadius:'14px', padding:'24px'}}>
+            <h4 style={{margin:'0 0 16px', color:'#1e293b', fontSize:'16px'}}>Main Conference Zoom Configuration</h4>
+            
+            <div className="formgrid">
+              <Field
+                label="Stream Title / Stage Name"
+                value={stream.stream_title || ''}
+                onChange={x => setStream(prev => ({ ...prev, stream_title: x }))}
+                placeholder="e.g. MAPCON 2026 Hybrid & Online Main Stage"
+              />
+
+              <label className="field">
+                <span>Streaming Platform</span>
+                <select
+                  value={stream.stream_platform || 'ZOOM'}
+                  onChange={e => setStream(prev => ({ ...prev, stream_platform: e.target.value }))}
+                >
+                  <option value="ZOOM">Zoom Meeting / Webinar</option>
+                  <option value="YOUTUBE">YouTube Live</option>
+                  <option value="WEBCAST">Custom Webcast / RTMP</option>
+                </select>
+              </label>
+
+              <div style={{gridColumn:'1/-1'}}>
+                <Field
+                  label="Master Zoom Join Link (with Passcode token)"
+                  value={stream.zoom_link || ''}
+                  onChange={x => setStream(prev => ({ ...prev, zoom_link: x }))}
+                  placeholder="https://zoom.us/j/84512948123?pwd=MAPCON2026HYBRID"
+                />
+              </div>
+
+              <Field
+                label="Zoom Meeting ID"
+                value={stream.meeting_id || ''}
+                onChange={x => setStream(prev => ({ ...prev, meeting_id: x }))}
+                placeholder="e.g. 845 1294 8123"
+              />
+
+              <Field
+                label="Zoom Passcode"
+                value={stream.passcode || ''}
+                onChange={x => setStream(prev => ({ ...prev, passcode: x }))}
+                placeholder="e.g. MAPCON2026"
+              />
+
+              <div style={{gridColumn:'1/-1'}}>
+                <Field
+                  textarea
+                  label="Instructions for Hybrid Delegates (shown in app)"
+                  value={stream.stream_instructions || ''}
+                  onChange={x => setStream(prev => ({ ...prev, stream_instructions: x }))}
+                  placeholder="e.g. Join 5-10 minutes prior to session schedule..."
+                />
+              </div>
+            </div>
+
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:'20px', paddingTop:'16px', borderTop:'1px solid #e2e8f0'}}>
+              <button type="button" onClick={copyDetails} style={{display:'flex', alignItems:'center', gap:'6px', background:'#f1f5f9', border:'1px solid #cbd5e1', borderRadius:'8px', padding:'8px 14px', cursor:'pointer', fontWeight:'600', fontSize:'13px'}}>
+                <Copy size={15}/> Copy Meeting Info
+              </button>
+              <button className="primary" type="submit" disabled={busy} style={{padding:'10px 24px', fontSize:'14px', fontWeight:'700'}}>
+                {busy ? 'Saving...' : '💾 Save Zoom Stream Settings'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {subTab === 'sessions' && (
+        <div>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'16px', gap:'12px', flexWrap:'wrap'}}>
+            <input
+              placeholder="🔍 Search session by title, speaker or hall..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              style={{maxWidth:'360px', padding:'8px 14px', borderRadius:'8px', border:'1px solid #cbd5e1', fontSize:'13px'}}
+            />
+            <div style={{display:'flex', gap:'8px', alignItems:'center', fontSize:'13px', color:'#64748b'}}>
+              <span>Total Sessions: <b>{sessions.length}</b></span> |
+              <span style={{color:'#dc2626', fontWeight:'700'}}>🔴 Live Streams: <b>{sessions.filter(s=>s.is_live).length}</b></span>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Schedule</th>
+                <th>Session Details</th>
+                <th>Hall & Speaker</th>
+                <th>Zoom Stream Config</th>
+                <th>Live Status Switch</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredSessions.map(s => (
+                <tr key={s.id} style={{background: s.is_live ? '#fff5f5' : 'inherit'}}>
+                  <td style={{fontSize:'12.5px', whiteSpace:'nowrap'}}>
+                    <b>{toInputDate(s.session_date)}</b><br/>
+                    <span style={{color:'#64748b'}}>{s.start_time} - {s.end_time}</span>
+                  </td>
+                  <td>
+                    <b style={{fontSize:'14px', color:'#1e293b'}}>{s.title}</b><br/>
+                    <small style={{color:'#64748b'}}>{s.category || 'Session'}</small>
+                  </td>
+                  <td>
+                    <div>📍 <b>{s.hall_name || 'Main Hall'}</b></div>
+                    <small style={{color:'#64748b'}}>👨‍🏫 {s.speaker_name || 'Faculty'}</small>
+                  </td>
+                  <td>
+                    {s.zoom_link ? (
+                      <div style={{fontSize:'12px'}}>
+                        <span style={{color:'#2563eb', fontWeight:'700', wordBreak:'break-all'}}>Zoom Configured</span>
+                        {s.meeting_id && <div style={{color:'#64748b', fontSize:'11px'}}>ID: {s.meeting_id}</div>}
+                      </div>
+                    ) : (
+                      <span style={{color:'#94a3b8', fontSize:'12px'}}>Uses Master Zoom Link</span>
+                    )}
+                  </td>
+                  <td>
+                    <button
+                      onClick={() => toggleSessionLive(s.id)}
+                      style={{
+                        background: s.is_live ? '#dc2626' : '#f1f5f9',
+                        color: s.is_live ? '#fff' : '#334155',
+                        border: `1.5px solid ${s.is_live ? '#dc2626' : '#cbd5e1'}`,
+                        borderRadius: '20px',
+                        padding: '6px 14px',
+                        fontSize: '12px',
+                        fontWeight: '800',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      {s.is_live ? '🔴 LIVE NOW (Click to End)' : '▶️ Go LIVE'}
+                    </button>
+                  </td>
+                  <td>
+                    <button
+                      className="icon"
+                      title="Edit Zoom Link"
+                      onClick={() => setEditSession(s)}
+                      style={{background:'#eff6ff', color:'#2563eb', border:'1px solid #bfdbfe', borderRadius:'6px', padding:'6px'}}
+                    >
+                      <Video size={16}/>
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {!filteredSessions.length && (
+                <tr>
+                  <td colSpan={6} style={{textAlign:'center', padding:'30px', color:'#94a3b8'}}>
+                    No sessions found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+
+          {editSession && (
+            <SessionStreamModal
+              session={editSession}
+              onSave={saveSessionStream}
+              onClose={() => setEditSession(null)}
+            />
+          )}
+        </div>
+      )}
+
+      {subTab === 'attendees' && (
+        <div>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'16px', gap:'12px', flexWrap:'wrap'}}>
+            <input
+              placeholder="🔍 Search hybrid attendee by name, email, reg no..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              style={{maxWidth:'360px', padding:'8px 14px', borderRadius:'8px', border:'1px solid #cbd5e1', fontSize:'13px'}}
+            />
+            <div style={{fontSize:'13px', color:'#64748b'}}>
+              <span>Total Hybrid Attendees: <b style={{color:'#2563eb'}}>{hybridUsers.length}</b></span>
+            </div>
+          </div>
+
+          <div style={{background:'#eff6ff', border:'1px solid #bfdbfe', padding:'12px 16px', borderRadius:'10px', marginBottom:'16px', fontSize:'13px', color:'#1e40af'}}>
+            💡 <b>Note:</b> Delegates listed below have active access to the <b>Hybrid & Online Stage (Zoom)</b> card in the mobile app and web platform.
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Reg No.</th>
+                <th>Delegate Name</th>
+                <th>Email & Phone</th>
+                <th>Category / Access</th>
+                <th>Mode Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredAttendees.map(u => (
+                <tr key={u.id}>
+                  <td><b>{u.registration_no || '—'}</b></td>
+                  <td>
+                    <b>{u.name}</b><br/>
+                    <small style={{color:'#64748b'}}>{u.designation || u.university || 'Delegate'}</small>
+                  </td>
+                  <td>
+                    {u.email}<br/>
+                    <small style={{color:'#64748b'}}>{u.phone || '—'}</small>
+                  </td>
+                  <td>
+                    <span className="pill" style={{background:'#2563eb', color:'#fff', fontSize:'11px', fontWeight:'700'}}>
+                      {u.category || 'Hybrid Delegate'}
+                    </span>
+                  </td>
+                  <td>
+                    <button
+                      onClick={() => toggleParticipantHybrid(u.id)}
+                      style={{
+                        background: '#fff',
+                        color: '#dc2626',
+                        border: '1px solid #fca5a5',
+                        borderRadius: '6px',
+                        padding: '4px 10px',
+                        fontSize: '12px',
+                        fontWeight: '700',
+                        cursor: 'pointer'
+                      }}
+                      title="Switch to Regular in-person attendee"
+                    >
+                      Make Regular
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {!filteredAttendees.length && (
+                <tr>
+                  <td colSpan={5} style={{textAlign:'center', padding:'30px', color:'#94a3b8'}}>
+                    No hybrid attendees found. You can set any attendee category to "Hybrid Delegate" in the Participants tab.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SessionStreamModal({session, onSave, onClose}){
+  const [v, set] = formState({
+    ...session,
+    zoom_link: session.zoom_link || '',
+    meeting_id: session.meeting_id || '',
+    passcode: session.passcode || '',
+    is_live: session.is_live ? 1 : 0
+  });
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal" style={{maxWidth:'580px'}}>
+        <div className="modal-header">
+          <h3>📹 Configure Session Zoom Link</h3>
+          <button className="close" onClick={onClose}>&times;</button>
+        </div>
+        <div className="modal-body">
+          <div style={{background:'#f8fafc', padding:'12px', borderRadius:'8px', marginBottom:'14px', border:'1px solid #e2e8f0'}}>
+            <strong style={{color:'#1e293b', fontSize:'14px'}}>{session.title}</strong>
+            <div style={{fontSize:'12px', color:'#64748b', marginTop:'4px'}}>
+              🕒 {toInputDate(session.session_date)} ({session.start_time} - {session.end_time}) | 📍 {session.hall_name || 'Hall'}
+            </div>
+          </div>
+
+          <div className="formgrid">
+            <div style={{gridColumn:'1/-1'}}>
+              <Field
+                label="Session-Specific Zoom Link"
+                value={v.zoom_link}
+                onChange={x => set('zoom_link', x)}
+                placeholder="https://zoom.us/j/..."
+              />
+            </div>
+            <Field
+              label="Meeting ID"
+              value={v.meeting_id}
+              onChange={x => set('meeting_id', x)}
+              placeholder="e.g. 845 1294 8123"
+            />
+            <Field
+              label="Passcode"
+              value={v.passcode}
+              onChange={x => set('passcode', x)}
+              placeholder="e.g. MAPCON2026"
+            />
+            <div style={{gridColumn:'1/-1', display:'flex', alignItems:'center', gap:'10px', marginTop:'10px'}}>
+              <input
+                type="checkbox"
+                id="sess_live_chk"
+                checked={!!v.is_live}
+                onChange={e => set('is_live', e.target.checked ? 1 : 0)}
+                style={{width:'18px', height:'18px', cursor:'pointer'}}
+              />
+              <label htmlFor="sess_live_chk" style={{fontWeight:'700', fontSize:'13px', color: v.is_live ? '#dc2626' : '#1e293b', cursor:'pointer'}}>
+                {v.is_live ? '🔴 Session is CURRENTLY LIVE STREAMING' : 'Mark as Live Stream Active'}
+              </label>
+            </div>
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button onClick={onClose}>Cancel</button>
+          <button className="primary" onClick={() => onSave(v)}>Save Zoom Link</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 createRoot(document.getElementById('root')).render(<App/>);
