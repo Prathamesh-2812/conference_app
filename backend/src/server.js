@@ -2896,7 +2896,7 @@ app.get('/api/chat/messages',auth,asyncRoute(async(req,res)=>{
     const convId = cRes.insertId;
     await pool.query('INSERT INTO conversation_members(conversation_id, user_id) VALUES(?,?)', [convId, req.user.id]);
     await pool.query('INSERT INTO messages(conversation_id, sender_id, message_type, body) VALUES(?,?,?,?)',
-      [convId, 1, 'TEXT', 'Welcome to MAPCON 2026! I am your Conference Liaison Assistant (Dr. Pallavi Kiran Shinde). How can I assist you with sessions, accommodation at Hotel Sayaji, meals, transport, or certificates today?']);
+      [convId, 1, 'TEXT', 'Welcome to MAPCON 2026! How can I assist you with sessions, accommodation at Hotel Sayaji, meals, transport, or certificates today?']);
     conv = { id: convId };
   }
 
@@ -2918,7 +2918,7 @@ app.post('/api/chat/messages',auth,[body('body').notEmpty()],validate,asyncRoute
   
   let [[conv]] = await pool.query('SELECT c.id FROM conversations c JOIN conversation_members cm ON cm.conversation_id=c.id WHERE cm.user_id=? AND c.conference_id=? LIMIT 1', [req.user.id, conferenceId]);
   if(!conv) {
-    const [cRes] = await pool.query('INSERT INTO conversations(conference_id, title) VALUES(?,?)', [conferenceId, `Liaison Chat - ${req.user.name||'Delegate'}`]);
+    const [cRes] = await pool.query('INSERT INTO conversations(conference_id, title) VALUES(?,?)', [conferenceId, `Support Chat - ${req.user.name||'Delegate'}`]);
     const convId = cRes.insertId;
     await pool.query('INSERT INTO conversation_members(conversation_id, user_id) VALUES(?,?)', [convId, req.user.id]);
     conv = { id: convId };
@@ -2941,10 +2941,10 @@ app.post('/api/chat/messages',auth,[body('body').notEmpty()],validate,asyncRoute
     replyText = '📜 Certificates will be available for download under the "Certificate" tab in your app once your session attendance is verified at the valedictory session.';
   } else if (q.includes('venue') || q.includes('location') || q.includes('map') || q.includes('address') || q.includes('direction')) {
     replyText = '📍 Conference Venue:\nHotel Sayaji, Old Pune-Bangalore Highway, Kawala Naka, Kolhapur (416001). 5 mins from CBS Bus Stand, 10 mins from Kolhapur Railway Station.';
-  } else if (q.includes('speaker') || q.includes('faculty') || q.includes('pallavi')) {
-    replyText = '👩‍🏫 Conference Liaison Faculty:\nDr. Pallavi Kiran Shinde (Phone: +91 9766594602). For VIP protocols, speaker slides, and transport desk, visit the Liaison Counter in Hall A.';
+  } else if (q.includes('speaker') || q.includes('faculty') || q.includes('liaison')) {
+    replyText = '👩‍🏫 Conference Liaison Desk:\nFor VIP protocols, speaker slides, and transport desk, please visit the Liaison Counter in Hall A or the Help Desk in the main lobby.';
   } else {
-    replyText = `Thank you for your message! Dr. Pallavi Kiran Shinde and the MAPCON 2026 organizing team have received your note: "${userText}". We are here at Hotel Sayaji to assist you throughout the conference!`;
+    replyText = `Thank you for your message! The MAPCON 2026 Help Desk team has received your note: "${userText}". We are here at Hotel Sayaji to assist you throughout the conference!`;
   }
 
   // 3. Save Assistant Response
