@@ -767,16 +767,140 @@ app.get('/api/me/conferences', auth, asyncRoute(async(req, res) => {
 app.get('/api/me/profile', auth, asyncRoute(async(req, res) => {
   const conferenceId = req.query.conferenceId || 1;
   const [[u]] = await pool.query(`
-    SELECT u.id, u.name, u.email, u.phone, u.role, u.designation, u.university, u.blood_group, u.photo,
-           p.id as participant_id, p.registration_no, p.category, p.mode_of_travel, p.status as participant_status
+    SELECT u.id, u.name, u.email, u.phone, u.role, u.designation, u.university, u.blood_group, u.photo, u.last_login_at,
+           p.id as participant_id, p.registration_no, p.category, p.status as participant_status,
+           p.food_preference, p.emergency_contact, p.mode_of_travel, p.flight_number,
+           p.arrival_date, p.arrival_time, p.departure_date, p.departure_time,
+           h.name as hotel_name, r.room_number, r.room_type,
+           lf.name as liaison_name, lf.phone as liaison_phone
     FROM users u
     LEFT JOIN participants p ON p.user_id = u.id AND p.conference_id = ?
+    LEFT JOIN room_allocations ra ON ra.participant_id = p.id
+    LEFT JOIN rooms r ON r.id = ra.room_id
+    LEFT JOIN hotels h ON h.id = r.hotel_id
+    LEFT JOIN liaison_faculty lf ON lf.id = p.liaison_id
     WHERE u.id = ?
     LIMIT 1
   `, [conferenceId, req.user.id]);
   
-  if (!u) return res.status(404).json({ message: 'User not found' });
-  ok(res, u, 'Profile retrieved');
+  if (!u) return res.status(404).json({ success: false, message: 'User not found' });
+  
+  res.json({
+    success: true,
+    message: 'Profile retrieved',
+    data: u,
+    ...u
+  });
+}));
+
+app.put('/api/me/profile', auth, asyncRoute(async(req, res) => {
+  const conferenceId = req.body.conferenceId || req.query.conferenceId || 1;
+  const {
+    name, phone, designation, university, blood_group,
+    emergency_contact, mode_of_travel, flight_number,
+    arrival_date, arrival_time, departure_date, departure_time,
+    food_preference
+  } = req.body;
+
+  // 1. Update user fields
+  await pool.query(`
+    UPDATE users SET
+      name = COALESCE(?, name),
+      phone = COALESCE(?, phone),
+      designation = COALESCE(?, designation),
+      university = COALESCE(?, university),
+      blood_group = COALESCE(?, blood_group)
+    WHERE id = ?
+  `, [name, phone, designation, university, blood_group, req.user.id]);
+
+  // 2. Ensure participant record exists and update it
+  const [[existingPart]] = await pool.query('SELECT id FROM participants WHERE user_id = ? AND conference_id = ? LIMIT 1', [req.user.id, conferenceId]);
+  if (existingPart) {
+    await pool.query(`
+      UPDATE participants SET
+        emergency_contact = COALESCE(?, emergency_contact),
+        mode_of_travel = COALESCE(?, mode_of_travel),
+        flight_number = COALESCE(?, flight_number),
+        arrival_date = COALESCE(?, arrival_date),
+        arrival_time = COALESCE(?, arrival_time),
+        departure_date = COALESCE(?, departure_date),
+        departure_time = COALESCE(?, departure_time),
+        food_preference = COALESCE(?, food_preference)
+      WHERE id = ?
+    `, [
+      emergency_contact || null,
+      mode_of_travel || null,
+      flight_number || null,
+      arrival_date || null,
+      arrival_time || null,
+      departure_date || null,
+      departure_time || null,
+      food_preference || null,
+      existingPart.id
+    ]);
+  } else {
+    const regNo = 'REG-' + Math.floor(1000 + Math.random() * 9000);
+    await pool.query(`
+      INSERT INTO participants (user_id, conference_id, registration_no, category, emergency_contact, mode_of_travel, flight_number, arrival_date, arrival_time, departure_date, departure_time, food_preference)
+      VALUES (?, ?, ?, 'Delegate', ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      req.user.id,
+      conferenceId,
+      regNo,
+      emergency_contact || null,
+      mode_of_travel || null,
+      flight_number || null,
+      arrival_date || null,
+      arrival_time || null,
+      departure_date || null,
+      departure_time || null,
+      food_preference || 'VEG'
+    ]);
+  }
+
+  // 3. Retrieve full updated profile
+  const [[updated]] = await pool.query(`
+    SELECT u.id, u.name, u.email, u.phone, u.role, u.designation, u.university, u.blood_group, u.photo, u.last_login_at,
+           p.id as participant_id, p.registration_no, p.category, p.status as participant_status,
+           p.food_preference, p.emergency_contact, p.mode_of_travel, p.flight_number,
+           p.arrival_date, p.arrival_time, p.departure_date, p.departure_time,
+           h.name as hotel_name, r.room_number, r.room_type,
+           lf.name as liaison_name, lf.phone as liaison_phone
+    FROM users u
+    LEFT JOIN participants p ON p.user_id = u.id AND p.conference_id = ?
+    LEFT JOIN room_allocations ra ON ra.participant_id = p.id
+    LEFT JOIN rooms r ON r.id = ra.room_id
+    LEFT JOIN hotels h ON h.id = r.hotel_id
+    LEFT JOIN liaison_faculty lf ON lf.id = p.liaison_id
+    WHERE u.id = ?
+    LIMIT 1
+  `, [conferenceId, req.user.id]);
+
+  io.to(`user_${req.user.id}`).emit('profile_updated', updated);
+  res.json({
+    success: true,
+    message: 'Profile updated successfully',
+    data: updated,
+    ...updated
+  });
+}));
+
+app.post('/api/me/photo', auth, asyncRoute(async(req, res) => {
+  const file = req.body.file;
+  if (!file || !file.dataUrl) {
+    return res.status(400).json({ success: false, message: 'Photo data is required' });
+  }
+
+  const url = await saveDataUrlUpload('avatars', file);
+  await pool.query('UPDATE users SET photo = ? WHERE id = ?', [url, req.user.id]);
+
+  io.to(`user_${req.user.id}`).emit('profile_updated', { id: req.user.id, photo: url });
+  res.json({
+    success: true,
+    message: 'Profile photo updated successfully',
+    url,
+    data: { photo: url }
+  });
 }));
 
 app.get('/api/conferences',asyncRoute(async(req,res)=>{

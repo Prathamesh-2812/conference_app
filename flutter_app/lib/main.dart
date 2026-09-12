@@ -1651,8 +1651,11 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final res = await ApiService.get('/me/profile');
       if (res is Map && mounted) {
+        final profileData = res['data'] is Map
+            ? Map<String, dynamic>.from(res['data'] as Map)
+            : Map<String, dynamic>.from(res);
         setState(() {
-          _userProfile = Map<String, dynamic>.from(res);
+          _userProfile = profileData;
         });
       }
     } catch (_) {}
@@ -5484,7 +5487,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isUpdatingPhoto = false;
   int _refreshKey = 0;
 
-  Future<dynamic> load() => ApiService.get('/me/profile');
+  @override
+  void initState() {
+    super.initState();
+    RealtimeSyncService.instance.syncNotifier.addListener(_onSyncUpdate);
+  }
+
+  @override
+  void dispose() {
+    RealtimeSyncService.instance.syncNotifier.removeListener(_onSyncUpdate);
+    super.dispose();
+  }
+
+  void _onSyncUpdate() {
+    if (mounted) {
+      setState(() => _refreshKey++);
+    }
+  }
+
+  Future<dynamic> load() async {
+    final res = await ApiService.get('/me/profile');
+    if (res is Map && res['data'] is Map) {
+      return Map<String, dynamic>.from(res['data'] as Map);
+    }
+    if (res is Map) {
+      return Map<String, dynamic>.from(res);
+    }
+    return {};
+  }
 
   String _formatPhotoUrl(dynamic raw) {
     if (raw == null) return '';
