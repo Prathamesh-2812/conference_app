@@ -5076,7 +5076,7 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
                       color: Colors.white.withOpacity(0.15),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.camera_enhance, color: gold, size: 28),
+                    child: const Icon(Icons.face_retouching_natural, color: gold, size: 28),
                   ),
                   const SizedBox(width: 12),
                   const Expanded(
@@ -5513,7 +5513,8 @@ class ChatScreen extends StatelessWidget {
                 padding: const EdgeInsets.all(18),
                 children: [
                   CardButton(
-                    icon: Icons.help_outline_rounded,
+                    icon: Icons.contact_support,
+                    iconColor: maroon,
                     title: 'Need Help?',
                     subtitle: 'Conference Help Desk & Support • Active now at Hotel Sayaji',
                     onTap: () => Navigator.push(
@@ -5525,7 +5526,8 @@ class ChatScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   CardButton(
-                    icon: Icons.support_agent_rounded,
+                    icon: Icons.support_agent,
+                    iconColor: maroon,
                     title: 'Delegate Help Desk & Transport Control',
                     subtitle: 'Lobby Counter #1 • Dial 0231 2555555',
                     onTap: () => Navigator.push(
