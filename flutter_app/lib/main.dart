@@ -1902,25 +1902,28 @@ class _HomeScreenState extends State<HomeScreen> {
                     subtitle: 'Campus map, how to reach & hall guide',
                     onTap: () => go(context, const VenueDirectionsScreen()),
                   ),
-                  CardButton(
-                    icon: Icons.hotel,
-                    title: 'My Accommodation',
-                    subtitle: 'Hotel, room allotment & check-in details',
-                    onTap: () => go(context, const AccommodationScreen()),
-                  ),
-                  CardButton(
-                    icon: Icons.directions_car,
-                    title: 'Transport & Cab',
-                    subtitle: 'Pickup timing, vehicle & driver contact',
-                    onTap: () => go(context, const TransportScreen()),
-                  ),
-                  CardButton(
-                    icon: Icons.assignment,
-                    title: 'Duty Roster',
-                    subtitle: 'Assigned committee & conference tasks',
-                    onTap: () => go(context, const DutiesScreen()),
-                  ),
-                  if (conference.settings['enableRegistration'] != false)
+                  if (conference.settings['enableAccommodation'] == true)
+                    CardButton(
+                      icon: Icons.hotel,
+                      title: 'My Accommodation',
+                      subtitle: 'Hotel, room allotment & check-in details',
+                      onTap: () => go(context, const AccommodationScreen()),
+                    ),
+                  if (conference.settings['enableTransport'] == true)
+                    CardButton(
+                      icon: Icons.directions_car,
+                      title: 'Transport & Cab',
+                      subtitle: 'Pickup timing, vehicle & driver contact',
+                      onTap: () => go(context, const TransportScreen()),
+                    ),
+                  if (conference.settings['enableDuties'] == true)
+                    CardButton(
+                      icon: Icons.assignment,
+                      title: 'Duty Roster',
+                      subtitle: 'Assigned committee & conference tasks',
+                      onTap: () => go(context, const DutiesScreen()),
+                    ),
+                  if (conference.settings['enableQr'] == true)
                     CardButton(
                       icon: Icons.qr_code_2,
                       title: 'Digital Conference ID',
