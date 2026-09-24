@@ -17,7 +17,7 @@ const API = getApiBase();
 const emptyConference={name:'',shortName:'',description:'',welcomeMessage:'',aboutConference:'',startDate:'',endDate:'',registrationStartDate:'',registrationEndDate:'',contactPerson:'',contactPhone:'',contactEmail:'',website:'',organizer:'',hostInstitution:'',theme:'',status:'ACTIVE'};
 const emptyVenue={name:'',address:'',city:'',state:'',country:'',pincode:'',latitude:'',longitude:'',googleMapsUrl:'',parkingInformation:'',directions:'',contactNumber:''};
 const emptyBranding={logoUrl:'',organizerLogoUrl:'',bannerUrl:'',splashScreenUrl:'',faviconUrl:'',primaryColor:'#8C1119',secondaryColor:'#C8A45A',accentColor:'#2E6F95',backgroundColor:'#FCFAF5'};
-const emptySettings={enableRegistration:true,enableChat:true,enableGallery:true,enableAttendance:true,enableQr:false,enablePushNotifications:false,enableCertificates:true,enableTransport:false,enableDuties:false,enableAccommodation:false,enablePolls:false,enableFeedback:true};
+const emptySettings={enableRegistration:true,enableChat:false,enableGallery:true,enableAttendance:true,enableQr:false,enablePushNotifications:false,enableCertificates:true,enableTransport:false,enableDuties:false,enableAccommodation:false,enableSlider:true,enableHybridStage:true,enableSchedule:true,enableSpeakers:true,enableVenueDirections:true,enableTravelGuide:true,enableEmergency:true,enableSponsors:true,enableNotices:true,enablePolls:false,enableFeedback:true};
 
 async function req(path,opt={}){
   const token=localStorage.getItem('token');
@@ -495,7 +495,64 @@ function formState(initial){
 function ConferenceForm({value,onSave}){const[v,set,setV]=formState(value);return <FormShell icon={Building2} title="Conference Details" description="Edit the public conference profile consumed by Admin and Flutter." onReset={()=>setV(value)} onSave={()=>onSave(v)}><Field label="Conference Name" value={v.name} onChange={x=>set('name',x)}/><Field label="Short Name" value={v.shortName} onChange={x=>set('shortName',x)}/><Field label="Theme" value={v.theme} onChange={x=>set('theme',x)}/><SelectField label="Conference Status" value={v.status} onChange={x=>set('status',x)} options={['ACTIVE','DRAFT','PUBLISHED','ARCHIVED','INACTIVE']}/><Field type="date" label="Start Date" value={v.startDate} onChange={x=>set('startDate',x)}/><Field type="date" label="End Date" value={v.endDate} onChange={x=>set('endDate',x)}/><Field type="date" label="Registration Start" value={v.registrationStartDate} onChange={x=>set('registrationStartDate',x)}/><Field type="date" label="Registration End" value={v.registrationEndDate} onChange={x=>set('registrationEndDate',x)}/><Field label="Contact Person" value={v.contactPerson} onChange={x=>set('contactPerson',x)}/><Field label="Contact Phone" value={v.contactPhone} onChange={x=>set('contactPhone',x)}/><Field label="Contact Email" value={v.contactEmail} onChange={x=>set('contactEmail',x)}/><Field label="Website" value={v.website} onChange={x=>set('website',x)}/><Field label="Organizer" value={v.organizer} onChange={x=>set('organizer',x)}/><Field label="Host Institution" value={v.hostInstitution} onChange={x=>set('hostInstitution',x)}/><Field textarea label="Description" value={v.description} onChange={x=>set('description',x)}/><Field textarea label="Welcome Message" value={v.welcomeMessage} onChange={x=>set('welcomeMessage',x)}/><Field textarea label="About Conference" value={v.aboutConference} onChange={x=>set('aboutConference',x)}/></FormShell>}
 function VenueForm({value,onSave}){const[v,set,setV]=formState(value);return <FormShell icon={MapPin} title="Venue & Location" description="Publish map, address, parking, and direction data to the mobile app." onReset={()=>setV(value)} onSave={()=>onSave(v)}><Field label="Venue Name" value={v.name} onChange={x=>set('name',x)}/><Field label="City" value={v.city} onChange={x=>set('city',x)}/><Field label="State" value={v.state} onChange={x=>set('state',x)}/><Field label="Country" value={v.country} onChange={x=>set('country',x)}/><Field label="Pincode" value={v.pincode} onChange={x=>set('pincode',x)}/><Field label="Latitude" value={v.latitude} onChange={x=>set('latitude',x)}/><Field label="Longitude" value={v.longitude} onChange={x=>set('longitude',x)}/><Field label="Venue Contact Number" value={v.contactNumber} onChange={x=>set('contactNumber',x)}/><Field textarea label="Address" value={v.address} onChange={x=>set('address',x)}/><Field textarea label="Google Maps URL" value={v.googleMapsUrl} onChange={x=>set('googleMapsUrl',x)}/><Field textarea label="Parking Information" value={v.parkingInformation} onChange={x=>set('parkingInformation',x)}/><Field textarea label="Directions" value={v.directions} onChange={x=>set('directions',x)}/></FormShell>}
 function BrandingForm({value,onSave,notify}){const[v,set,setV]=formState(value);const upload=async(key,file)=>{if(!file)return;const reader=new FileReader();reader.onload=async()=>{const data=await req('/admin/uploads',{method:'POST',body:JSON.stringify({folder:'conference',file:{name:file.name,dataUrl:reader.result}})});set(key,data.url);notify('File uploaded')};reader.readAsDataURL(file)};return <FormShell icon={Palette} title="Branding" description="Control logos, banner imagery, splash assets, and conference colors." onReset={()=>setV(value)} onSave={()=>onSave(v)} preview={<BrandPreview branding={v}/>}>{[['Conference Logo','logoUrl'],['Organizer Logo','organizerLogoUrl'],['Banner','bannerUrl'],['Splash Screen','splashScreenUrl'],['Favicon','faviconUrl']].map(([label,key])=><label className="field uploadfield" key={key}><span>{label}</span><div><input value={v[key]||''} onChange={e=>set(key,e.target.value)} placeholder="URL or uploaded file path"/><label className="uploadBtn"><Upload size={16}/>Upload<input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>upload(key,e.target.files?.[0])}/></label></div></label>)}<Field type="color" label="Primary Color" value={v.primaryColor} onChange={x=>set('primaryColor',x)}/><Field type="color" label="Secondary Color" value={v.secondaryColor} onChange={x=>set('secondaryColor',x)}/><Field type="color" label="Accent Color" value={v.accentColor} onChange={x=>set('accentColor',x)}/><Field type="color" label="Background Color" value={v.backgroundColor} onChange={x=>set('backgroundColor',x)}/></FormShell>}
-function SettingsForm({value,onSave}){const[v,set,setV]=formState(value);return <FormShell icon={Settings} title="Conference Settings" description="Feature flags are saved in MySQL and can be consumed by clients in real-time." onReset={()=>setV(value)} onSave={()=>onSave(v)}>{Object.entries({enableRegistration:'Enable Registration',enableQr:'Enable Digital Conference ID (QR)',enableAccommodation:'Enable Accommodation / Hotel Card',enableTransport:'Enable Transport & Cab Card',enableDuties:'Enable Duty Roster Card',enableChat:'Enable Chat',enableGallery:'Enable Gallery',enableAttendance:'Enable Attendance',enablePushNotifications:'Enable Push Notifications',enableCertificates:'Enable Certificates',enablePolls:'Enable Polls',enableFeedback:'Enable Feedback'}).map(([k,label])=><Toggle key={k} label={label} checked={v[k]} onChange={x=>set(k,x)}/>)}</FormShell>}
+function SettingsForm({value,onSave}){
+  const[v,set,setV]=formState(value);
+  const sections = [
+    {
+      group: '📱 Bottom Navigation & Main App Tabs',
+      items: {
+        enableSchedule: 'Schedule Tab & Timeline',
+        enableNotices: 'Notices Tab & Push Alerts',
+        enableChat: 'Community Chat Tab',
+        enableGallery: 'Photo Gallery Tab & Facial Search',
+      }
+    },
+    {
+      group: '🏠 Home Screen Services & Content Cards',
+      items: {
+        enableSlider: 'Home Media Slider / Banners Carousel',
+        enableHybridStage: 'Hybrid & Zoom Live Stage Card',
+        enableSpeakers: 'Conference Speakers Card',
+        enableVenueDirections: 'Directions, Venue & Campus Map Card',
+        enableAccommodation: 'My Accommodation / Hotel Card',
+        enableTransport: 'Transport & Cab Service Card',
+        enableDuties: 'Duty Roster / Task Assignment Card',
+        enableQr: 'Digital Conference ID (QR) Card',
+        enableCertificates: 'Certificate of Participation Card',
+        enableTravelGuide: 'Kolhapur Travel & Tourist Guide Card',
+        enableEmergency: 'Emergency Help & Contacts Card',
+        enableSponsors: 'Our Sponsors & Exhibition Partners Card',
+      }
+    },
+    {
+      group: '⚙️ Conference Logistics & Delegate Features',
+      items: {
+        enableRegistration: 'Delegate Public Registration',
+        enableAttendance: 'Session Attendance / Gate Entry Scanning',
+        enableFeedback: 'Conference & Session Feedback Form',
+        enablePolls: 'Interactive Quizzes & Live Polls',
+        enablePushNotifications: 'Push Notifications System',
+      }
+    }
+  ];
+
+  return (
+    <FormShell icon={Settings} title="Conference Settings" description="Toggle active / inactive status for any module, tab, or service across the Flutter mobile app in real-time." onReset={()=>setV(value)} onSave={()=>onSave(v)}>
+      <div style={{gridColumn:'1 / -1', display:'flex', flexDirection:'column', gap:'20px'}}>
+        {sections.map(sec => (
+          <div key={sec.group} style={{background:'#f8fafc', padding:'16px 20px', borderRadius:'14px', border:'1px solid #e2e8f0'}}>
+            <h4 style={{margin:'0 0 12px 0', fontSize:'14.5px', color:'#1e293b', fontWeight:'700'}}>{sec.group}</h4>
+            <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:'12px'}}>
+              {Object.entries(sec.items).map(([k, label]) => (
+                <Toggle key={k} label={label} checked={v[k] !== false && v[k] !== 0 && (k === 'enableChat' || k === 'enableAccommodation' || k === 'enableTransport' || k === 'enableDuties' || k === 'enableQr' || k === 'enablePushNotifications' || k === 'enablePolls' ? !!v[k] : v[k] !== false)} onChange={x=>set(k, x)} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </FormShell>
+  );
+}
 function FormShell({icon:Icon,title,description,children,onSave,onReset,preview}){const[busy,setBusy]=useState(false);const submit=async()=>{setBusy(true);try{await onSave()}finally{setBusy(false)}};return <div className="panel"><div className="pagehead"><div className="titleline"><Icon/><div><h3>{title}</h3><p>{description}</p></div></div><div className="actions"><button onClick={onReset}>Reset</button><button onClick={submit} disabled={busy}>{busy?'Saving...':'Save'}</button></div></div>{preview}<div className="formgrid">{children}</div></div>}
 function BrandPreview({branding}){return <div className="brandpreview" style={{background:branding.backgroundColor||'#FCFAF5',borderColor:branding.primaryColor||'#8C1119'}}>{branding.bannerUrl&&<img src={branding.bannerUrl.startsWith('/uploads')?API.replace('/api','')+branding.bannerUrl:branding.bannerUrl} alt="Conference banner"/>}<div><span style={{color:branding.accentColor}}>Live Preview</span><strong style={{color:branding.primaryColor}}>Mobile conference branding</strong><small style={{color:branding.secondaryColor}}>Logo, banner, and colors are API driven.</small></div></div>}
 

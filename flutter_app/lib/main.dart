@@ -826,14 +826,6 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int i = 0;
-  final pages = const [
-    HomeScreen(),
-    ScheduleScreen(),
-    ChatScreen(),
-    NoticesScreen(),
-    GalleryScreen(),
-    ProfileScreen()
-  ];
 
   @override
   void initState() {
@@ -899,7 +891,17 @@ class _MainShellState extends State<MainShell> {
           label: 'VIEW',
           textColor: gold,
           onPressed: () {
-            setState(() => i = 3);
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const AppShell(
+                  child: Scaffold(
+                    backgroundColor: Colors.white,
+                    body: NoticesScreen(),
+                  ),
+                ),
+              ),
+            );
             RealtimeSyncService.instance.markAllAsRead();
           },
         ),
@@ -912,87 +914,111 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
-  void _onTabSelected(int idx) {
-    if (idx == 3) {
-      RealtimeSyncService.instance.markAllAsRead();
-    }
-    setState(() => i = idx);
-  }
-
   @override
   Widget build(BuildContext c) {
     final conference = ConferenceScope.of(c);
+    final bool enableSchedule = conference.settings['enableSchedule'] != false;
+    final bool enableNotices = conference.settings['enableNotices'] != false;
+    final bool enableChat = conference.settings['enableChat'] == true;
+    final bool enableGallery = conference.settings['enableGallery'] != false;
+
+    final List<Widget> pages = [
+      const HomeScreen(),
+      if (enableSchedule) const ScheduleScreen(),
+      if (enableChat) const ChatScreen(),
+      if (enableNotices) const NoticesScreen(),
+      if (enableGallery) const GalleryScreen(),
+      const ProfileScreen(),
+    ];
+
+    final List<NavigationDestination> destinations = [
+      const NavigationDestination(
+        icon: Icon(Icons.home_outlined),
+        selectedIcon: Icon(Icons.home, color: maroon),
+        label: 'Home',
+      ),
+      if (enableSchedule)
+        const NavigationDestination(
+          icon: Icon(Icons.calendar_month_outlined),
+          selectedIcon: Icon(Icons.calendar_month, color: maroon),
+          label: 'Schedule',
+        ),
+      if (enableChat)
+        const NavigationDestination(
+          icon: Icon(Icons.chat_bubble_outline),
+          selectedIcon: Icon(Icons.chat_bubble, color: maroon),
+          label: 'Chat',
+        ),
+      if (enableNotices)
+        NavigationDestination(
+          icon: ValueListenableBuilder<int>(
+            valueListenable: RealtimeSyncService.instance.unreadNotifCountNotifier,
+            builder: (context, unreadCount, child) {
+              return Badge(
+                isLabelVisible: unreadCount > 0,
+                label: Text(
+                  '$unreadCount',
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 10, color: Colors.white),
+                ),
+                backgroundColor: const Color(0xFFDC2626),
+                child: const Icon(Icons.notifications_none),
+              );
+            },
+          ),
+          selectedIcon: ValueListenableBuilder<int>(
+            valueListenable: RealtimeSyncService.instance.unreadNotifCountNotifier,
+            builder: (context, unreadCount, child) {
+              return Badge(
+                isLabelVisible: unreadCount > 0,
+                label: Text(
+                  '$unreadCount',
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 10, color: Colors.white),
+                ),
+                backgroundColor: const Color(0xFFDC2626),
+                child: const Icon(Icons.notifications, color: maroon),
+              );
+            },
+          ),
+          label: 'Notices',
+        ),
+      if (enableGallery)
+        const NavigationDestination(
+          icon: Icon(Icons.photo_library_outlined),
+          selectedIcon: Icon(Icons.photo_library, color: maroon),
+          label: 'Gallery',
+        ),
+      const NavigationDestination(
+        icon: Icon(Icons.person_outline),
+        selectedIcon: Icon(Icons.person, color: maroon),
+        label: 'Profile',
+      ),
+    ];
+
+    final int safeIndex = (i >= 0 && i < pages.length) ? i : 0;
+
+    void onTabSelected(int idx) {
+      if (idx >= 0 && idx < destinations.length) {
+        if (destinations[idx].label == 'Notices') {
+          RealtimeSyncService.instance.markAllAsRead();
+        }
+      }
+      setState(() => i = idx);
+    }
+
     return AppShell(
       child: Scaffold(
         backgroundColor: Colors.white,
         body: IndexedStack(
-          index: i,
+          index: safeIndex,
           children: pages,
         ),
         bottomNavigationBar: NavigationBar(
-          selectedIndex: i,
+          selectedIndex: safeIndex,
           backgroundColor: Colors.white,
           indicatorColor: conference.primaryColor.withOpacity(0.14),
           elevation: 6,
-          onDestinationSelected: _onTabSelected,
-          destinations: [
-            const NavigationDestination(
-              icon: Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home, color: maroon),
-              label: 'Home',
-            ),
-            const NavigationDestination(
-              icon: Icon(Icons.calendar_month_outlined),
-              selectedIcon: Icon(Icons.calendar_month, color: maroon),
-              label: 'Schedule',
-            ),
-            const NavigationDestination(
-              icon: Icon(Icons.chat_bubble_outline),
-              selectedIcon: Icon(Icons.chat_bubble, color: maroon),
-              label: 'Chat',
-            ),
-            NavigationDestination(
-              icon: ValueListenableBuilder<int>(
-                valueListenable: RealtimeSyncService.instance.unreadNotifCountNotifier,
-                builder: (context, unreadCount, child) {
-                  return Badge(
-                    isLabelVisible: unreadCount > 0,
-                    label: Text(
-                      '$unreadCount',
-                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 10, color: Colors.white),
-                    ),
-                    backgroundColor: const Color(0xFFDC2626),
-                    child: const Icon(Icons.notifications_none),
-                  );
-                },
-              ),
-              selectedIcon: ValueListenableBuilder<int>(
-                valueListenable: RealtimeSyncService.instance.unreadNotifCountNotifier,
-                builder: (context, unreadCount, child) {
-                  return Badge(
-                    isLabelVisible: unreadCount > 0,
-                    label: Text(
-                      '$unreadCount',
-                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 10, color: Colors.white),
-                    ),
-                    backgroundColor: const Color(0xFFDC2626),
-                    child: const Icon(Icons.notifications, color: maroon),
-                  );
-                },
-              ),
-              label: 'Notices',
-            ),
-            const NavigationDestination(
-              icon: Icon(Icons.photo_library_outlined),
-              selectedIcon: Icon(Icons.photo_library, color: maroon),
-              label: 'Gallery',
-            ),
-            const NavigationDestination(
-              icon: Icon(Icons.person_outline),
-              selectedIcon: Icon(Icons.person, color: maroon),
-              label: 'Profile',
-            ),
-          ],
+          onDestinationSelected: onTabSelected,
+          destinations: destinations,
         ),
       ),
     );
@@ -1757,7 +1783,8 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const MainMediaSlider(),
+                  if (conference.settings['enableSlider'] != false)
+                    const MainMediaSlider(),
                   // Welcome Banner Card
                   Container(
                     width: double.infinity,
@@ -1850,7 +1877,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  if (_isHybridUser)
+                  if (_isHybridUser && conference.settings['enableHybridStage'] != false)
                     CardButton(
                       icon: Icons.videocam_rounded,
                       iconColor: const Color(0xFF2563EB),
@@ -1878,30 +1905,34 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       onTap: () => go(context, const VirtualStageScreen()),
                     ),
-                  CardButton(
-                    icon: Icons.calendar_month,
-                    title: 'Event Schedule',
-                    subtitle: 'Day-wise timeline, tracks & halls',
-                    onTap: () => go(context, const ScheduleScreen()),
-                  ),
-                  CardButton(
-                    icon: Icons.groups,
-                    title: 'Conference Speakers',
-                    subtitle: 'Distinguished dignitaries & profiles',
-                    onTap: () => go(context, const SpeakersScreen()),
-                  ),
-                  CardButton(
-                    icon: Icons.photo_library_rounded,
-                    title: 'Photo Gallery',
-                    subtitle: 'View conference photos & event moments',
-                    onTap: () => go(context, const GalleryScreen()),
-                  ),
-                  CardButton(
-                    icon: Icons.location_on,
-                    title: 'Directions & Venue',
-                    subtitle: 'Campus map, how to reach & hall guide',
-                    onTap: () => go(context, const VenueDirectionsScreen()),
-                  ),
+                  if (conference.settings['enableSchedule'] != false)
+                    CardButton(
+                      icon: Icons.calendar_month,
+                      title: 'Event Schedule',
+                      subtitle: 'Day-wise timeline, tracks & halls',
+                      onTap: () => go(context, const ScheduleScreen()),
+                    ),
+                  if (conference.settings['enableSpeakers'] != false)
+                    CardButton(
+                      icon: Icons.groups,
+                      title: 'Conference Speakers',
+                      subtitle: 'Distinguished dignitaries & profiles',
+                      onTap: () => go(context, const SpeakersScreen()),
+                    ),
+                  if (conference.settings['enableGallery'] != false)
+                    CardButton(
+                      icon: Icons.photo_library_rounded,
+                      title: 'Photo Gallery',
+                      subtitle: 'View conference photos & event moments',
+                      onTap: () => go(context, const GalleryScreen()),
+                    ),
+                  if (conference.settings['enableVenueDirections'] != false)
+                    CardButton(
+                      icon: Icons.location_on,
+                      title: 'Directions & Venue',
+                      subtitle: 'Campus map, how to reach & hall guide',
+                      onTap: () => go(context, const VenueDirectionsScreen()),
+                    ),
                   if (conference.settings['enableAccommodation'] == true)
                     CardButton(
                       icon: Icons.hotel,
@@ -1937,48 +1968,51 @@ class _HomeScreenState extends State<HomeScreen> {
                       subtitle: 'View & download certified credentials',
                       onTap: () => go(context, const CertificateScreen()),
                     ),
-                  CardButton(
-                    icon: Icons.explore_rounded,
-                    title: 'Travel & Nearest Tourist Places',
-                    subtitle: 'Temples, forts, Kolhapuri food, lassi & local transit',
-                    trailingBadge: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: gold.withOpacity(0.18),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: gold.withOpacity(0.6)),
+                  if (conference.settings['enableTravelGuide'] != false)
+                    CardButton(
+                      icon: Icons.explore_rounded,
+                      title: 'Travel & Nearest Tourist Places',
+                      subtitle: 'Temples, forts, Kolhapuri food, lassi & local transit',
+                      trailingBadge: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: gold.withOpacity(0.18),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: gold.withOpacity(0.6)),
+                        ),
+                        child: const Text(
+                          'KOLHAPUR',
+                          style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w900, color: darkMaroon),
+                        ),
                       ),
-                      child: const Text(
-                        'KOLHAPUR',
-                        style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w900, color: darkMaroon),
-                      ),
+                      onTap: () => go(context, const TravelGuideScreen()),
                     ),
-                    onTap: () => go(context, const TravelGuideScreen()),
-                  ),
-                  CardButton(
-                    icon: Icons.emergency,
-                    title: 'Emergency Help & Contacts',
-                    subtitle: 'Help desk, medical unit & security',
-                    onTap: () => go(context, const EmergencyScreen()),
-                  ),
-                  CardButton(
-                    icon: Icons.handshake_rounded,
-                    title: 'Our Sponsors & Partners',
-                    subtitle: 'Industry leaders, diagnostic partners & stall directory',
-                    trailingBadge: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: gold.withOpacity(0.18),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: gold.withOpacity(0.6)),
-                      ),
-                      child: const Text(
-                        'EXHIBITION',
-                        style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w900, color: darkMaroon),
-                      ),
+                  if (conference.settings['enableEmergency'] != false)
+                    CardButton(
+                      icon: Icons.emergency,
+                      title: 'Emergency Help & Contacts',
+                      subtitle: 'Help desk, medical unit & security',
+                      onTap: () => go(context, const EmergencyScreen()),
                     ),
-                    onTap: () => go(context, const SponsorsScreen()),
-                  ),
+                  if (conference.settings['enableSponsors'] != false)
+                    CardButton(
+                      icon: Icons.handshake_rounded,
+                      title: 'Our Sponsors & Partners',
+                      subtitle: 'Industry leaders, diagnostic partners & stall directory',
+                      trailingBadge: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: gold.withOpacity(0.18),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: gold.withOpacity(0.6)),
+                        ),
+                        child: const Text(
+                          'EXHIBITION',
+                          style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w900, color: darkMaroon),
+                        ),
+                      ),
+                      onTap: () => go(context, const SponsorsScreen()),
+                    ),
                   const SizedBox(height: 24),
                 ],
               ),

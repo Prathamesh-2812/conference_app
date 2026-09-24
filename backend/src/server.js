@@ -410,6 +410,15 @@ async function runMigrations(){
       await pool.query(`ALTER TABLE conference_settings ADD COLUMN enable_transport TINYINT(1) DEFAULT 0`).catch(() => {});
       await pool.query(`ALTER TABLE conference_settings ADD COLUMN enable_duties TINYINT(1) DEFAULT 0`).catch(() => {});
       await pool.query(`ALTER TABLE conference_settings ADD COLUMN enable_accommodation TINYINT(1) DEFAULT 0`).catch(() => {});
+      await pool.query(`ALTER TABLE conference_settings ADD COLUMN enable_slider TINYINT(1) DEFAULT 1`).catch(() => {});
+      await pool.query(`ALTER TABLE conference_settings ADD COLUMN enable_hybrid_stage TINYINT(1) DEFAULT 1`).catch(() => {});
+      await pool.query(`ALTER TABLE conference_settings ADD COLUMN enable_schedule TINYINT(1) DEFAULT 1`).catch(() => {});
+      await pool.query(`ALTER TABLE conference_settings ADD COLUMN enable_speakers TINYINT(1) DEFAULT 1`).catch(() => {});
+      await pool.query(`ALTER TABLE conference_settings ADD COLUMN enable_venue_directions TINYINT(1) DEFAULT 1`).catch(() => {});
+      await pool.query(`ALTER TABLE conference_settings ADD COLUMN enable_travel_guide TINYINT(1) DEFAULT 1`).catch(() => {});
+      await pool.query(`ALTER TABLE conference_settings ADD COLUMN enable_emergency TINYINT(1) DEFAULT 1`).catch(() => {});
+      await pool.query(`ALTER TABLE conference_settings ADD COLUMN enable_sponsors TINYINT(1) DEFAULT 1`).catch(() => {});
+      await pool.query(`ALTER TABLE conference_settings ADD COLUMN enable_notices TINYINT(1) DEFAULT 1`).catch(() => {});
     } catch(_) {}
   }catch(err){
     console.log('Migration check:', err.message);
@@ -427,13 +436,13 @@ async function getConference(conferenceId=1){
   const [[venue]]=await pool.query('SELECT * FROM venues WHERE conference_id=? ORDER BY id LIMIT 1',[conferenceId]);
   const [[branding]]=await pool.query('SELECT * FROM conference_branding WHERE conference_id=?',[conferenceId]);
   const [[settings]]=await pool.query('SELECT * FROM conference_settings WHERE conference_id=?',[conferenceId]);
-  return {id:conference.id,name:conference.name,shortName:conference.short_name,description:conference.description,welcomeMessage:conference.welcome_message,aboutConference:conference.about_conference,startDate:conference.start_date,endDate:conference.end_date,registrationStartDate:conference.registration_start_date,registrationEndDate:conference.registration_end_date,contactPerson:conference.contact_person,contactPhone:conference.contact_phone,contactEmail:conference.contact_email,website:conference.website,organizer:conference.organizer,hostInstitution:conference.host_institution,theme:conference.theme,status:conference.status,active:conference.active,venue:{id:venue?.id||null,name:venue?.name||conference.venue,address:venue?.address||conference.address,city:venue?.city,state:venue?.state,country:venue?.country,pincode:venue?.pincode,latitude:venue?.latitude,longitude:venue?.longitude,googleMapsUrl:venue?.google_maps_url,parkingInformation:venue?.parking_information,directions:venue?.directions,contactNumber:venue?.contact_number},branding:{logoUrl:branding?.conference_logo||conference.logo_url,organizerLogoUrl:branding?.organizer_logo,bannerUrl:branding?.banner||conference.banner_url,splashScreenUrl:branding?.splash_screen,faviconUrl:branding?.favicon,primaryColor:branding?.primary_color,secondaryColor:branding?.secondary_color,accentColor:branding?.accent_color,backgroundColor:branding?.background_color},settings:{enableRegistration:!!settings?.enable_registration,enableChat:!!settings?.enable_chat,enableGallery:!!settings?.enable_gallery,enableAttendance:!!settings?.enable_attendance,enableQr:!!settings?.enable_qr,enablePushNotifications:!!settings?.enable_push_notifications,enableCertificates:!!settings?.enable_certificates,enableTransport:!!settings?.enable_transport,enableDuties:!!settings?.enable_duties,enableAccommodation:!!settings?.enable_accommodation,enablePolls:!!settings?.enable_polls,enableFeedback:!!settings?.enable_feedback}};
+  return {id:conference.id,name:conference.name,shortName:conference.short_name,description:conference.description,welcomeMessage:conference.welcome_message,aboutConference:conference.about_conference,startDate:conference.start_date,endDate:conference.end_date,registrationStartDate:conference.registration_start_date,registrationEndDate:conference.registration_end_date,contactPerson:conference.contact_person,contactPhone:conference.contact_phone,contactEmail:conference.contact_email,website:conference.website,organizer:conference.organizer,hostInstitution:conference.host_institution,theme:conference.theme,status:conference.status,active:conference.active,venue:{id:venue?.id||null,name:venue?.name||conference.venue,address:venue?.address||conference.address,city:venue?.city,state:venue?.state,country:venue?.country,pincode:venue?.pincode,latitude:venue?.latitude,longitude:venue?.longitude,googleMapsUrl:venue?.google_maps_url,parkingInformation:venue?.parking_information,directions:venue?.directions,contactNumber:venue?.contact_number},branding:{logoUrl:branding?.conference_logo||conference.logo_url,organizerLogoUrl:branding?.organizer_logo,bannerUrl:branding?.banner||conference.banner_url,splashScreenUrl:branding?.splash_screen,faviconUrl:branding?.favicon,primaryColor:branding?.primary_color,secondaryColor:branding?.secondary_color,accentColor:branding?.accent_color,backgroundColor:branding?.background_color},settings:{enableRegistration:!!settings?.enable_registration,enableChat:!!settings?.enable_chat,enableGallery:settings?.enable_gallery!==0&&settings?.enable_gallery!==false,enableAttendance:!!settings?.enable_attendance,enableQr:!!settings?.enable_qr,enablePushNotifications:!!settings?.enable_push_notifications,enableCertificates:settings?.enable_certificates!==0&&settings?.enable_certificates!==false,enableTransport:!!settings?.enable_transport,enableDuties:!!settings?.enable_duties,enableAccommodation:!!settings?.enable_accommodation,enableSlider:settings?.enable_slider!==0&&settings?.enable_slider!==false,enableHybridStage:settings?.enable_hybrid_stage!==0&&settings?.enable_hybrid_stage!==false,enableSchedule:settings?.enable_schedule!==0&&settings?.enable_schedule!==false,enableSpeakers:settings?.enable_speakers!==0&&settings?.enable_speakers!==false,enableVenueDirections:settings?.enable_venue_directions!==0&&settings?.enable_venue_directions!==false,enableTravelGuide:settings?.enable_travel_guide!==0&&settings?.enable_travel_guide!==false,enableEmergency:settings?.enable_emergency!==0&&settings?.enable_emergency!==false,enableSponsors:settings?.enable_sponsors!==0&&settings?.enable_sponsors!==false,enableNotices:settings?.enable_notices!==0&&settings?.enable_notices!==false,enablePolls:!!settings?.enable_polls,enableFeedback:!!settings?.enable_feedback}};
 }
 
 const bool = v => v === 'true' || v === true || v === 1 || v === '1';
 const emptyStr = v => v === undefined || v === null ? '' : String(v).trim();
 function toClientConference(conference, venue, branding, settings) {
-  return { id: conference.id, name: conference.name, shortName: conference.short_name, description: conference.description, welcomeMessage: conference.welcome_message, aboutConference: conference.about_conference, startDate: conference.start_date, endDate: conference.end_date, registrationStartDate: conference.registration_start_date, registrationEndDate: conference.registration_end_date, contactPerson: conference.contact_person, contactPhone: conference.contact_phone, contactEmail: conference.contact_email, website: conference.website, organizer: conference.organizer, hostInstitution: conference.host_institution, theme: conference.theme, status: conference.status, active: conference.active, venue: { id: venue?.id || null, name: venue?.name || conference.venue, address: venue?.address || conference.address, city: venue?.city, state: venue?.state, country: venue?.country, pincode: venue?.pincode, latitude: venue?.latitude, longitude: venue?.longitude, googleMapsUrl: venue?.google_maps_url, parkingInformation: venue?.parking_information, directions: venue?.directions, contactNumber: venue?.contact_number }, branding: { logoUrl: branding?.conference_logo || conference.logo_url, organizerLogoUrl: branding?.organizer_logo, bannerUrl: branding?.banner || conference.banner_url, splashScreenUrl: branding?.splash_screen, faviconUrl: branding?.favicon, primaryColor: branding?.primary_color, secondaryColor: branding?.secondary_color, accentColor: branding?.accent_color, backgroundColor: branding?.background_color }, settings: { enableRegistration: !!settings?.enable_registration, enableChat: !!settings?.enable_chat, enableGallery: !!settings?.enable_gallery, enableAttendance: !!settings?.enable_attendance, enableQr: !!settings?.enable_qr, enablePushNotifications: !!settings?.enable_push_notifications, enableCertificates: !!settings?.enable_certificates, enableTransport: !!settings?.enable_transport, enableDuties: !!settings?.enable_duties, enableAccommodation: !!settings?.enable_accommodation, enablePolls: !!settings?.enable_polls, enableFeedback: !!settings?.enable_feedback } };
+  return { id: conference.id, name: conference.name, shortName: conference.short_name, description: conference.description, welcomeMessage: conference.welcome_message, aboutConference: conference.about_conference, startDate: conference.start_date, endDate: conference.end_date, registrationStartDate: conference.registration_start_date, registrationEndDate: conference.registration_end_date, contactPerson: conference.contact_person, contactPhone: conference.contact_phone, contactEmail: conference.contact_email, website: conference.website, organizer: conference.organizer, hostInstitution: conference.host_institution, theme: conference.theme, status: conference.status, active: conference.active, venue: { id: venue?.id || null, name: venue?.name || conference.venue, address: venue?.address || conference.address, city: venue?.city, state: venue?.state, country: venue?.country, pincode: venue?.pincode, latitude: venue?.latitude, longitude: venue?.longitude, googleMapsUrl: venue?.google_maps_url, parkingInformation: venue?.parking_information, directions: venue?.directions, contactNumber: venue?.contact_number }, branding: { logoUrl: branding?.conference_logo || conference.logo_url, organizerLogoUrl: branding?.organizer_logo, bannerUrl: branding?.banner || conference.banner_url, splashScreenUrl: branding?.splash_screen, faviconUrl: branding?.favicon, primaryColor: branding?.primary_color, secondaryColor: branding?.secondary_color, accentColor: branding?.accent_color, backgroundColor: branding?.background_color }, settings: { enableRegistration: !!settings?.enable_registration, enableChat: !!settings?.enable_chat, enableGallery: settings?.enable_gallery!==0&&settings?.enable_gallery!==false, enableAttendance: !!settings?.enable_attendance, enableQr: !!settings?.enable_qr, enablePushNotifications: !!settings?.enable_push_notifications, enableCertificates: settings?.enable_certificates!==0&&settings?.enable_certificates!==false, enableTransport: !!settings?.enable_transport, enableDuties: !!settings?.enable_duties, enableAccommodation: !!settings?.enable_accommodation, enableSlider: settings?.enable_slider!==0&&settings?.enable_slider!==false, enableHybridStage: settings?.enable_hybrid_stage!==0&&settings?.enable_hybrid_stage!==false, enableSchedule: settings?.enable_schedule!==0&&settings?.enable_schedule!==false, enableSpeakers: settings?.enable_speakers!==0&&settings?.enable_speakers!==false, enableVenueDirections: settings?.enable_venue_directions!==0&&settings?.enable_venue_directions!==false, enableTravelGuide: settings?.enable_travel_guide!==0&&settings?.enable_travel_guide!==false, enableEmergency: settings?.enable_emergency!==0&&settings?.enable_emergency!==false, enableSponsors: settings?.enable_sponsors!==0&&settings?.enable_sponsors!==false, enableNotices: settings?.enable_notices!==0&&settings?.enable_notices!==false, enablePolls: !!settings?.enable_polls, enableFeedback: !!settings?.enable_feedback } };
 }
 function emptyToNull(v) { return v === '' ? null : v; }
 function normalizeValues(obj) { return Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, emptyToNull(v)])); }
@@ -665,9 +674,11 @@ app.put('/api/admin/conference/settings',auth,roles('ADMIN','SUPER_ADMIN'),async
    INSERT INTO conference_settings(
      conference_id, enable_registration, enable_chat, enable_gallery, enable_attendance,
      enable_qr, enable_push_notifications, enable_certificates, enable_transport,
-     enable_duties, enable_accommodation, enable_polls, enable_feedback
+     enable_duties, enable_accommodation, enable_slider, enable_hybrid_stage,
+     enable_schedule, enable_speakers, enable_venue_directions, enable_travel_guide,
+     enable_emergency, enable_sponsors, enable_notices, enable_polls, enable_feedback
    )
-   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
    ON DUPLICATE KEY UPDATE
      enable_registration=VALUES(enable_registration),
      enable_chat=VALUES(enable_chat),
@@ -679,6 +690,15 @@ app.put('/api/admin/conference/settings',auth,roles('ADMIN','SUPER_ADMIN'),async
      enable_transport=VALUES(enable_transport),
      enable_duties=VALUES(enable_duties),
      enable_accommodation=VALUES(enable_accommodation),
+     enable_slider=VALUES(enable_slider),
+     enable_hybrid_stage=VALUES(enable_hybrid_stage),
+     enable_schedule=VALUES(enable_schedule),
+     enable_speakers=VALUES(enable_speakers),
+     enable_venue_directions=VALUES(enable_venue_directions),
+     enable_travel_guide=VALUES(enable_travel_guide),
+     enable_emergency=VALUES(enable_emergency),
+     enable_sponsors=VALUES(enable_sponsors),
+     enable_notices=VALUES(enable_notices),
      enable_polls=VALUES(enable_polls),
      enable_feedback=VALUES(enable_feedback)
  `, [
@@ -693,6 +713,15 @@ app.put('/api/admin/conference/settings',auth,roles('ADMIN','SUPER_ADMIN'),async
    bool(req.body.enableTransport),
    bool(req.body.enableDuties),
    bool(req.body.enableAccommodation),
+   bool(req.body.enableSlider),
+   bool(req.body.enableHybridStage),
+   bool(req.body.enableSchedule),
+   bool(req.body.enableSpeakers),
+   bool(req.body.enableVenueDirections),
+   bool(req.body.enableTravelGuide),
+   bool(req.body.enableEmergency),
+   bool(req.body.enableSponsors),
+   bool(req.body.enableNotices),
    bool(req.body.enablePolls),
    bool(req.body.enableFeedback)
  ]);
