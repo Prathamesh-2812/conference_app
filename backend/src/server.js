@@ -407,6 +407,15 @@ async function runMigrations(){
       console.warn("Stream table migration notice:", streamErr.message);
     }
     try {
+      await pool.query(`ALTER TABLE conference_streams ADD COLUMN zoom_link_2 TEXT`).catch(() => {});
+      await pool.query(`ALTER TABLE conference_streams ADD COLUMN meeting_id_2 VARCHAR(100) DEFAULT '845 1294 8124'`).catch(() => {});
+      await pool.query(`ALTER TABLE conference_streams ADD COLUMN passcode_2 VARCHAR(100) DEFAULT 'MAPCON2026B'`).catch(() => {});
+      await pool.query(`ALTER TABLE conference_streams ADD COLUMN stream_platform_2 VARCHAR(50) DEFAULT 'ZOOM'`).catch(() => {});
+      await pool.query(`ALTER TABLE conference_streams ADD COLUMN is_live_2 TINYINT(1) DEFAULT 1`).catch(() => {});
+      await pool.query(`ALTER TABLE conference_streams ADD COLUMN stream_title_2 VARCHAR(255) DEFAULT 'Hall B - Scientific Hall (Zoom)'`).catch(() => {});
+      await pool.query(`ALTER TABLE conference_streams ADD COLUMN stream_instructions_2 TEXT`).catch(() => {});
+    } catch(_) {}
+    try {
       await pool.query(`ALTER TABLE conference_settings ADD COLUMN enable_transport TINYINT(1) DEFAULT 0`).catch(() => {});
       await pool.query(`ALTER TABLE conference_settings ADD COLUMN enable_duties TINYINT(1) DEFAULT 0`).catch(() => {});
       await pool.query(`ALTER TABLE conference_settings ADD COLUMN enable_accommodation TINYINT(1) DEFAULT 0`).catch(() => {});
@@ -1115,8 +1124,15 @@ app.get('/api/stream/settings', asyncRoute(async(req, res) => {
       passcode: 'MAPCON2026',
       stream_platform: 'ZOOM',
       is_live: 1,
-      stream_title: 'MAPCON 2026 Hybrid & Online Main Stage',
-      stream_instructions: 'Please join the session 5-10 minutes prior to schedule. Keep your microphone muted during presentations and use the Q&A box for asking questions.'
+      stream_title: 'Hall A - Main Stage (Zoom)',
+      stream_instructions: 'Hall A Live broadcast for keynotes and plenary sessions.',
+      zoom_link_2: 'https://zoom.us/j/84512948124?pwd=MAPCON2026HALLB',
+      meeting_id_2: '845 1294 8124',
+      passcode_2: 'MAPCON2026B',
+      stream_platform_2: 'ZOOM',
+      is_live_2: 1,
+      stream_title_2: 'Hall B - Scientific Hall (Zoom)',
+      stream_instructions_2: 'Hall B Live broadcast for scientific papers and workshops.'
     });
   }
   ok(res, stream);
@@ -1133,8 +1149,15 @@ app.get('/api/admin/stream/settings', auth, roles('ADMIN', 'SUPER_ADMIN'), async
       passcode: 'MAPCON2026',
       stream_platform: 'ZOOM',
       is_live: 1,
-      stream_title: 'MAPCON 2026 Hybrid & Online Main Stage',
-      stream_instructions: 'Please join the session 5-10 minutes prior to schedule. Keep your microphone muted during presentations and use the Q&A box for asking questions.'
+      stream_title: 'Hall A - Main Stage (Zoom)',
+      stream_instructions: 'Hall A Live broadcast for keynotes and plenary sessions.',
+      zoom_link_2: 'https://zoom.us/j/84512948124?pwd=MAPCON2026HALLB',
+      meeting_id_2: '845 1294 8124',
+      passcode_2: 'MAPCON2026B',
+      stream_platform_2: 'ZOOM',
+      is_live_2: 1,
+      stream_title_2: 'Hall B - Scientific Hall (Zoom)',
+      stream_instructions_2: 'Hall B Live broadcast for scientific papers and workshops.'
     });
   }
   ok(res, stream);
@@ -1142,11 +1165,19 @@ app.get('/api/admin/stream/settings', auth, roles('ADMIN', 'SUPER_ADMIN'), async
 
 app.put('/api/admin/stream/settings', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncRoute(async(req, res) => {
   const conferenceId = req.body.conferenceId || 1;
-  const { zoom_link, meeting_id, passcode, stream_platform, is_live, stream_instructions, stream_title } = req.body;
+  const {
+    zoom_link, meeting_id, passcode, stream_platform, is_live, stream_instructions, stream_title,
+    zoom_link_2, meeting_id_2, passcode_2, stream_platform_2, is_live_2, stream_instructions_2, stream_title_2
+  } = req.body;
   const liveVal = is_live === 1 || is_live === true || is_live === '1' ? 1 : 0;
+  const liveVal2 = is_live_2 === 1 || is_live_2 === true || is_live_2 === '1' ? 1 : 0;
   await pool.query(`
-    INSERT INTO conference_streams (conference_id, zoom_link, meeting_id, passcode, stream_platform, is_live, stream_instructions, stream_title)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO conference_streams (
+      conference_id,
+      zoom_link, meeting_id, passcode, stream_platform, is_live, stream_instructions, stream_title,
+      zoom_link_2, meeting_id_2, passcode_2, stream_platform_2, is_live_2, stream_instructions_2, stream_title_2
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON DUPLICATE KEY UPDATE
       zoom_link = VALUES(zoom_link),
       meeting_id = VALUES(meeting_id),
@@ -1154,12 +1185,23 @@ app.put('/api/admin/stream/settings', auth, roles('ADMIN', 'SUPER_ADMIN'), async
       stream_platform = VALUES(stream_platform),
       is_live = VALUES(is_live),
       stream_instructions = VALUES(stream_instructions),
-      stream_title = VALUES(stream_title)
-  `, [conferenceId, zoom_link, meeting_id, passcode, stream_platform || 'ZOOM', liveVal, stream_instructions, stream_title]);
+      stream_title = VALUES(stream_title),
+      zoom_link_2 = VALUES(zoom_link_2),
+      meeting_id_2 = VALUES(meeting_id_2),
+      passcode_2 = VALUES(passcode_2),
+      stream_platform_2 = VALUES(stream_platform_2),
+      is_live_2 = VALUES(is_live_2),
+      stream_instructions_2 = VALUES(stream_instructions_2),
+      stream_title_2 = VALUES(stream_title_2)
+  `, [
+    conferenceId,
+    zoom_link, meeting_id, passcode, stream_platform || 'ZOOM', liveVal, stream_instructions, stream_title,
+    zoom_link_2, meeting_id_2, passcode_2, stream_platform_2 || 'ZOOM', liveVal2, stream_instructions_2, stream_title_2
+  ]);
 
   const [[updated]] = await pool.query('SELECT * FROM conference_streams WHERE conference_id = ?', [conferenceId]);
   io.emit('stream_settings_updated', { conferenceId, stream: updated });
-  ok(res, updated, 'Hybrid stream settings saved successfully');
+  ok(res, updated, 'Zoom stream settings saved successfully');
 }));
 
 app.put('/api/admin/sessions/:id/live-toggle', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncRoute(async(req, res) => {

@@ -4310,10 +4310,16 @@ function HybridLiveStream({tab, notify, selectedConferenceId}){
     }
   };
 
-  const copyDetails = () => {
-    const text = `MAPCON 2026 Live Zoom Stream:\nURL: ${stream.zoom_link}\nMeeting ID: ${stream.meeting_id}\nPasscode: ${stream.passcode}`;
-    navigator.clipboard.writeText(text);
-    notify('Zoom meeting details copied to clipboard');
+  const copyDetails = (linkNum = 1) => {
+    if (linkNum === 2) {
+      const text = `${stream.stream_title_2 || 'Hall B - Scientific Hall'}:\nURL: ${stream.zoom_link_2 || ''}\nMeeting ID: ${stream.meeting_id_2 || ''}\nPasscode: ${stream.passcode_2 || ''}`;
+      navigator.clipboard.writeText(text);
+      notify('Hall B Zoom details copied to clipboard');
+    } else {
+      const text = `${stream.stream_title || 'Hall A - Main Stage'}:\nURL: ${stream.zoom_link || ''}\nMeeting ID: ${stream.meeting_id || ''}\nPasscode: ${stream.passcode || ''}`;
+      navigator.clipboard.writeText(text);
+      notify('Hall A Zoom details copied to clipboard');
+    }
   };
 
   const filteredSessions = sessions.filter(s => {
@@ -4332,173 +4338,238 @@ function HybridLiveStream({tab, notify, selectedConferenceId}){
     <div className="panel">
       <div className="pagehead">
         <div>
-          <h3>🌐 Hybrid & Online Stream Control Room (Zoom)</h3>
-          <p>Configure Zoom meeting links, toggle live session broadcasts, and manage online/hybrid delegates.</p>
+          <h3>🌐 Zoom Stream Links & Live Stage</h3>
+          <p>Configure the two main Zoom stream links (e.g., Hall A & Hall B) accessible to all conference attendees.</p>
         </div>
         <div className="actions" style={{display:'flex', gap:'8px'}}>
           <button className={subTab==='settings'?'primary':''} onClick={()=>setSubTab('settings')}>
-            ⚙️ Main Zoom Stream
+            ⚙️ 2 Zoom Stream Links
           </button>
           <button className={subTab==='sessions'?'primary':''} onClick={()=>setSubTab('sessions')}>
             🔴 Session Live Controls ({sessions.filter(s=>s.is_live).length} Live)
           </button>
           <button className={subTab==='attendees'?'primary':''} onClick={()=>setSubTab('attendees')}>
-            👥 Hybrid Attendees ({hybridUsers.length})
+            👥 Attendees ({allUsers.length || hybridUsers.length})
           </button>
         </div>
       </div>
 
       {subTab === 'settings' && (
-        <div>
-          {/* Top Live Status Card */}
-          <div style={{
-            background: stream.is_live ? 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)' : '#f8fafc',
-            color: stream.is_live ? '#fff' : '#1e293b',
-            border: `2px solid ${stream.is_live ? '#3b82f6' : '#cbd5e1'}`,
-            borderRadius: '16px',
-            padding: '22px',
-            marginBottom: '24px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: '16px',
-            boxShadow: stream.is_live ? '0 10px 25px rgba(37,99,235,0.2)' : 'none'
-          }}>
-            <div>
-              <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+        <form onSubmit={saveSettings}>
+          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(360px, 1fr))', gap:'20px', marginBottom:'24px'}}>
+            
+            {/* Stream 1 Card (Hall A / Main Stage) */}
+            <div style={{
+              background:'#fff',
+              border: stream.is_live ? '2px solid #2563eb' : '1px solid #e2e8f0',
+              borderRadius:'16px',
+              padding:'20px',
+              boxShadow:'0 4px 12px rgba(0,0,0,0.04)'
+            }}>
+              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'14px'}}>
                 <span className="pill" style={{
                   background: stream.is_live ? '#dc2626' : '#64748b',
                   color: '#fff',
-                  fontSize: '12px',
+                  fontSize: '11px',
                   fontWeight: '800',
-                  padding: '4px 10px'
+                  padding: '4px 8px'
                 }}>
-                  {stream.is_live ? '🔴 BROADCAST ACTIVE (LIVE NOW)' : '⚪ BROADCAST OFFLINE'}
+                  {stream.is_live ? '🔴 LINK 1 LIVE' : '⚪ LINK 1 OFFLINE'}
                 </span>
-                <span style={{fontSize:'13px', color: stream.is_live ? '#93c5fd' : '#64748b'}}>
-                  Platform: <b>{stream.stream_platform || 'ZOOM'}</b>
-                </span>
+                <div style={{display:'flex', gap:'6px'}}>
+                  <button
+                    type="button"
+                    style={{
+                      background: stream.is_live ? '#dc2626' : '#16a34a',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '5px 10px',
+                      fontWeight: '700',
+                      fontSize: '12px',
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => setStream(prev => ({ ...prev, is_live: prev.is_live ? 0 : 1 }))}
+                  >
+                    {stream.is_live ? 'Stop Live' : 'Go Live'}
+                  </button>
+                  {stream.zoom_link && (
+                    <a
+                      href={stream.zoom_link}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        background: '#2563eb',
+                        color: '#fff',
+                        borderRadius: '6px',
+                        padding: '5px 10px',
+                        fontWeight: '600',
+                        fontSize: '12px',
+                        textDecoration: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      <ExternalLink size={13}/> Test
+                    </a>
+                  )}
+                  <button type="button" onClick={() => copyDetails(1)} style={{background:'#f1f5f9', border:'1px solid #cbd5e1', borderRadius:'6px', padding:'5px 8px', cursor:'pointer', fontSize:'12px'}}>
+                    <Copy size={13}/>
+                  </button>
+                </div>
               </div>
-              <h3 style={{margin:'8px 0 4px', color: stream.is_live ? '#fff' : '#1e293b', fontSize:'20px'}}>
-                {stream.stream_title || 'MAPCON 2026 Main Hybrid Stage'}
-              </h3>
-              <p style={{margin:0, fontSize:'13px', color: stream.is_live ? '#cbd5e1' : '#64748b', maxWidth:'600px'}}>
-                {stream.stream_instructions || 'Live video stream for hybrid delegates and virtual participants.'}
-              </p>
-            </div>
 
-            <div style={{display:'flex', gap:'10px', alignItems:'center'}}>
-              <button
-                style={{
-                  background: stream.is_live ? '#dc2626' : '#16a34a',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '10px',
-                  padding: '10px 18px',
-                  fontWeight: '800',
-                  fontSize: '14px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}
-                onClick={() => setStream(prev => ({ ...prev, is_live: prev.is_live ? 0 : 1 }))}
-              >
-                {stream.is_live ? '⏹️ Stop Main Stream' : '🔴 Start Main Stream Live'}
-              </button>
-              {stream.zoom_link && (
-                <a
-                  href={stream.zoom_link}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{
-                    background: '#2563eb',
-                    color: '#fff',
-                    borderRadius: '10px',
-                    padding: '10px 16px',
-                    fontWeight: '700',
-                    fontSize: '13px',
-                    textDecoration: 'none',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px'
-                  }}
-                >
-                  <ExternalLink size={16}/> Test Zoom Link
-                </a>
-              )}
-            </div>
-          </div>
-
-          {/* Form Settings */}
-          <form onSubmit={saveSettings} style={{background:'#fff', border:'1px solid #e2e8f0', borderRadius:'14px', padding:'24px'}}>
-            <h4 style={{margin:'0 0 16px', color:'#1e293b', fontSize:'16px'}}>Main Conference Zoom Configuration</h4>
-            
-            <div className="formgrid">
+              <h4 style={{margin:'0 0 12px', color:'#1e3a8a', fontSize:'15px'}}>🎥 Zoom Link 1 (Hall A / Main Stage)</h4>
+              
               <Field
-                label="Stream Title / Stage Name"
-                value={stream.stream_title || ''}
+                label="Stream Title"
+                value={stream.stream_title || 'Hall A - Main Stage (Zoom)'}
                 onChange={x => setStream(prev => ({ ...prev, stream_title: x }))}
-                placeholder="e.g. MAPCON 2026 Hybrid & Online Main Stage"
+                placeholder="e.g. Hall A - Main Stage (Zoom)"
               />
-
-              <label className="field">
-                <span>Streaming Platform</span>
-                <select
-                  value={stream.stream_platform || 'ZOOM'}
-                  onChange={e => setStream(prev => ({ ...prev, stream_platform: e.target.value }))}
-                >
-                  <option value="ZOOM">Zoom Meeting / Webinar</option>
-                  <option value="YOUTUBE">YouTube Live</option>
-                  <option value="WEBCAST">Custom Webcast / RTMP</option>
-                </select>
-              </label>
-
-              <div style={{gridColumn:'1/-1'}}>
+              <div style={{height:'10px'}}/>
+              <Field
+                label="Zoom Direct Join URL"
+                value={stream.zoom_link || ''}
+                onChange={x => setStream(prev => ({ ...prev, zoom_link: x }))}
+                placeholder="https://zoom.us/j/84512948123?pwd=MAPCON2026HYBRID"
+              />
+              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginTop:'10px'}}>
                 <Field
-                  label="Master Zoom Join Link (with Passcode token)"
-                  value={stream.zoom_link || ''}
-                  onChange={x => setStream(prev => ({ ...prev, zoom_link: x }))}
-                  placeholder="https://zoom.us/j/84512948123?pwd=MAPCON2026HYBRID"
+                  label="Meeting ID"
+                  value={stream.meeting_id || ''}
+                  onChange={x => setStream(prev => ({ ...prev, meeting_id: x }))}
+                  placeholder="845 1294 8123"
+                />
+                <Field
+                  label="Passcode"
+                  value={stream.passcode || ''}
+                  onChange={x => setStream(prev => ({ ...prev, passcode: x }))}
+                  placeholder="MAPCON2026"
                 />
               </div>
-
-              <Field
-                label="Zoom Meeting ID"
-                value={stream.meeting_id || ''}
-                onChange={x => setStream(prev => ({ ...prev, meeting_id: x }))}
-                placeholder="e.g. 845 1294 8123"
-              />
-
-              <Field
-                label="Zoom Passcode"
-                value={stream.passcode || ''}
-                onChange={x => setStream(prev => ({ ...prev, passcode: x }))}
-                placeholder="e.g. MAPCON2026"
-              />
-
-              <div style={{gridColumn:'1/-1'}}>
+              <div style={{marginTop:'10px'}}>
                 <Field
                   textarea
-                  label="Instructions for Hybrid Delegates (shown in app)"
+                  label="Instructions / Description"
                   value={stream.stream_instructions || ''}
                   onChange={x => setStream(prev => ({ ...prev, stream_instructions: x }))}
-                  placeholder="e.g. Join 5-10 minutes prior to session schedule..."
+                  placeholder="e.g. Hall A Keynote and Plenary Sessions..."
                 />
               </div>
             </div>
 
-            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:'20px', paddingTop:'16px', borderTop:'1px solid #e2e8f0'}}>
-              <button type="button" onClick={copyDetails} style={{display:'flex', alignItems:'center', gap:'6px', background:'#f1f5f9', border:'1px solid #cbd5e1', borderRadius:'8px', padding:'8px 14px', cursor:'pointer', fontWeight:'600', fontSize:'13px'}}>
-                <Copy size={15}/> Copy Meeting Info
-              </button>
-              <button className="primary" type="submit" disabled={busy} style={{padding:'10px 24px', fontSize:'14px', fontWeight:'700'}}>
-                {busy ? 'Saving...' : '💾 Save Zoom Stream Settings'}
-              </button>
+            {/* Stream 2 Card (Hall B / Scientific Hall) */}
+            <div style={{
+              background:'#fff',
+              border: stream.is_live_2 ? '2px solid #0891b2' : '1px solid #e2e8f0',
+              borderRadius:'16px',
+              padding:'20px',
+              boxShadow:'0 4px 12px rgba(0,0,0,0.04)'
+            }}>
+              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'14px'}}>
+                <span className="pill" style={{
+                  background: stream.is_live_2 ? '#dc2626' : '#64748b',
+                  color: '#fff',
+                  fontSize: '11px',
+                  fontWeight: '800',
+                  padding: '4px 8px'
+                }}>
+                  {stream.is_live_2 ? '🔴 LINK 2 LIVE' : '⚪ LINK 2 OFFLINE'}
+                </span>
+                <div style={{display:'flex', gap:'6px'}}>
+                  <button
+                    type="button"
+                    style={{
+                      background: stream.is_live_2 ? '#dc2626' : '#16a34a',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '5px 10px',
+                      fontWeight: '700',
+                      fontSize: '12px',
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => setStream(prev => ({ ...prev, is_live_2: prev.is_live_2 ? 0 : 1 }))}
+                  >
+                    {stream.is_live_2 ? 'Stop Live' : 'Go Live'}
+                  </button>
+                  {stream.zoom_link_2 && (
+                    <a
+                      href={stream.zoom_link_2}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        background: '#0891b2',
+                        color: '#fff',
+                        borderRadius: '6px',
+                        padding: '5px 10px',
+                        fontWeight: '600',
+                        fontSize: '12px',
+                        textDecoration: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      <ExternalLink size={13}/> Test
+                    </a>
+                  )}
+                  <button type="button" onClick={() => copyDetails(2)} style={{background:'#f1f5f9', border:'1px solid #cbd5e1', borderRadius:'6px', padding:'5px 8px', cursor:'pointer', fontSize:'12px'}}>
+                    <Copy size={13}/>
+                  </button>
+                </div>
+              </div>
+
+              <h4 style={{margin:'0 0 12px', color:'#0e7490', fontSize:'15px'}}>🎥 Zoom Link 2 (Hall B / Scientific Hall)</h4>
+              
+              <Field
+                label="Stream Title"
+                value={stream.stream_title_2 || 'Hall B - Scientific Hall (Zoom)'}
+                onChange={x => setStream(prev => ({ ...prev, stream_title_2: x }))}
+                placeholder="e.g. Hall B - Scientific Hall (Zoom)"
+              />
+              <div style={{height:'10px'}}/>
+              <Field
+                label="Zoom Direct Join URL"
+                value={stream.zoom_link_2 || ''}
+                onChange={x => setStream(prev => ({ ...prev, zoom_link_2: x }))}
+                placeholder="https://zoom.us/j/84512948124?pwd=MAPCON2026HALLB"
+              />
+              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginTop:'10px'}}>
+                <Field
+                  label="Meeting ID"
+                  value={stream.meeting_id_2 || ''}
+                  onChange={x => setStream(prev => ({ ...prev, meeting_id_2: x }))}
+                  placeholder="845 1294 8124"
+                />
+                <Field
+                  label="Passcode"
+                  value={stream.passcode_2 || ''}
+                  onChange={x => setStream(prev => ({ ...prev, passcode_2: x }))}
+                  placeholder="MAPCON2026B"
+                />
+              </div>
+              <div style={{marginTop:'10px'}}>
+                <Field
+                  textarea
+                  label="Instructions / Description"
+                  value={stream.stream_instructions_2 || ''}
+                  onChange={x => setStream(prev => ({ ...prev, stream_instructions_2: x }))}
+                  placeholder="e.g. Hall B Scientific Sessions & Free Papers..."
+                />
+              </div>
             </div>
-          </form>
-        </div>
+
+          </div>
+
+          <div style={{display:'flex', justifyContent:'flex-end', alignItems:'center', background:'#fff', padding:'16px 20px', borderRadius:'12px', border:'1px solid #e2e8f0'}}>
+            <button className="primary" type="submit" disabled={busy} style={{padding:'12px 28px', fontSize:'14px', fontWeight:'700'}}>
+              {busy ? 'Saving...' : '💾 Save Both Zoom Stream Links'}
+            </button>
+          </div>
+        </form>
       )}
 
       {subTab === 'sessions' && (
