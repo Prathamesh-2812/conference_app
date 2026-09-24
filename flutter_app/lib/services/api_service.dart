@@ -84,8 +84,13 @@ class ApiService {
   }
 
   static String _errorMessage(dynamic data, String fallback) {
-    if (data is Map && data['message'] != null) {
-      return data['message'].toString();
+    if (data is Map) {
+      if (data['message'] != null && data['message'].toString().trim().isNotEmpty) {
+        return data['message'].toString().trim();
+      }
+      if (data['error'] != null && data['error'].toString().trim().isNotEmpty) {
+        return data['error'].toString().trim();
+      }
     }
 
     return fallback;
@@ -113,8 +118,16 @@ class ApiService {
     final data = _decode(response.body);
 
     if (response.statusCode >= 400) {
+      final serverMsg = _errorMessage(data, '');
+      if (response.statusCode == 401) {
+        throw Exception(serverMsg.isNotEmpty ? serverMsg : 'Session expired or unauthorized. Please sign in again.');
+      } else if (response.statusCode == 404) {
+        throw Exception(serverMsg.isNotEmpty ? serverMsg : 'Requested information not found.');
+      } else if (response.statusCode >= 500) {
+        throw Exception('Server is temporarily busy. Please try again later.');
+      }
       throw Exception(
-        _errorMessage(data, 'Request failed (${response.statusCode})'),
+        serverMsg.isNotEmpty ? serverMsg : 'Request failed. Please try again.',
       );
     }
 
@@ -155,8 +168,16 @@ class ApiService {
     final data = _decode(response.body);
 
     if (response.statusCode >= 400) {
+      final serverMsg = _errorMessage(data, '');
+      if (response.statusCode == 401) {
+        throw Exception(serverMsg.isNotEmpty ? serverMsg : 'Unauthorized request.');
+      } else if (response.statusCode == 404) {
+        throw Exception(serverMsg.isNotEmpty ? serverMsg : 'Requested resource not found.');
+      } else if (response.statusCode >= 500) {
+        throw Exception('Server error. Please try again in a few moments.');
+      }
       throw Exception(
-        _errorMessage(data, 'Request failed (${response.statusCode})'),
+        serverMsg.isNotEmpty ? serverMsg : 'Unable to complete request. Please try again.',
       );
     }
 
@@ -183,8 +204,16 @@ class ApiService {
     final data = _decode(response.body);
 
     if (response.statusCode >= 400) {
+      final serverMsg = _errorMessage(data, '');
+      if (response.statusCode == 401) {
+        throw Exception(serverMsg.isNotEmpty ? serverMsg : 'Unauthorized request.');
+      } else if (response.statusCode == 404) {
+        throw Exception(serverMsg.isNotEmpty ? serverMsg : 'Requested resource not found.');
+      } else if (response.statusCode >= 500) {
+        throw Exception('Server error. Please try again in a few moments.');
+      }
       throw Exception(
-        _errorMessage(data, 'Request failed (${response.statusCode})'),
+        serverMsg.isNotEmpty ? serverMsg : 'Unable to update. Please try again.',
       );
     }
 
@@ -206,8 +235,16 @@ class ApiService {
     final data = _decode(response.body);
 
     if (response.statusCode >= 400) {
+      final serverMsg = _errorMessage(data, '');
+      if (response.statusCode == 401) {
+        throw Exception(serverMsg.isNotEmpty ? serverMsg : 'Unauthorized request.');
+      } else if (response.statusCode == 404) {
+        throw Exception(serverMsg.isNotEmpty ? serverMsg : 'Requested resource not found.');
+      } else if (response.statusCode >= 500) {
+        throw Exception('Server error. Please try again in a few moments.');
+      }
       throw Exception(
-        _errorMessage(data, 'Request failed (${response.statusCode})'),
+        serverMsg.isNotEmpty ? serverMsg : 'Unable to delete. Please try again.',
       );
     }
 
@@ -240,8 +277,22 @@ class ApiService {
     final data = _decode(response.body);
 
     if (response.statusCode >= 400) {
+      final serverMsg = _errorMessage(data, '');
+      if (response.statusCode == 401 || response.statusCode == 400 || response.statusCode == 404) {
+        if (serverMsg.isNotEmpty && 
+            !serverMsg.toLowerCase().contains('route not found') && 
+            !serverMsg.toLowerCase().contains('cannot post') &&
+            !serverMsg.toLowerCase().contains('failed (')) {
+          throw Exception(serverMsg);
+        }
+        throw Exception('Invalid email or password. Please check your credentials.');
+      } else if (response.statusCode == 403) {
+        throw Exception(serverMsg.isNotEmpty ? serverMsg : 'Access denied. Please contact conference administrator.');
+      } else if (response.statusCode >= 500) {
+        throw Exception('Server is temporarily unreachable. Please try again later.');
+      }
       throw Exception(
-        _errorMessage(data, 'Login failed (${response.statusCode})'),
+        serverMsg.isNotEmpty ? serverMsg : 'Sign in failed. Please check your details and try again.',
       );
     }
 

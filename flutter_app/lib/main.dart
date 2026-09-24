@@ -116,6 +116,33 @@ String resolveMediaUrl(dynamic rawUrl, [String defaultFallback = '']) {
   return '$base${str.startsWith('/') ? '' : '/'}$str';
 }
 
+String formatErrorMessage(dynamic error, [String defaultMessage = 'An unexpected error occurred. Please try again.']) {
+  if (error == null) return defaultMessage;
+  String msg = error.toString().trim();
+  while (msg.startsWith('Exception:')) {
+    msg = msg.substring('Exception:'.length).trim();
+  }
+  while (msg.startsWith('Error:')) {
+    msg = msg.substring('Error:'.length).trim();
+  }
+  if (msg.toLowerCase().contains('clientexception') || 
+      msg.toLowerCase().contains('failed to fetch') || 
+      msg.toLowerCase().contains('socketexception') ||
+      msg.toLowerCase().contains('networkerror') ||
+      msg.toLowerCase().contains('connection refused')) {
+    return 'Unable to reach the server. Please check your internet connection.';
+  }
+  if (msg.toLowerCase().contains('login failed (404)') || 
+      msg.toLowerCase().contains('login failed') ||
+      msg.toLowerCase().contains('invalid credentials') ||
+      msg.toLowerCase().contains('user not found') ||
+      msg.toLowerCase().contains('invalid email')) {
+    return 'Invalid email or password. Please check your credentials and try again.';
+  }
+  if (msg.isEmpty) return defaultMessage;
+  return msg;
+}
+
 // App Shell for Desktop/Web Responsive Layout
 class AppShell extends StatelessWidget {
   final Widget child;
@@ -459,10 +486,25 @@ class _LoginScreenState extends State<LoginScreen> {
       widget.onLogin();
     } catch (x) {
       if (mounted) {
+        final cleanMsg = formatErrorMessage(x, 'Invalid email or password. Please try again.');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(x.toString()),
-            backgroundColor: Colors.red.shade700,
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    cleanMsg,
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFFDC2626),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            margin: const EdgeInsets.all(16),
           ),
         );
       }
@@ -4888,7 +4930,10 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
       setState(() => _isMatching = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Matching error: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text(formatErrorMessage(e, 'Could not complete AI face match. Please try another photo.')),
+            backgroundColor: Colors.red.shade700,
+          ),
         );
       }
     }
@@ -5959,7 +6004,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (mounted) {
         setState(() => _isUpdatingPhoto = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update photo: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text(formatErrorMessage(e, 'Failed to update photo. Please try again.')),
+            backgroundColor: Colors.red.shade700,
+          ),
         );
       }
     }
@@ -6175,7 +6223,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               setModalState(() => isSaving = false);
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Failed to update: $e'), backgroundColor: Colors.red),
+                                  SnackBar(
+                                    content: Text(formatErrorMessage(e, 'Failed to update profile. Please try again.')),
+                                    backgroundColor: Colors.red.shade700,
+                                  ),
                                 );
                               }
                             }
