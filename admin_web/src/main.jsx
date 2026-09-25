@@ -1,6 +1,6 @@
 import React,{useEffect,useState,useMemo} from 'react';
 import {createRoot} from 'react-dom/client';
-import {Bell,Building2,Bus,CalendarDays,CheckCircle,ChevronDown,FileCheck,Hotel,Image,LayoutDashboard,Lock,LogOut,MapPin,Palette,RefreshCw,Search,Settings,Shield,Upload,Users,QrCode,Maximize2,Minimize2,Printer,Tv,UserCheck,MessageCircle,Send,Share2,Menu,X,Video,Radio,Copy,ExternalLink,ShieldCheck,Trash2,Edit2,CheckSquare,Square,UserPlus} from 'lucide-react';
+import {Bell,Building2,Bus,CalendarDays,CheckCircle,ChevronDown,FileCheck,Hotel,Image,LayoutDashboard,Lock,LogOut,MapPin,Palette,RefreshCw,Search,Settings,Shield,Upload,Users,QrCode,Maximize2,Minimize2,Printer,Tv,UserCheck,MessageCircle,Send,Share2,Menu,X,Video,Radio,Copy,ExternalLink,ShieldCheck,Trash2,Edit2,CheckSquare,Square,UserPlus,SlidersHorizontal} from 'lucide-react';
 import {QRCodeSVG} from 'qrcode.react';
 import * as XLSX from 'xlsx';
 import './style.css';
@@ -47,6 +47,7 @@ function Login({onLogin}){const[e,setE]=useState(''),[p,setP]=useState(''),[busy
 
 const MODULE_PERMISSIONS = [
   { key: 'dashboard', label: 'Dashboard & Stats', group: 'Overview' },
+  { key: 'active_inactive', label: 'Active / Inactive Menus', group: 'Settings' },
   { key: 'conference', label: 'Conference Details & Branding', group: 'Settings' },
   { key: 'participants', label: 'Participants & Registrations', group: 'Delegates' },
   { key: 'speakers', label: 'Speakers & Faculty', group: 'Program' },
@@ -65,7 +66,8 @@ const MODULE_PERMISSIONS = [
 
 const fullMenu = [
   { key: 'dashboard', title: 'Dashboard', icon: LayoutDashboard },
-  { key: 'conference', title: 'Conference', icon: Building2, children: ['Conference Details', 'Venue & Location', 'Branding', 'Conference Settings', 'Main Screen Slider'] },
+  { key: 'active_inactive', title: 'Active / Inactive Menus', icon: SlidersHorizontal },
+  { key: 'conference', title: 'Conference', icon: Building2, children: ['Conference Details', 'Active / Inactive Menus', 'Venue & Location', 'Branding', 'Main Screen Slider'] },
   { key: 'participants', title: 'Participants', icon: Users, children: ['All Participants', 'Add Participant', 'Import Participants', 'Registration & Passes', 'QR Codes'] },
   { key: 'speakers', title: 'Speakers', icon: Users, children: ['All Speakers', 'Add Speaker'] },
   { key: 'schedule', title: 'Schedule', icon: CalendarDays, children: ['Sessions Timeline', 'Tracks & Halls', 'Add Session'] },
@@ -276,7 +278,13 @@ function NavItem({item,active,open,onToggle,onSelect}){const I=item.icon;const p
 
 function renderPage(tab,conference,setConference,notify,selectedConferenceId,currentUser){
   if(tab==='Dashboard')return <Dashboard selectedConferenceId={selectedConferenceId}/>;
-  if(['Conference','Conference Details','Venue & Location','Branding','Conference Settings','Main Screen Slider'].includes(tab))return <ConferenceModule tab={tab} conference={conference} setConference={setConference} notify={notify} selectedConferenceId={selectedConferenceId}/>;
+  if(['Active / Inactive Menus','Active / Inactive Settings'].includes(tab))return <SettingsForm value={conference?.settings} conferenceName={conference?.name} onSave={v=>{
+    req('/admin/conference/settings',{method:'PUT',body:JSON.stringify({...v, conferenceId: selectedConferenceId || 1})}).then(data=>{
+      setConference(normalizeConference(data));
+      notify('Active / Inactive menu settings saved successfully');
+    });
+  }}/>;
+  if(['Conference','Conference Details','Active / Inactive Menus','Venue & Location','Branding','Conference Settings','Main Screen Slider'].includes(tab))return <ConferenceModule tab={tab} conference={conference} setConference={setConference} notify={notify} selectedConferenceId={selectedConferenceId}/>;
   if(['Participants','All Participants','Add Participant','Import Participants','Registration & Passes','QR Codes'].includes(tab))return <Participants tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
   if(['Speakers','All Speakers','Add Speaker'].includes(tab))return <Speakers tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
   if(['Schedule','Sessions Timeline','Tracks & Halls','Add Session','Sessions','Tracks','Halls'].includes(tab))return <Schedule tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
@@ -320,7 +328,7 @@ function ConferenceModule({tab,conference,setConference,notify,selectedConferenc
   };
   if(tab==='Venue & Location')return <VenueForm value={conference.venue} onSave={v=>save('/admin/conference/venue',v,'Venue updated')}/>;
   if(tab==='Branding')return <BrandingForm value={conference.branding} onSave={v=>save('/admin/conference/branding',v,'Branding updated')} notify={notify}/>;
-  if(tab==='Conference Settings')return <SettingsForm value={conference.settings} onSave={v=>save('/admin/conference/settings',v,'Settings updated')}/>;
+  if(tab==='Conference Settings' || tab==='Active / Inactive Menus')return <SettingsForm value={conference.settings} conferenceName={conference.name} onSave={v=>save('/admin/conference/settings',v,'Active / Inactive menu settings updated')}/>;
   return <ConferenceForm value={conference} onSave={v=>save('/admin/conference',v,'Conference details updated')}/>;
 }
 
@@ -867,7 +875,7 @@ function formState(initial){
 function ConferenceForm({value,onSave}){const[v,set,setV]=formState(value);return <FormShell icon={Building2} title="Conference Details" description="Edit the public conference profile consumed by Admin and Flutter." onReset={()=>setV(value)} onSave={()=>onSave(v)}><Field label="Conference Name" value={v.name} onChange={x=>set('name',x)}/><Field label="Short Name" value={v.shortName} onChange={x=>set('shortName',x)}/><Field label="Theme" value={v.theme} onChange={x=>set('theme',x)}/><SelectField label="Conference Status" value={v.status} onChange={x=>set('status',x)} options={['ACTIVE','DRAFT','PUBLISHED','ARCHIVED','INACTIVE']}/><Field type="date" label="Start Date" value={v.startDate} onChange={x=>set('startDate',x)}/><Field type="date" label="End Date" value={v.endDate} onChange={x=>set('endDate',x)}/><Field type="date" label="Registration Start" value={v.registrationStartDate} onChange={x=>set('registrationStartDate',x)}/><Field type="date" label="Registration End" value={v.registrationEndDate} onChange={x=>set('registrationEndDate',x)}/><Field label="Contact Person" value={v.contactPerson} onChange={x=>set('contactPerson',x)}/><Field label="Contact Phone" value={v.contactPhone} onChange={x=>set('contactPhone',x)}/><Field label="Contact Email" value={v.contactEmail} onChange={x=>set('contactEmail',x)}/><Field label="Website" value={v.website} onChange={x=>set('website',x)}/><Field label="Organizer" value={v.organizer} onChange={x=>set('organizer',x)}/><Field label="Host Institution" value={v.hostInstitution} onChange={x=>set('hostInstitution',x)}/><Field textarea label="Description" value={v.description} onChange={x=>set('description',x)}/><Field textarea label="Welcome Message" value={v.welcomeMessage} onChange={x=>set('welcomeMessage',x)}/><Field textarea label="About Conference" value={v.aboutConference} onChange={x=>set('aboutConference',x)}/></FormShell>}
 function VenueForm({value,onSave}){const[v,set,setV]=formState(value);return <FormShell icon={MapPin} title="Venue & Location" description="Publish map, address, parking, and direction data to the mobile app." onReset={()=>setV(value)} onSave={()=>onSave(v)}><Field label="Venue Name" value={v.name} onChange={x=>set('name',x)}/><Field label="City" value={v.city} onChange={x=>set('city',x)}/><Field label="State" value={v.state} onChange={x=>set('state',x)}/><Field label="Country" value={v.country} onChange={x=>set('country',x)}/><Field label="Pincode" value={v.pincode} onChange={x=>set('pincode',x)}/><Field label="Latitude" value={v.latitude} onChange={x=>set('latitude',x)}/><Field label="Longitude" value={v.longitude} onChange={x=>set('longitude',x)}/><Field label="Venue Contact Number" value={v.contactNumber} onChange={x=>set('contactNumber',x)}/><Field textarea label="Address" value={v.address} onChange={x=>set('address',x)}/><Field textarea label="Google Maps URL" value={v.googleMapsUrl} onChange={x=>set('googleMapsUrl',x)}/><Field textarea label="Parking Information" value={v.parkingInformation} onChange={x=>set('parkingInformation',x)}/><Field textarea label="Directions" value={v.directions} onChange={x=>set('directions',x)}/></FormShell>}
 function BrandingForm({value,onSave,notify}){const[v,set,setV]=formState(value);const upload=async(key,file)=>{if(!file)return;const reader=new FileReader();reader.onload=async()=>{const data=await req('/admin/uploads',{method:'POST',body:JSON.stringify({folder:'conference',file:{name:file.name,dataUrl:reader.result}})});set(key,data.url);notify('File uploaded')};reader.readAsDataURL(file)};return <FormShell icon={Palette} title="Branding" description="Control logos, banner imagery, splash assets, and conference colors." onReset={()=>setV(value)} onSave={()=>onSave(v)} preview={<BrandPreview branding={v}/>}>{[['Conference Logo','logoUrl'],['Organizer Logo','organizerLogoUrl'],['Banner','bannerUrl'],['Splash Screen','splashScreenUrl'],['Favicon','faviconUrl']].map(([label,key])=><label className="field uploadfield" key={key}><span>{label}</span><div><input value={v[key]||''} onChange={e=>set(key,e.target.value)} placeholder="URL or uploaded file path"/><label className="uploadBtn"><Upload size={16}/>Upload<input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>upload(key,e.target.files?.[0])}/></label></div></label>)}<Field type="color" label="Primary Color" value={v.primaryColor} onChange={x=>set('primaryColor',x)}/><Field type="color" label="Secondary Color" value={v.secondaryColor} onChange={x=>set('secondaryColor',x)}/><Field type="color" label="Accent Color" value={v.accentColor} onChange={x=>set('accentColor',x)}/><Field type="color" label="Background Color" value={v.backgroundColor} onChange={x=>set('backgroundColor',x)}/></FormShell>}
-function SettingsForm({value,onSave}){
+function SettingsForm({value,onSave,conferenceName}){
   const[v,set,setV]=formState(value);
   const sections = [
     {
@@ -909,7 +917,13 @@ function SettingsForm({value,onSave}){
   ];
 
   return (
-    <FormShell icon={Settings} title="Conference Settings" description="Toggle active / inactive status for any module, tab, or service across the Flutter mobile app in real-time." onReset={()=>setV(value)} onSave={()=>onSave(v)}>
+    <FormShell 
+      icon={SlidersHorizontal} 
+      title={`Active / Inactive Menus • ${conferenceName || 'Current Conference'}`} 
+      description="Each Conference Admin can independently toggle Active / Inactive status for any menu, tab, or service across the mobile app for their conference in real-time." 
+      onReset={()=>setV(value)} 
+      onSave={()=>onSave(v)}
+    >
       <div style={{gridColumn:'1 / -1', display:'flex', flexDirection:'column', gap:'20px'}}>
         {sections.map(sec => (
           <div key={sec.group} style={{background:'#f8fafc', padding:'16px 20px', borderRadius:'14px', border:'1px solid #e2e8f0'}}>
