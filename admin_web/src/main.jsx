@@ -1,6 +1,6 @@
-import React,{useEffect,useState} from 'react';
+import React,{useEffect,useState,useMemo} from 'react';
 import {createRoot} from 'react-dom/client';
-import {Bell,Building2,Bus,CalendarDays,CheckCircle,ChevronDown,FileCheck,Hotel,Image,LayoutDashboard,Lock,LogOut,MapPin,Palette,RefreshCw,Search,Settings,Shield,Upload,Users,QrCode,Maximize2,Minimize2,Printer,Tv,UserCheck,MessageCircle,Send,Share2,Menu,X,Video,Radio,Copy,ExternalLink} from 'lucide-react';
+import {Bell,Building2,Bus,CalendarDays,CheckCircle,ChevronDown,FileCheck,Hotel,Image,LayoutDashboard,Lock,LogOut,MapPin,Palette,RefreshCw,Search,Settings,Shield,Upload,Users,QrCode,Maximize2,Minimize2,Printer,Tv,UserCheck,MessageCircle,Send,Share2,Menu,X,Video,Radio,Copy,ExternalLink,ShieldCheck,Trash2,Edit2,CheckSquare,Square,UserPlus} from 'lucide-react';
 import {QRCodeSVG} from 'qrcode.react';
 import * as XLSX from 'xlsx';
 import './style.css';
@@ -45,24 +45,42 @@ function normalizeConference(data){
 
 function Login({onLogin}){const[e,setE]=useState(''),[p,setP]=useState(''),[busy,setBusy]=useState(false);const submit=async x=>{x.preventDefault();setBusy(true);try{const d=await req('/auth/login',{method:'POST',body:JSON.stringify({email:e,password:p})});localStorage.setItem('token',d.token);onLogin()}catch(err){alert(err.message)}finally{setBusy(false)}};return <div className="login"><form onSubmit={submit}><div className="brand-logo-container"><img src="/logo.png" alt="DY Patil Logo" className="brand-img" /></div><h1>Conference Control Room</h1><p>Manage live conference content, logistics, and mobile app data from MySQL.</p><input value={e} onChange={x=>setE(x.target.value)} placeholder="Email"/><input type="password" value={p} onChange={x=>setP(x.target.value)} placeholder="Password"/><button disabled={busy}>{busy?'Signing in...':'Sign in'}</button></form></div>}
 
-const menu=[
-  {title:'Dashboard',icon:LayoutDashboard},
-  {title:'Conference',icon:Building2,children:['Conference Details','Venue & Location','Branding','Conference Settings','Main Screen Slider']},
-  {title:'Participants',icon:Users,children:['All Participants','Add Participant','Import Participants','Registration & Passes','QR Codes']},
-  {title:'Speakers',icon:Users,children:['All Speakers','Add Speaker']},
-  {title:'Schedule',icon:CalendarDays,children:['Sessions Timeline','Tracks & Halls','Add Session']},
-  {title:'Zoom Stream Links',icon:Tv},
-  {title:'Accommodation',icon:Hotel,children:['Hotels','Rooms','Room Allocation']},
-  {title:'Transport',icon:Bus,children:['Vehicles','Drivers','Transport Assignments']},
-  {title:'Notices',icon:Bell,children:['Notices & Announcements','Send Push Notification']},
-  {title:'Gallery',icon:Image,children:['Photo Gallery','Upload Photo']},
-  {title:'Duties',icon:Shield,children:['Duty Roster','Assign Staff']},
-  {title:'Certificates',icon:FileCheck,children:['Issued Certificates','Issue Certificate']},
-  {title:'Feedback',icon:MessageCircle,children:['CME Feedback & Ratings','Feedback Analytics']},
-  {title:'Chat',icon:Bell,children:['Live Chat','Broadcast Message']},
-  {title:'Reports',icon:FileCheck,children:['Participant Reports','Accommodation Reports','Transport Reports','Certificate Reports','CME Feedback Reports']},
-  {title:'Admin Users',icon:Lock,children:['Admin Users List','Audit Logs']},
-  {title:'System Settings',icon:Settings},
+const MODULE_PERMISSIONS = [
+  { key: 'dashboard', label: 'Dashboard & Stats', group: 'Overview' },
+  { key: 'conference', label: 'Conference Details & Branding', group: 'Settings' },
+  { key: 'participants', label: 'Participants & Registrations', group: 'Delegates' },
+  { key: 'speakers', label: 'Speakers & Faculty', group: 'Program' },
+  { key: 'schedule', label: 'Sessions, Tracks & Halls', group: 'Program' },
+  { key: 'zoom', label: 'Zoom Links & Live Stream', group: 'Program' },
+  { key: 'accommodation', label: 'Hotels & Room Allocation', group: 'Hospitality' },
+  { key: 'transport', label: 'Transport & Vehicles', group: 'Hospitality' },
+  { key: 'notices', label: 'Notices & Push Alerts', group: 'Communications' },
+  { key: 'gallery', label: 'Photo Gallery & Uploads', group: 'Communications' },
+  { key: 'duties', label: 'Duty Roster & Staff', group: 'Hospitality' },
+  { key: 'certificates', label: 'Certificate Issuance', group: 'Delegates' },
+  { key: 'feedback', label: 'CME Feedback & Polls', group: 'Communications' },
+  { key: 'chat', label: 'Live Chat & Broadcasts', group: 'Communications' },
+  { key: 'reports', label: 'Reports & Export Analytics', group: 'Settings' },
+];
+
+const fullMenu = [
+  { key: 'dashboard', title: 'Dashboard', icon: LayoutDashboard },
+  { key: 'conference', title: 'Conference', icon: Building2, children: ['Conference Details', 'Venue & Location', 'Branding', 'Conference Settings', 'Main Screen Slider'] },
+  { key: 'participants', title: 'Participants', icon: Users, children: ['All Participants', 'Add Participant', 'Import Participants', 'Registration & Passes', 'QR Codes'] },
+  { key: 'speakers', title: 'Speakers', icon: Users, children: ['All Speakers', 'Add Speaker'] },
+  { key: 'schedule', title: 'Schedule', icon: CalendarDays, children: ['Sessions Timeline', 'Tracks & Halls', 'Add Session'] },
+  { key: 'zoom', title: 'Zoom Stream Links', icon: Tv },
+  { key: 'accommodation', title: 'Accommodation', icon: Hotel, children: ['Hotels', 'Rooms', 'Room Allocation'] },
+  { key: 'transport', title: 'Transport', icon: Bus, children: ['Vehicles', 'Drivers', 'Transport Assignments'] },
+  { key: 'notices', title: 'Notices', icon: Bell, children: ['Notices & Announcements', 'Send Push Notification'] },
+  { key: 'gallery', title: 'Gallery', icon: Image, children: ['Photo Gallery', 'Upload Photo'] },
+  { key: 'duties', title: 'Duties', icon: Shield, children: ['Duty Roster', 'Assign Staff'] },
+  { key: 'certificates', title: 'Certificates', icon: FileCheck, children: ['Issued Certificates', 'Issue Certificate'] },
+  { key: 'feedback', title: 'Feedback', icon: MessageCircle, children: ['CME Feedback & Ratings', 'Feedback Analytics'] },
+  { key: 'chat', title: 'Chat', icon: Bell, children: ['Live Chat', 'Broadcast Message'] },
+  { key: 'reports', title: 'Reports', icon: FileCheck, children: ['Participant Reports', 'Accommodation Reports', 'Transport Reports', 'Certificate Reports', 'CME Feedback Reports'] },
+  { key: 'team', title: 'Team & Sub-Admins', icon: ShieldCheck, children: ['Conference Staff & Sub-Admins', 'Audit Logs'] },
+  { key: 'settings', title: 'System Settings', icon: Settings },
 ];
 
 function App(){
@@ -72,17 +90,28 @@ function App(){
   const[conferencesList,setConferencesList]=useState([]);
   const[selectedConferenceId,setSelectedConferenceId]=useState(1);
   const[conference,setConference]=useState(null);
+  const[currentUser,setCurrentUser]=useState(null);
   const[toast,setToast]=useState('');
   const[mobileNavOpen,setMobileNavOpen]=useState(false);
   const[showCreateConfModal,setShowCreateConfModal]=useState(false);
 
   const loadConferencesList = () => {
-    req('/conferences').then(list => {
-      setConferencesList(list);
-      if(list.length && !list.find(c => c.id === selectedConferenceId)){
-        setSelectedConferenceId(list[0].id);
+    req('/admin/my-conferences').then(res => {
+      const userConfs = (res && res.conferences) ? res.conferences : [];
+      setConferencesList(userConfs);
+      setCurrentUser(res);
+      if(userConfs.length && !userConfs.find(c => c.id === selectedConferenceId)){
+        setSelectedConferenceId(userConfs[0].id);
       }
-    }).catch(e => console.warn(e));
+    }).catch(e => {
+      console.warn('my-conferences error, falling back:', e);
+      req('/conferences').then(list => {
+        setConferencesList(list);
+        if(list.length && !list.find(c => c.id === selectedConferenceId)){
+          setSelectedConferenceId(list[0].id);
+        }
+      }).catch(err => console.warn(err));
+    });
   };
 
   const loadConference = (confId) => {
@@ -123,10 +152,14 @@ function App(){
           if (eventName === 'conference_updated') {
             loadConference(selectedConferenceId);
           }
+          if (eventName === 'conference_created' || eventName === 'staff_updated') {
+            loadConferencesList();
+          }
         };
 
         const events = [
-          'conference_updated', 'participant_registered', 'participant_status_updated',
+          'conference_updated', 'conference_created', 'staff_updated',
+          'participant_registered', 'participant_status_updated',
           'participant_deleted', 'meal_scanned', 'new_scan', 'sessions_updated',
           'speakers_updated', 'new_notice', 'room_allocated', 'room_deallocated',
           'transport_assigned', 'gallery_updated', 'sliders_updated'
@@ -144,6 +177,17 @@ function App(){
     };
   },[logged, selectedConferenceId]);
 
+  const visibleMenu = useMemo(() => {
+    if (!currentUser) return fullMenu;
+    if (currentUser.isSuperAdmin) return fullMenu;
+    if (currentUser.isConferenceAdmin) {
+      return fullMenu.filter(m => m.key !== 'settings');
+    }
+    // Sub-Admin: filter strictly by permissions
+    const perms = Array.isArray(currentUser.permissions) ? currentUser.permissions : [];
+    return fullMenu.filter(m => perms.includes('all') || perms.includes(m.key));
+  }, [currentUser]);
+
   const notify=msg=>{setToast(msg);setTimeout(()=>setToast(''),2800)};
   if(!logged)return <Login onLogin={()=>setLogged(true)}/>;
 
@@ -153,11 +197,29 @@ function App(){
       <div className="sidebrand">
         <div className="sidebrand-header">
           <img src="/logo.png" alt="Logo" className="sidebrand-logo" />
-          <div style={{flex:1}}><strong>DY Patil</strong><span>Conference</span></div>
+          <div style={{flex:1}}>
+            <strong>DY Patil</strong>
+            <span>Conference</span>
+            {currentUser?.isSuperAdmin && (
+              <span style={{display:'inline-block',fontSize:'9px',fontWeight:800,background:'#8C1119',color:'#fff',padding:'2px 6px',borderRadius:'4px',marginTop:'2px'}}>
+                👑 SUPER ADMIN
+              </span>
+            )}
+            {currentUser?.isConferenceAdmin && (
+              <span style={{display:'inline-block',fontSize:'9px',fontWeight:800,background:'#b45309',color:'#fff',padding:'2px 6px',borderRadius:'4px',marginTop:'2px'}}>
+                👔 CONF ADMIN
+              </span>
+            )}
+            {currentUser?.isSubAdmin && (
+              <span style={{display:'inline-block',fontSize:'9px',fontWeight:800,background:'#0284c7',color:'#fff',padding:'2px 6px',borderRadius:'4px',marginTop:'2px'}}>
+                🧑‍💼 SUB ADMIN
+              </span>
+            )}
+          </div>
           <button className="sidebar-close-btn" onClick={()=>setMobileNavOpen(false)} title="Close menu"><X size={20}/></button>
         </div>
       </div>
-      <nav>{menu.map(item=><NavItem key={item.title} item={item} active={tab} open={open[item.title]} onToggle={()=>setOpen(o=>({...o,[item.title]:!o[item.title]}))} onSelect={handleSelectTab}/>)}</nav>
+      <nav>{visibleMenu.map(item=><NavItem key={item.title} item={item} active={tab} open={open[item.title]} onToggle={()=>setOpen(o=>({...o,[item.title]:!o[item.title]}))} onSelect={handleSelectTab}/>)}</nav>
       <button className="logout" onClick={()=>{localStorage.clear();setLogged(false)}}><LogOut size={18}/>Sign out</button>
     </aside>
     <main>
@@ -186,13 +248,15 @@ function App(){
               {conferencesList.map(c => (
                 <option key={c.id} value={c.id}>{c.short_name || c.name} (ID: {c.id})</option>
               ))}
-              <option value="NEW">➕ Host New Conference...</option>
+              {(currentUser?.isSuperAdmin || !currentUser) && (
+                <option value="NEW">➕ Host New Conference...</option>
+              )}
             </select>
           </div>
           <button className="icon" onClick={() => loadConference(selectedConferenceId)} title="Refresh conference"><RefreshCw size={18}/></button>
         </div>
       </header>
-      {renderPage(tab,conference,setConference,notify,selectedConferenceId)}
+      {renderPage(tab,conference,setConference,notify,selectedConferenceId,currentUser)}
       {toast&&<div className="toast">{toast}</div>}
       {showCreateConfModal && (
         <CreateConferenceModal
@@ -210,7 +274,7 @@ function App(){
 
 function NavItem({item,active,open,onToggle,onSelect}){const I=item.icon;const parentActive=active===item.title||item.children?.includes(active);return <div className="navgroup"><button className={parentActive?'active':''} onClick={()=>item.children?onToggle():onSelect(item.title)}><I size={18}/><span>{item.title}</span>{item.children&&<ChevronDown className={open?'rotated':''} size={15}/>}</button>{item.children&&open&&<div className="subnav">{item.children.map(child=><button key={child} className={active===child?'active child':'child'} onClick={()=>onSelect(child)}>{child}</button>)}</div>}</div>}
 
-function renderPage(tab,conference,setConference,notify,selectedConferenceId){
+function renderPage(tab,conference,setConference,notify,selectedConferenceId,currentUser){
   if(tab==='Dashboard')return <Dashboard selectedConferenceId={selectedConferenceId}/>;
   if(['Conference','Conference Details','Venue & Location','Branding','Conference Settings','Main Screen Slider'].includes(tab))return <ConferenceModule tab={tab} conference={conference} setConference={setConference} notify={notify} selectedConferenceId={selectedConferenceId}/>;
   if(['Participants','All Participants','Add Participant','Import Participants','Registration & Passes','QR Codes'].includes(tab))return <Participants tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
@@ -230,6 +294,7 @@ function renderPage(tab,conference,setConference,notify,selectedConferenceId){
   if(['Feedback','CME Feedback & Ratings','Feedback Analytics'].includes(tab))return <FeedbackView tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
   if(['Chat','Live Chat','Broadcast Message'].includes(tab))return <Chat tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
   if(['Reports','Participant Reports','Attendance Reports','Accommodation Reports','Transport Reports','Meal Reports','Certificate Reports','CME Feedback Reports'].includes(tab))return <Reports tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
+  if(['Team & Sub-Admins','Conference Staff & Sub-Admins','Team & Permissions'].includes(tab))return <ConferenceStaffManager conferenceId={selectedConferenceId} conference={conference} notify={notify} isSuperAdmin={currentUser?.isSuperAdmin}/>;
   if(['Admin Users','Admin Users List','Audit Logs'].includes(tab))return <AdminUsers tab={tab} notify={notify}/>;
   if(tab==='System Settings')return <SystemSettings notify={notify}/>;
   return <Placeholder title={tab}/>;
@@ -261,8 +326,10 @@ function ConferenceModule({tab,conference,setConference,notify,selectedConferenc
 
 function CreateConferenceModal({ onClose, onCreated, notify }) {
   const [v, setV] = useState({
-    name: '', shortName: '', theme: '', organizer: '', hostInstitution: '', venue: '', address: '', startDate: '', endDate: ''
+    name: '', shortName: '', theme: '', organizer: '', hostInstitution: '', venue: '', address: '', startDate: '', endDate: '',
+    adminName: '', adminEmail: '', adminPhone: '', adminPassword: ''
   });
+  const [showAdminFields, setShowAdminFields] = useState(true);
   const [busy, setBusy] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -286,28 +353,333 @@ function CreateConferenceModal({ onClose, onCreated, notify }) {
 
   return (
     <div className="modal-overlay">
-      <div className="modal" style={{maxWidth:'600px'}}>
+      <div className="modal" style={{maxWidth:'640px'}}>
         <div className="modal-header" style={{background:'#8C1119', color:'#fff'}}>
           <h3>➕ Host New Conference</h3>
           <button className="close" onClick={onClose} style={{color:'#fff'}}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
-          <div className="modal-body" style={{display:'flex', flexDirection:'column', gap:'12px'}}>
+          <div className="modal-body" style={{display:'flex', flexDirection:'column', gap:'12px', maxHeight:'70vh', overflowY:'auto'}}>
             <Field label="Conference Full Title *" value={v.name} onChange={x => setV(s => ({...s, name: x}))} />
-            <Field label="Short Name / Acronym" value={v.shortName} onChange={x => setV(s => ({...s, shortName: x}))} />
-            <Field label="Theme / Topic" value={v.theme} onChange={x => setV(s => ({...s, theme: x}))} />
-            <Field label="Organizer Body" value={v.organizer} onChange={x => setV(s => ({...s, organizer: x}))} />
-            <Field label="Host Institution" value={v.hostInstitution} onChange={x => setV(s => ({...s, hostInstitution: x}))} />
+            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px'}}>
+              <Field label="Short Name / Acronym" value={v.shortName} onChange={x => setV(s => ({...s, shortName: x}))} />
+              <Field label="Theme / Topic" value={v.theme} onChange={x => setV(s => ({...s, theme: x}))} />
+            </div>
+            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px'}}>
+              <Field label="Organizer Body" value={v.organizer} onChange={x => setV(s => ({...s, organizer: x}))} />
+              <Field label="Host Institution" value={v.hostInstitution} onChange={x => setV(s => ({...s, hostInstitution: x}))} />
+            </div>
             <Field label="Venue Name" value={v.venue} onChange={x => setV(s => ({...s, venue: x}))} />
             <Field textarea label="Venue Address" value={v.address} onChange={x => setV(s => ({...s, address: x}))} />
             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px'}}>
               <Field type="date" label="Start Date" value={v.startDate} onChange={x => setV(s => ({...s, startDate: x}))} />
               <Field type="date" label="End Date" value={v.endDate} onChange={x => setV(s => ({...s, endDate: x}))} />
             </div>
+
+            <div style={{marginTop:'8px', padding:'14px', background:'#f8fafc', borderRadius:'10px', border:'1px solid #e2e8f0'}}>
+              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'8px'}}>
+                <strong style={{color:'#8C1119', fontSize:'13px', display:'flex', alignItems:'center', gap:'6px'}}>
+                  <UserPlus size={16}/> Assign Initial Conference Admin (Optional)
+                </strong>
+                <button type="button" onClick={() => setShowAdminFields(!showAdminFields)} style={{fontSize:'12px', background:'transparent', border:'none', color:'#64748b', cursor:'pointer', textDecoration:'underline'}}>
+                  {showAdminFields ? 'Hide' : 'Show'}
+                </button>
+              </div>
+              {showAdminFields && (
+                <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
+                  <p style={{fontSize:'12px', color:'#64748b', margin:0}}>This admin will have full management control of this conference and can invite Sub-Admins.</p>
+                  <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>
+                    <Field label="Admin Full Name" value={v.adminName} onChange={x => setV(s => ({...s, adminName: x}))} />
+                    <Field label="Admin Email" value={v.adminEmail} onChange={x => setV(s => ({...s, adminEmail: x}))} />
+                  </div>
+                  <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>
+                    <Field label="Admin Phone" value={v.adminPhone} onChange={x => setV(s => ({...s, adminPhone: x}))} />
+                    <Field type="password" label="Temporary Password" value={v.adminPassword} onChange={x => setV(s => ({...s, adminPassword: x}))} />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
           <div className="modal-footer">
             <button type="button" onClick={onClose}>Cancel</button>
             <button type="submit" className="primary" disabled={busy}>{busy ? 'Creating...' : 'Create Conference'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function ConferenceStaffManager({ conferenceId, conference, notify, isSuperAdmin }) {
+  const [staff, setStaff] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [editingStaff, setEditingStaff] = useState(null);
+
+  const loadStaff = async () => {
+    setBusy(true);
+    try {
+      const data = await req(`/admin/conference-staff?conferenceId=${conferenceId || 1}`);
+      setStaff(Array.isArray(data) ? data : (data.data || []));
+    } catch(err) {
+      console.warn('Load staff error:', err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  useEffect(() => { loadStaff(); }, [conferenceId]);
+
+  const handleDelete = async (item) => {
+    if (!confirm(`Are you sure you want to remove ${item.name} from managing this conference?`)) return;
+    try {
+      await req(`/admin/conference-staff/${item.id}`, { method: 'DELETE' });
+      notify('Staff member removed successfully');
+      loadStaff();
+    } catch(err) {
+      alert('Failed to remove staff: ' + err.message);
+    }
+  };
+
+  return (
+    <div className="panel">
+      <div className="pagehead">
+        <div>
+          <h3>Team & Permissions Management</h3>
+          <p>Assign Conference Admins and Sub-Admins with module-level permissions for <b>{conference?.name || 'this conference'}</b>.</p>
+        </div>
+        <div className="actions">
+          <button className="primary" onClick={() => { setEditingStaff(null); setShowModal(true); }}>
+            + Add Conference Staff / Sub-Admin
+          </button>
+        </div>
+      </div>
+
+      <div className="table-responsive" style={{overflowX:'auto'}}>
+        <table>
+          <thead>
+            <tr>
+              <th>Staff Member</th>
+              <th>Conference Role</th>
+              <th>Module Permissions</th>
+              <th>Last Active</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {staff.map(member => (
+              <tr key={member.id}>
+                <td>
+                  <div style={{fontWeight: 700, color: '#1e293b'}}>{member.name}</div>
+                  <small style={{color: '#64748b'}}>{member.email}</small>
+                  {member.phone && <small style={{color: '#64748b', display:'block'}}>📞 {member.phone}</small>}
+                </td>
+                <td>
+                  {member.staff_role === 'ADMIN' ? (
+                    <span className="pill" style={{background: '#8C1119', color: '#fff', fontWeight: 700}}>
+                      👔 Conference Admin (Full Access)
+                    </span>
+                  ) : (
+                    <span className="pill" style={{background: '#0284c7', color: '#fff', fontWeight: 700}}>
+                      🧑‍💼 Sub-Admin (Restricted)
+                    </span>
+                  )}
+                </td>
+                <td style={{maxWidth: '360px'}}>
+                  {member.staff_role === 'ADMIN' || (Array.isArray(member.permissions) && member.permissions.includes('all')) ? (
+                    <span style={{fontSize: '12px', color: '#16a34a', fontWeight: 600}}>✅ Full Access to All Conference Modules</span>
+                  ) : (
+                    <div style={{display:'flex', flexWrap:'wrap', gap:'4px'}}>
+                      {Array.isArray(member.permissions) && member.permissions.length > 0 ? (
+                        member.permissions.map(p => {
+                          const label = MODULE_PERMISSIONS.find(m => m.key === p)?.label || p;
+                          return (
+                            <span key={p} className="pill" style={{fontSize:'10px', background:'#f1f5f9', color:'#334155', border:'1px solid #cbd5e1'}}>
+                              {label}
+                            </span>
+                          );
+                        })
+                      ) : (
+                        <span style={{color:'#94a3b8', fontSize:'12px'}}>No active permissions assigned</span>
+                      )}
+                    </div>
+                  )}
+                </td>
+                <td>
+                  <small style={{color: '#64748b'}}>
+                    {member.last_login_at ? new Date(member.last_login_at).toLocaleDateString() : 'Never logged in'}
+                  </small>
+                </td>
+                <td>
+                  <div style={{display:'flex', gap:'8px'}}>
+                    <button className="icon" title="Edit Staff & Permissions" onClick={() => { setEditingStaff(member); setShowModal(true); }}>
+                      <Edit2 size={16} />
+                    </button>
+                    <button className="icon" title="Remove Staff Member" onClick={() => handleDelete(member)} style={{color: '#dc2626'}}>
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {staff.length === 0 && !busy && (
+              <tr>
+                <td colSpan={5} style={{textAlign: 'center', padding: '30px', color: '#94a3b8'}}>
+                  No staff members or sub-admins assigned to this conference yet. Click "+ Add Conference Staff / Sub-Admin" to assign one.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {showModal && (
+        <ConferenceStaffModal
+          conferenceId={conferenceId}
+          staff={editingStaff}
+          onClose={() => { setShowModal(false); setEditingStaff(null); }}
+          onSave={async (v) => {
+            try {
+              if (editingStaff) {
+                await req(`/admin/conference-staff/${editingStaff.id}`, { method: 'PUT', body: JSON.stringify(v) });
+                notify('Staff member updated successfully');
+              } else {
+                await req('/admin/conference-staff', { method: 'POST', body: JSON.stringify({ ...v, conferenceId }) });
+                notify('Staff member assigned successfully');
+              }
+              setShowModal(false);
+              setEditingStaff(null);
+              loadStaff();
+            } catch(err) {
+              alert('Error saving staff member: ' + err.message);
+            }
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function ConferenceStaffModal({ conferenceId, staff, onClose, onSave }) {
+  const isEdit = !!staff;
+  const [name, setName] = useState(staff?.name || '');
+  const [email, setEmail] = useState(staff?.email || '');
+  const [phone, setPhone] = useState(staff?.phone || '');
+  const [password, setPassword] = useState('');
+  const [role, setRole] = useState(staff?.staff_role || (staff?.role === 'SUB_ADMIN' ? 'SUB_ADMIN' : 'ADMIN'));
+  
+  let initialPerms = [];
+  if (Array.isArray(staff?.permissions)) {
+    initialPerms = staff.permissions;
+  } else if (typeof staff?.permissions === 'string') {
+    try { initialPerms = JSON.parse(staff.permissions); } catch(_) { initialPerms = []; }
+  }
+  const [permissions, setPermissions] = useState(initialPerms);
+  const [busy, setBusy] = useState(false);
+
+  const togglePermission = (key) => {
+    setPermissions(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
+  };
+
+  const selectAllPerms = () => {
+    setPermissions(MODULE_PERMISSIONS.map(m => m.key));
+  };
+
+  const clearAllPerms = () => {
+    setPermissions([]);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!name.trim()) { alert('Name is required'); return; }
+    if (!email.trim()) { alert('Email is required'); return; }
+    if (!isEdit && !password.trim()) { alert('Password is required for new accounts'); return; }
+
+    setBusy(true);
+    try {
+      await onSave({
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        phone: phone.trim(),
+        password: password.trim() || undefined,
+        role,
+        permissions: role === 'ADMIN' ? ['all'] : permissions
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal" style={{maxWidth: '680px'}}>
+        <div className="modal-header" style={{background: '#8C1119', color: '#fff'}}>
+          <h3>{isEdit ? '✏️ Edit Conference Staff & Permissions' : '➕ Add Staff / Sub-Admin'}</h3>
+          <button className="close" onClick={onClose} style={{color: '#fff'}}>&times;</button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body" style={{display: 'flex', flexDirection: 'column', gap: '14px', maxHeight: '70vh', overflowY: 'auto'}}>
+            <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px'}}>
+              <Field label="Full Name *" value={name} onChange={setName} />
+              <Field label="Email Address *" value={email} onChange={setEmail} />
+            </div>
+            <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px'}}>
+              <Field label="Phone / Mobile Number" value={phone} onChange={setPhone} />
+              <Field type="password" label={isEdit ? "New Password (leave blank to keep current)" : "Password *"} value={password} onChange={setPassword} />
+            </div>
+
+            <div>
+              <label style={{fontWeight: 700, fontSize: '13px', display: 'block', marginBottom: '6px'}}>Assigned Role in this Conference</label>
+              <div style={{display: 'flex', gap: '14px'}}>
+                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '10px 14px', border: role==='ADMIN'?'2px solid #8C1119':'1px solid #cbd5e1', borderRadius: '8px', background: role==='ADMIN'?'#fff5f5':'#fff'}}>
+                  <input type="radio" name="staffRole" value="ADMIN" checked={role === 'ADMIN'} onChange={() => setRole('ADMIN')} />
+                  <div>
+                    <strong style={{color: '#8C1119', display: 'block'}}>👔 Conference Admin</strong>
+                    <small style={{color: '#64748b'}}>Full control of this conference + can add Sub-Admins</small>
+                  </div>
+                </label>
+                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '10px 14px', border: role==='SUB_ADMIN'?'2px solid #0284c7':'1px solid #cbd5e1', borderRadius: '8px', background: role==='SUB_ADMIN'?'#f0f9ff':'#fff'}}>
+                  <input type="radio" name="staffRole" value="SUB_ADMIN" checked={role === 'SUB_ADMIN'} onChange={() => setRole('SUB_ADMIN')} />
+                  <div>
+                    <strong style={{color: '#0284c7', display: 'block'}}>🧑‍💼 Sub-Admin</strong>
+                    <small style={{color: '#64748b'}}>Granted specific module permissions below</small>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {role === 'SUB_ADMIN' && (
+              <div style={{marginTop: '8px', padding: '14px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0'}}>
+                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}>
+                  <strong style={{fontSize: '13px', color: '#1e293b'}}>Allowed Module Permissions:</strong>
+                  <div style={{display: 'flex', gap: '8px'}}>
+                    <button type="button" onClick={selectAllPerms} style={{padding: '4px 8px', fontSize: '11px', background: '#e2e8f0', border: 'none', borderRadius: '4px', cursor: 'pointer'}}>
+                      Select All
+                    </button>
+                    <button type="button" onClick={clearAllPerms} style={{padding: '4px 8px', fontSize: '11px', background: '#fee2e2', color: '#991b1b', border: 'none', borderRadius: '4px', cursor: 'pointer'}}>
+                      Clear All
+                    </button>
+                  </div>
+                </div>
+                <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px'}}>
+                  {MODULE_PERMISSIONS.map(m => {
+                    const checked = permissions.includes(m.key);
+                    return (
+                      <label key={m.key} style={{display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer', background: checked ? '#e0f2fe' : '#ffffff', padding: '8px 10px', borderRadius: '6px', border: checked ? '1px solid #7dd3fc' : '1px solid #cbd5e1'}}>
+                        <input type="checkbox" checked={checked} onChange={() => togglePermission(m.key)} />
+                        <span>{m.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="modal-footer">
+            <button type="button" onClick={onClose}>Cancel</button>
+            <button type="submit" className="primary" disabled={busy}>
+              {busy ? 'Saving...' : (isEdit ? 'Save Changes' : 'Assign to Conference')}
+            </button>
           </div>
         </form>
       </div>

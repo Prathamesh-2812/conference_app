@@ -363,6 +363,7 @@ async function runMigrations(){
       console.warn("Participants composite key migration notice:", migErr.message);
     }
 
+    try {
       await pool.query(`
         UPDATE conferences SET 
           name = 'MAPCON 2026',
@@ -474,6 +475,37 @@ async function runMigrations(){
       await pool.query(`ALTER TABLE conference_settings ADD COLUMN enable_sponsors TINYINT(1) DEFAULT 1`).catch(() => {});
       await pool.query(`ALTER TABLE conference_settings ADD COLUMN enable_notices TINYINT(1) DEFAULT 1`).catch(() => {});
     } catch(_) {}
+
+    try {
+      await pool.query(`ALTER TABLE users MODIFY COLUMN role VARCHAR(50) DEFAULT 'PARTICIPANT'`).catch(() => {});
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS conference_staff (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          user_id INT NOT NULL,
+          conference_id INT NOT NULL,
+          role ENUM('ADMIN', 'SUB_ADMIN') NOT NULL DEFAULT 'ADMIN',
+          permissions JSON NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+          FOREIGN KEY (conference_id) REFERENCES conferences(id) ON DELETE CASCADE,
+          UNIQUE KEY unique_user_conf (user_id, conference_id)
+        )
+      `);
+      // Auto-assign existing ADMIN users to conference 1 if table is empty
+      const [staffCount] = await pool.query('SELECT COUNT(*) as count FROM conference_staff');
+      if (staffCount[0]?.count === 0) {
+        const [adminUsers] = await pool.query("SELECT id FROM users WHERE role IN ('ADMIN', 'SUPER_ADMIN')");
+        for (const admin of adminUsers) {
+          await pool.query(`
+            INSERT IGNORE INTO conference_staff (user_id, conference_id, role, permissions)
+            VALUES (?, 1, 'ADMIN', JSON_ARRAY('all'))
+          `, [admin.id]).catch(() => {});
+        }
+      }
+    } catch(staffErr) {
+      console.warn('Conference staff migration notice:', staffErr.message);
+    }
   }catch(err){
     console.log('Migration check:', err.message);
   }
@@ -482,6 +514,11 @@ runMigrations();
 async function ensureConferenceChildren(conferenceId=1){
   await pool.query(`INSERT INTO conference_branding(conference_id) VALUES(?) ON DUPLICATE KEY UPDATE conference_id=conference_id`,[conferenceId]);
   await pool.query(`INSERT INTO conference_settings(conference_id) VALUES(?) ON DUPLICATE KEY UPDATE conference_id=conference_id`,[conferenceId]);
+  await pool.query(`
+    INSERT INTO venues (conference_id, name, address, city, state, country, pincode, google_maps_url, parking_information, directions, contact_number)
+    VALUES (?, 'Hotel Sayaji, Kolhapur', 'Old Pune-Bangalore Highway, Kawala Naka, Kolhapur, Maharashtra 416001', 'Kolhapur', 'Maharashtra', 'India', '416001', 'https://maps.app.goo.gl/NAngo7dJh9DdEWz87', 'Dedicated valet and delegate parking available at Hotel Sayaji premises.', 'Located at Kawala Naka on Old Pune-Bangalore Highway, Kolhapur.', '0231 2555555')
+    ON DUPLICATE KEY UPDATE conference_id = conference_id
+  `).catch(() => {});
 }
 async function getConference(conferenceId=1){
   await ensureConferenceChildren(conferenceId);
@@ -1036,10 +1073,183 @@ app.get('/api/conferences/:id',asyncRoute(async(req,res)=>{
   res.json(c);
 }));
 
+app.get('/api/admin/my-conferences', auth, asyncRoute(async(req, res) => {
+  const user = req.user;
+  if (user.role === 'SUPER_ADMIN') {
+    const [confs] = await pool.query('SELECT * FROM conferences ORDER BY start_date DESC, id DESC');
+    return ok(res, {
+      role: 'SUPER_ADMIN',
+      isSuperAdmin: true,
+      conferences: confs,
+      permissions: ['all']
+    }, 'Accessible conferences retrieved');
+  }
+
+  const [staffRows] = await pool.query(`
+    SELECT c.*, cs.id as staff_id, cs.role as staff_role, cs.permissions
+    FROM conference_staff cs
+    JOIN conferences c ON c.id = cs.conference_id
+    WHERE cs.user_id = ? AND c.active = 1
+    ORDER BY c.start_date DESC, c.id DESC
+  `, [user.id]);
+
+  if (staffRows.length === 0 && (user.role === 'ADMIN' || user.role === 'EVENT_MANAGER')) {
+    const [confs] = await pool.query('SELECT * FROM conferences ORDER BY start_date DESC, id DESC');
+    return ok(res, {
+      role: 'ADMIN',
+      isSuperAdmin: false,
+      isConferenceAdmin: true,
+      conferences: confs,
+      permissions: ['all']
+    }, 'Accessible conferences retrieved');
+  }
+
+  const isConferenceAdmin = staffRows.some(r => r.staff_role === 'ADMIN');
+  const isSubAdmin = !isConferenceAdmin;
+
+  let combinedPermissions = [];
+  staffRows.forEach(r => {
+    let p = r.permissions;
+    if (typeof p === 'string') {
+      try { p = JSON.parse(p); } catch(_) { p = []; }
+    }
+    if (Array.isArray(p)) {
+      combinedPermissions.push(...p);
+    }
+  });
+
+  ok(res, {
+    role: isConferenceAdmin ? 'ADMIN' : 'SUB_ADMIN',
+    isSuperAdmin: false,
+    isConferenceAdmin,
+    isSubAdmin,
+    conferences: staffRows,
+    permissions: isConferenceAdmin ? ['all'] : [...new Set(combinedPermissions)]
+  }, 'Accessible conferences retrieved');
+}));
+
+app.get('/api/admin/conference-staff', auth, roles('ADMIN', 'SUPER_ADMIN', 'SUB_ADMIN'), asyncRoute(async(req, res) => {
+  const confId = Number(req.query.conferenceId) || 1;
+  const [rows] = await pool.query(`
+    SELECT cs.id, cs.user_id, cs.conference_id, cs.role as staff_role, cs.permissions, cs.created_at, cs.updated_at,
+           u.name, u.email, u.phone, u.role as global_role, u.designation, u.last_login_at
+    FROM conference_staff cs
+    JOIN users u ON u.id = cs.user_id
+    WHERE cs.conference_id = ?
+    ORDER BY cs.role ASC, u.name ASC
+  `, [confId]);
+
+  const parsed = rows.map(r => {
+    let perms = r.permissions;
+    if (typeof perms === 'string') {
+      try { perms = JSON.parse(perms); } catch(_) { perms = []; }
+    }
+    return { ...r, permissions: perms || [] };
+  });
+
+  ok(res, parsed, 'Conference staff retrieved');
+}));
+
+app.post('/api/admin/conference-staff', auth, roles('ADMIN', 'SUPER_ADMIN'), [
+  body('email').isEmail(),
+  body('name').notEmpty()
+], validate, asyncRoute(async(req, res) => {
+  const { conferenceId, name, email, phone, password, role, permissions } = req.body;
+  const confId = Number(conferenceId) || 1;
+  const staffRole = role === 'ADMIN' ? 'ADMIN' : 'SUB_ADMIN';
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanPhone = phone ? phone.trim() : null;
+
+  let [[targetUser]] = await pool.query('SELECT id, password_hash FROM users WHERE LOWER(email) = ?', [cleanEmail]);
+  let userId;
+
+  if (targetUser) {
+    userId = targetUser.id;
+    const updates = ['name = ?'];
+    const params = [name];
+    if (cleanPhone) { updates.push('phone = ?'); params.push(cleanPhone); }
+    if (password && password.trim()) {
+      const hash = await bcrypt.hash(password.trim(), 10);
+      updates.push('password_hash = ?');
+      params.push(hash);
+    }
+    params.push(userId);
+    await pool.query(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, params);
+  } else {
+    const rawPass = (password && password.trim()) ? password.trim() : (cleanPhone || 'Pass@123');
+    const hash = await bcrypt.hash(rawPass, 10);
+    const [userRes] = await pool.query(
+      'INSERT INTO users (name, email, phone, password_hash, role) VALUES (?, ?, ?, ?, ?)',
+      [name, cleanEmail, cleanPhone, hash, staffRole === 'ADMIN' ? 'ADMIN' : 'SUB_ADMIN']
+    );
+    userId = userRes.insertId;
+  }
+
+  const permsJson = JSON.stringify(Array.isArray(permissions) ? permissions : (staffRole === 'ADMIN' ? ['all'] : []));
+
+  await pool.query(`
+    INSERT INTO conference_staff (user_id, conference_id, role, permissions)
+    VALUES (?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE role = VALUES(role), permissions = VALUES(permissions), updated_at = NOW()
+  `, [userId, confId, staffRole, permsJson]);
+
+  await audit(req, 'staff.assign', 'conference_staff', confId, null, { userId, email: cleanEmail, role: staffRole, permissions });
+  io.emit('staff_updated', { conferenceId: confId });
+
+  ok(res, { success: true, userId, conferenceId: confId, role: staffRole }, 'Staff member assigned successfully');
+}));
+
+app.put('/api/admin/conference-staff/:id', auth, roles('ADMIN', 'SUPER_ADMIN'), validate, asyncRoute(async(req, res) => {
+  const staffId = req.params.id;
+  const { name, email, phone, password, role, permissions } = req.body;
+
+  const [[staffRecord]] = await pool.query('SELECT * FROM conference_staff WHERE id = ?', [staffId]);
+  if (!staffRecord) return res.status(404).json({ message: 'Staff assignment not found' });
+
+  if (name || email || phone || password) {
+    const updates = [];
+    const params = [];
+    if (name) { updates.push('name = ?'); params.push(name); }
+    if (email) { updates.push('email = ?'); params.push(email.trim().toLowerCase()); }
+    if (phone) { updates.push('phone = ?'); params.push(phone.trim()); }
+    if (password && password.trim()) {
+      const hash = await bcrypt.hash(password.trim(), 10);
+      updates.push('password_hash = ?');
+      params.push(hash);
+    }
+    if (updates.length) {
+      params.push(staffRecord.user_id);
+      await pool.query(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, params);
+    }
+  }
+
+  const staffRole = role ? (role === 'ADMIN' ? 'ADMIN' : 'SUB_ADMIN') : staffRecord.role;
+  const permsJson = permissions !== undefined ? JSON.stringify(Array.isArray(permissions) ? permissions : []) : staffRecord.permissions;
+
+  await pool.query('UPDATE conference_staff SET role = ?, permissions = ?, updated_at = NOW() WHERE id = ?', [staffRole, permsJson, staffId]);
+
+  await audit(req, 'staff.update', 'conference_staff', staffId, null, { role: staffRole, permissions });
+  io.emit('staff_updated', { conferenceId: staffRecord.conference_id });
+
+  ok(res, { success: true, staffId }, 'Staff member updated successfully');
+}));
+
+app.delete('/api/admin/conference-staff/:id', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncRoute(async(req, res) => {
+  const staffId = req.params.id;
+  const [[staffRecord]] = await pool.query('SELECT * FROM conference_staff WHERE id = ?', [staffId]);
+  if (!staffRecord) return res.status(404).json({ message: 'Staff assignment not found' });
+
+  await pool.query('DELETE FROM conference_staff WHERE id = ?', [staffId]);
+  await audit(req, 'staff.delete', 'conference_staff', staffId, null, { staffId, userId: staffRecord.user_id });
+  io.emit('staff_updated', { conferenceId: staffRecord.conference_id });
+
+  ok(res, { success: true }, 'Staff member removed from conference');
+}));
+
 app.post('/api/admin/conferences', auth, roles('ADMIN','SUPER_ADMIN'), [
   body('name').notEmpty()
 ], validate, asyncRoute(async(req, res) => {
-  const { name, shortName, description, theme, organizer, hostInstitution, venue, address, startDate, endDate } = req.body;
+  const { name, shortName, description, theme, organizer, hostInstitution, venue, address, startDate, endDate, adminName, adminEmail, adminPhone, adminPassword } = req.body;
   const [r] = await pool.query(`
     INSERT INTO conferences(name, short_name, description, theme, organizer, host_institution, venue, address, start_date, end_date, active)
     VALUES(?,?,?,?,?,?,?,?,?,?,1)
@@ -1047,6 +1257,30 @@ app.post('/api/admin/conferences', auth, roles('ADMIN','SUPER_ADMIN'), [
   
   const confId = r.insertId;
   await ensureConferenceChildren(confId);
+
+  // If admin details provided, assign this user as Conference Admin
+  if (adminEmail && adminEmail.trim()) {
+    const cleanEmail = adminEmail.trim().toLowerCase();
+    const cleanPhone = adminPhone ? adminPhone.trim() : null;
+    const aName = adminName ? adminName.trim() : 'Conference Admin';
+    const aPass = adminPassword ? adminPassword.trim() : (cleanPhone || 'Admin@123');
+
+    let [[existing]] = await pool.query('SELECT id FROM users WHERE LOWER(email) = ?', [cleanEmail]);
+    let adminUserId;
+    if (existing) {
+      adminUserId = existing.id;
+    } else {
+      const hash = await bcrypt.hash(aPass, 10);
+      const [uRes] = await pool.query('INSERT INTO users(name, email, phone, password_hash, role) VALUES(?, ?, ?, ?, ?)', [aName, cleanEmail, cleanPhone, hash, 'ADMIN']);
+      adminUserId = uRes.insertId;
+    }
+    await pool.query(`
+      INSERT INTO conference_staff (user_id, conference_id, role, permissions)
+      VALUES (?, ?, 'ADMIN', JSON_ARRAY('all'))
+      ON DUPLICATE KEY UPDATE role = 'ADMIN', permissions = JSON_ARRAY('all')
+    `, [adminUserId, confId]);
+  }
+
   const newConf = await getConference(confId);
   await audit(req, 'conference.create', 'conference', confId, null, newConf);
   io.emit('conference_created', newConf);
