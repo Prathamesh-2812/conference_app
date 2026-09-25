@@ -19,4 +19,4 @@ String get apiBaseUrl {
 const String conferenceName = 'DYPESCONF 2026';
 const String conferenceShort = 'DYPESCONF 2026';
 const String defaultBanner = 'assets/images/banner.jpg';
-const String defaultMapUrl = 'https://www.google.com/maps/search/?api=1&query=Hotel+Sayaji+Kolhapur';
+const String defaultMapUrl = 'https://maps.app.goo.gl/NAngo7dJh9DdEWz87';

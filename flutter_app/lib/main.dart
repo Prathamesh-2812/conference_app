@@ -306,7 +306,9 @@ class ConferenceInfo {
       parkingInfo: '${venue['parkingInformation'] ?? 'Dedicated VIP & Delegate parking available near Gate No. 2 with valet assistance.'}',
       directions: '${venue['directions'] ?? 'Use the main Bawada campus entrance and follow conference signage.'}',
       venueContact: '${venue['contactNumber'] ?? '1800123456'}',
-      mapUrl: '${venue['googleMapsUrl'] ?? defaultMapUrl}',
+      mapUrl: (venue['googleMapsUrl'] != null && venue['googleMapsUrl'].toString().trim().isNotEmpty)
+          ? venue['googleMapsUrl'].toString().trim()
+          : defaultMapUrl,
       startDate: '${json['startDate'] ?? ''}',
       endDate: '${json['endDate'] ?? ''}',
       contactEmail: '${json['contactEmail'] ?? ''}',

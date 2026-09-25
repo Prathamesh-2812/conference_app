@@ -363,7 +363,6 @@ async function runMigrations(){
       console.warn("Participants composite key migration notice:", migErr.message);
     }
 
-    try {
       await pool.query(`
         UPDATE conferences SET 
           name = 'MAPCON 2026',
@@ -378,6 +377,22 @@ async function runMigrations(){
           address = 'Old Pune-Bangalore Highway, Kawala Naka, Kolhapur, Maharashtra 416001'
         WHERE id = 1;
       `);
+
+      await pool.query(`
+        INSERT INTO venues (conference_id, name, address, city, state, country, pincode, google_maps_url, parking_information, directions, contact_number)
+        VALUES (1, 'Hotel Sayaji, Kolhapur', 'Old Pune-Bangalore Highway, Kawala Naka, Kolhapur, Maharashtra 416001', 'Kolhapur', 'Maharashtra', 'India', '416001', 'https://maps.app.goo.gl/NAngo7dJh9DdEWz87', 'Dedicated valet and delegate parking available at Hotel Sayaji premises.', 'Located at Kawala Naka on Old Pune-Bangalore Highway, Kolhapur. 5 mins from CBS, 10 mins from Railway Station, 15 mins from Kolhapur Airport (KLH).', '0231 2555555')
+        ON DUPLICATE KEY UPDATE
+          google_maps_url = 'https://maps.app.goo.gl/NAngo7dJh9DdEWz87',
+          name = 'Hotel Sayaji, Kolhapur',
+          address = 'Old Pune-Bangalore Highway, Kawala Naka, Kolhapur, Maharashtra 416001',
+          city = 'Kolhapur',
+          state = 'Maharashtra',
+          country = 'India',
+          pincode = '416001',
+          parking_information = 'Dedicated valet and delegate parking available at Hotel Sayaji premises.',
+          directions = 'Located at Kawala Naka on Old Pune-Bangalore Highway, Kolhapur. 5 mins from CBS, 10 mins from Railway Station, 15 mins from Kolhapur Airport (KLH).',
+          contact_number = '0231 2555555';
+      `).catch(() => {});
     } catch(confErr) {
       console.warn("Conference auto-update notice:", confErr.message);
     }
