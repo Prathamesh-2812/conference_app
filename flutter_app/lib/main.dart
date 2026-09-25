@@ -7965,18 +7965,6 @@ class EmergencyScreen extends StatelessWidget {
             subtitle: 'Call 108 • On-campus medical unit',
             onTap: () => launchUrl(Uri.parse('tel:108')),
           ),
-          CardButton(
-            icon: Icons.security,
-            title: 'Campus Security & Control Room',
-            subtitle: 'Call 100 • Emergency Security Cell',
-            onTap: () => launchUrl(Uri.parse('tel:100')),
-          ),
-          CardButton(
-            icon: Icons.location_on,
-            title: 'Conference Location Map',
-            subtitle: 'Open in Google Maps for campus navigation',
-            onTap: () => launchUrl(Uri.parse(conference.mapUrl), mode: LaunchMode.externalApplication),
-          ),
         ],
       ),
     );
