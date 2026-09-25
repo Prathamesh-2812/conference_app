@@ -51,7 +51,7 @@ const menu=[
   {title:'Participants',icon:Users,children:['All Participants','Add Participant','Import Participants','Registration & Passes','QR Codes']},
   {title:'Speakers',icon:Users,children:['All Speakers','Add Speaker']},
   {title:'Schedule',icon:CalendarDays,children:['Sessions Timeline','Tracks & Halls','Add Session']},
-  {title:'Hybrid & Live Stream',icon:Tv,children:['Zoom Stream Settings','Session Live Controls','Hybrid Attendees']},
+  {title:'Zoom Stream Links',icon:Tv},
   {title:'Accommodation',icon:Hotel,children:['Hotels','Rooms','Room Allocation']},
   {title:'Transport',icon:Bus,children:['Vehicles','Drivers','Transport Assignments']},
   {title:'Notices',icon:Bell,children:['Notices & Announcements','Send Push Notification']},
@@ -216,7 +216,7 @@ function renderPage(tab,conference,setConference,notify,selectedConferenceId){
   if(['Participants','All Participants','Add Participant','Import Participants','Registration & Passes','QR Codes'].includes(tab))return <Participants tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
   if(['Speakers','All Speakers','Add Speaker'].includes(tab))return <Speakers tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
   if(['Schedule','Sessions Timeline','Tracks & Halls','Add Session','Sessions','Tracks','Halls'].includes(tab))return <Schedule tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
-  if(['Hybrid & Live Stream','Zoom Stream Settings','Session Live Controls','Hybrid Attendees'].includes(tab))return <HybridLiveStream tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
+  if(['Zoom Stream Links','Zoom Links','Hybrid & Live Stream','Zoom Stream Settings'].includes(tab))return <ZoomLinksModule tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
   if(['Accommodation','Hotels','Rooms'].includes(tab))return <Hotels tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
   if(tab==='Room Allocation')return <RoomAllocation notify={notify} selectedConferenceId={selectedConferenceId}/>;
   if(['Transport','Vehicles','Drivers'].includes(tab))return <Transport tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
@@ -4214,610 +4214,342 @@ function SystemSettings({notify}){
   </div>;
 }
 
-function HybridLiveStream({tab, notify, selectedConferenceId}){
+function ZoomLinksModule({notify, selectedConferenceId}){
   const confId = selectedConferenceId || 1;
-  const [subTab, setSubTab] = useState(tab === 'Session Live Controls' ? 'sessions' : (tab === 'Hybrid Attendees' ? 'attendees' : 'settings'));
-  const [stream, setStream] = useState({
-    stream_title: 'MAPCON 2026 Hybrid & Online Main Stage',
-    zoom_link: 'https://zoom.us/j/84512948123?pwd=MAPCON2026HYBRID',
-    meeting_id: '845 1294 8123',
-    passcode: 'MAPCON2026',
-    stream_platform: 'ZOOM',
-    is_live: 1,
-    stream_instructions: 'Please join the session 5-10 minutes prior to schedule. Keep your microphone muted during presentations and use the Q&A box for asking questions.'
-  });
-  const [sessions, setSessions] = useState([]);
-  const [hybridUsers, setHybridUsers] = useState([]);
-  const [allUsers, setAllUsers] = useState([]);
-  const [search, setSearch] = useState('');
+  const [links, setLinks] = useState([]);
   const [busy, setBusy] = useState(false);
-  const [editSession, setEditSession] = useState(null);
-
-  useEffect(() => {
-    if (tab === 'Session Live Controls') setSubTab('sessions');
-    else if (tab === 'Hybrid Attendees') setSubTab('attendees');
-    else if (tab === 'Zoom Stream Settings' || tab === 'Hybrid & Live Stream') setSubTab('settings');
-  }, [tab]);
+  const [editingLink, setEditingLink] = useState(null);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   const loadData = async () => {
     setBusy(true);
     try {
-      const [sRes, sessRes, hybRes, allPartRes] = await Promise.all([
-        req(`/admin/stream/settings?conferenceId=${confId}`).catch(() => null),
-        req(`/admin/sessions?conferenceId=${confId}`).catch(() => []),
-        req(`/admin/participants/hybrid?conferenceId=${confId}`).catch(() => []),
-        req(`/admin/participants?conferenceId=${confId}`).catch(() => ({ data: [] }))
-      ]);
-      if (sRes && (sRes.data || sRes.zoom_link)) setStream(sRes.data || sRes);
-      setSessions(sessRes || []);
-      setHybridUsers(hybRes.data || hybRes || []);
-      const pList = Array.isArray(allPartRes) ? allPartRes : (allPartRes.data || []);
-      setAllUsers(pList);
-    } catch (_) {}
-    finally { setBusy(false); }
-  };
-
-  useEffect(() => { loadData(); }, [confId]);
-
-  const saveSettings = async (e) => {
-    if (e) e.preventDefault();
-    setBusy(true);
-    try {
-      await req('/admin/stream/settings', {
-        method: 'PUT',
-        body: JSON.stringify({ ...stream, conferenceId: confId })
-      });
-      notify('Zoom live stream settings updated successfully');
-      loadData();
+      const data = await req(`/admin/zoom-links?conferenceId=${confId}`);
+      setLinks(Array.isArray(data) ? data : (data.data || []));
     } catch (err) {
-      alert('Failed to save settings: ' + err.message);
+      console.warn(err);
     } finally {
       setBusy(false);
     }
   };
 
-  const toggleSessionLive = async (sessionId) => {
+  useEffect(() => { loadData(); }, [confId]);
+
+  const toggleLive = async (item) => {
     try {
-      const res = await req(`/admin/sessions/${sessionId}/live-toggle`, { method: 'PUT' });
-      notify(res.message || 'Session live status toggled');
+      const res = await req(`/admin/zoom-links/${item.id}/toggle-live`, { method: 'PUT' });
+      notify(res.message || 'Stream live status updated');
       loadData();
     } catch (err) {
-      alert('Error toggling live status: ' + err.message);
+      alert('Error updating status: ' + err.message);
     }
   };
 
-  const toggleParticipantHybrid = async (participantId) => {
+  const deleteLink = async (id) => {
+    if (!confirm('Are you sure you want to delete this Zoom stream link?')) return;
     try {
-      const res = await req(`/admin/participants/${participantId}/toggle-hybrid`, { method: 'PUT' });
-      notify(res.message || 'Participant access updated');
+      await req(`/admin/zoom-links/${id}`, { method: 'DELETE' });
+      notify('Zoom link deleted successfully');
       loadData();
     } catch (err) {
-      alert('Error updating participant: ' + err.message);
+      alert('Error deleting link: ' + err.message);
     }
   };
 
-  const saveSessionStream = async (v) => {
+  const saveLink = async (formData) => {
     try {
-      await req(`/admin/sessions/${v.id}`, {
-        method: 'PUT',
-        body: JSON.stringify(v)
-      });
-      notify('Session Zoom link updated');
-      setEditSession(null);
+      if (formData.id) {
+        await req(`/admin/zoom-links/${formData.id}`, {
+          method: 'PUT',
+          body: JSON.stringify(formData)
+        });
+        notify('Zoom link updated successfully');
+      } else {
+        await req('/admin/zoom-links', {
+          method: 'POST',
+          body: JSON.stringify({ ...formData, conferenceId: confId })
+        });
+        notify('New Zoom link created successfully');
+      }
+      setEditingLink(null);
+      setShowAddModal(false);
       loadData();
     } catch (err) {
-      alert('Failed to update session: ' + err.message);
+      alert('Failed to save link: ' + err.message);
     }
   };
 
-  const copyDetails = (linkNum = 1) => {
-    if (linkNum === 2) {
-      const text = `${stream.stream_title_2 || 'Hall B - Scientific Hall'}:\nURL: ${stream.zoom_link_2 || ''}\nMeeting ID: ${stream.meeting_id_2 || ''}\nPasscode: ${stream.passcode_2 || ''}`;
-      navigator.clipboard.writeText(text);
-      notify('Hall B Zoom details copied to clipboard');
-    } else {
-      const text = `${stream.stream_title || 'Hall A - Main Stage'}:\nURL: ${stream.zoom_link || ''}\nMeeting ID: ${stream.meeting_id || ''}\nPasscode: ${stream.passcode || ''}`;
-      navigator.clipboard.writeText(text);
-      notify('Hall A Zoom details copied to clipboard');
-    }
+  const copyDetails = (item) => {
+    const text = `${item.title}:\nURL: ${item.zoom_link}\nMeeting ID: ${item.meeting_id || '—'}\nPasscode: ${item.passcode || '—'}`;
+    navigator.clipboard.writeText(text);
+    notify('Zoom meeting info copied to clipboard');
   };
-
-  const filteredSessions = sessions.filter(s => {
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    return (s.title || '').toLowerCase().includes(q) || (s.speaker_name || '').toLowerCase().includes(q) || (s.hall_name || '').toLowerCase().includes(q);
-  });
-
-  const filteredAttendees = hybridUsers.filter(u => {
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    return (u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q) || (u.registration_no || '').toLowerCase().includes(q) || (u.phone || '').includes(q);
-  });
 
   return (
     <div className="panel">
       <div className="pagehead">
         <div>
-          <h3>🌐 Zoom Stream Links & Live Stage</h3>
-          <p>Configure the two main Zoom stream links (e.g., Hall A & Hall B) accessible to all conference attendees.</p>
+          <h3>🎥 Zoom Stream Links Management</h3>
+          <p>Add, edit, delete, and control live status of conference Zoom stages for all attendees.</p>
         </div>
         <div className="actions" style={{display:'flex', gap:'8px'}}>
-          <button className={subTab==='settings'?'primary':''} onClick={()=>setSubTab('settings')}>
-            ⚙️ 2 Zoom Stream Links
+          <button className="secondary" onClick={loadData} disabled={busy}>
+            {busy ? 'Refreshing...' : '🔄 Refresh'}
           </button>
-          <button className={subTab==='sessions'?'primary':''} onClick={()=>setSubTab('sessions')}>
-            🔴 Session Live Controls ({sessions.filter(s=>s.is_live).length} Live)
-          </button>
-          <button className={subTab==='attendees'?'primary':''} onClick={()=>setSubTab('attendees')}>
-            👥 Attendees ({allUsers.length || hybridUsers.length})
+          <button className="primary" onClick={() => setShowAddModal(true)}>
+            ➕ Add Zoom Link
           </button>
         </div>
       </div>
 
-      {subTab === 'settings' && (
-        <form onSubmit={saveSettings}>
-          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(360px, 1fr))', gap:'20px', marginBottom:'24px'}}>
-            
-            {/* Stream 1 Card (Hall A / Main Stage) */}
-            <div style={{
+      {/* Grid of Zoom Links */}
+      <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(360px, 1fr))', gap:'20px', marginTop:'16px'}}>
+        {links.map((item, idx) => (
+          <div
+            key={item.id}
+            style={{
               background:'#fff',
-              border: stream.is_live ? '2px solid #2563eb' : '1px solid #e2e8f0',
+              border: item.is_live ? '2px solid #2563eb' : '1px solid #e2e8f0',
               borderRadius:'16px',
               padding:'20px',
-              boxShadow:'0 4px 12px rgba(0,0,0,0.04)'
-            }}>
-              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'14px'}}>
+              boxShadow: item.is_live ? '0 8px 24px rgba(37,99,235,0.12)' : '0 4px 12px rgba(0,0,0,0.03)',
+              display:'flex',
+              flexDirection:'column',
+              justifyContent:'space-between'
+            }}
+          >
+            <div>
+              {/* Header Badge & Live Toggle */}
+              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'12px'}}>
                 <span className="pill" style={{
-                  background: stream.is_live ? '#dc2626' : '#64748b',
+                  background: item.is_live ? '#dc2626' : '#64748b',
                   color: '#fff',
                   fontSize: '11px',
                   fontWeight: '800',
-                  padding: '4px 8px'
+                  padding: '4px 10px'
                 }}>
-                  {stream.is_live ? '🔴 LINK 1 LIVE' : '⚪ LINK 1 OFFLINE'}
+                  {item.is_live ? '🔴 LIVE STREAMING' : '⚪ OFFLINE'}
                 </span>
-                <div style={{display:'flex', gap:'6px'}}>
-                  <button
-                    type="button"
-                    style={{
-                      background: stream.is_live ? '#dc2626' : '#16a34a',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '6px',
-                      padding: '5px 10px',
-                      fontWeight: '700',
-                      fontSize: '12px',
-                      cursor: 'pointer'
-                    }}
-                    onClick={() => setStream(prev => ({ ...prev, is_live: prev.is_live ? 0 : 1 }))}
-                  >
-                    {stream.is_live ? 'Stop Live' : 'Go Live'}
-                  </button>
-                  {stream.zoom_link && (
-                    <a
-                      href={stream.zoom_link}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{
-                        background: '#2563eb',
-                        color: '#fff',
-                        borderRadius: '6px',
-                        padding: '5px 10px',
-                        fontWeight: '600',
-                        fontSize: '12px',
-                        textDecoration: 'none',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px'
-                      }}
-                    >
-                      <ExternalLink size={13}/> Test
-                    </a>
-                  )}
-                  <button type="button" onClick={() => copyDetails(1)} style={{background:'#f1f5f9', border:'1px solid #cbd5e1', borderRadius:'6px', padding:'5px 8px', cursor:'pointer', fontSize:'12px'}}>
-                    <Copy size={13}/>
-                  </button>
+                <button
+                  type="button"
+                  onClick={() => toggleLive(item)}
+                  style={{
+                    background: item.is_live ? '#fef2f2' : '#f0fdf4',
+                    color: item.is_live ? '#dc2626' : '#16a34a',
+                    border: `1.5px solid ${item.is_live ? '#fca5a5' : '#86efac'}`,
+                    borderRadius:'20px',
+                    padding:'4px 12px',
+                    fontSize:'11.5px',
+                    fontWeight:'800',
+                    cursor:'pointer'
+                  }}
+                >
+                  {item.is_live ? '⏹️ Stop Live' : '▶️ Go Live'}
+                </button>
+              </div>
+
+              {/* Title & Description */}
+              <h4 style={{margin:'0 0 6px', color:'#1e293b', fontSize:'16px', fontWeight:'800'}}>
+                {item.title}
+              </h4>
+              {item.instructions && (
+                <p style={{margin:'0 0 12px', color:'#64748b', fontSize:'12.5px', lineHeight:'1.4'}}>
+                  {item.instructions}
+                </p>
+              )}
+
+              {/* Meeting Info Box */}
+              <div style={{background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:'10px', padding:'10px 14px', marginBottom:'14px'}}>
+                <div style={{display:'flex', justifyContent:'space-between', fontSize:'12.5px', marginBottom:'6px'}}>
+                  <span style={{color:'#64748b'}}>Meeting ID:</span>
+                  <strong style={{fontFamily:'monospace', color:'#1e293b'}}>{item.meeting_id || '—'}</strong>
+                </div>
+                <div style={{display:'flex', justifyContent:'space-between', fontSize:'12.5px'}}>
+                  <span style={{color:'#64748b'}}>Passcode:</span>
+                  <strong style={{fontFamily:'monospace', color:'#1e293b'}}>{item.passcode || '—'}</strong>
                 </div>
               </div>
 
-              <h4 style={{margin:'0 0 12px', color:'#1e3a8a', fontSize:'15px'}}>🎥 Zoom Link 1 (Hall A / Main Stage)</h4>
-              
-              <Field
-                label="Stream Title"
-                value={stream.stream_title || 'Hall A - Main Stage (Zoom)'}
-                onChange={x => setStream(prev => ({ ...prev, stream_title: x }))}
-                placeholder="e.g. Hall A - Main Stage (Zoom)"
-              />
-              <div style={{height:'10px'}}/>
-              <Field
-                label="Zoom Direct Join URL"
-                value={stream.zoom_link || ''}
-                onChange={x => setStream(prev => ({ ...prev, zoom_link: x }))}
-                placeholder="https://zoom.us/j/84512948123?pwd=MAPCON2026HYBRID"
-              />
-              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginTop:'10px'}}>
-                <Field
-                  label="Meeting ID"
-                  value={stream.meeting_id || ''}
-                  onChange={x => setStream(prev => ({ ...prev, meeting_id: x }))}
-                  placeholder="845 1294 8123"
-                />
-                <Field
-                  label="Passcode"
-                  value={stream.passcode || ''}
-                  onChange={x => setStream(prev => ({ ...prev, passcode: x }))}
-                  placeholder="MAPCON2026"
-                />
-              </div>
-              <div style={{marginTop:'10px'}}>
-                <Field
-                  textarea
-                  label="Instructions / Description"
-                  value={stream.stream_instructions || ''}
-                  onChange={x => setStream(prev => ({ ...prev, stream_instructions: x }))}
-                  placeholder="e.g. Hall A Keynote and Plenary Sessions..."
-                />
+              {/* URL preview */}
+              <div style={{fontSize:'12px', color:'#2563eb', wordBreak:'break-all', marginBottom:'14px', background:'#eff6ff', padding:'8px 10px', borderRadius:'8px', border:'1px solid #bfdbfe'}}>
+                🔗 <a href={item.zoom_link} target="_blank" rel="noreferrer" style={{color:'#2563eb', textDecoration:'none', fontWeight:'600'}}>
+                  {item.zoom_link}
+                </a>
               </div>
             </div>
 
-            {/* Stream 2 Card (Hall B / Scientific Hall) */}
-            <div style={{
-              background:'#fff',
-              border: stream.is_live_2 ? '2px solid #0891b2' : '1px solid #e2e8f0',
-              borderRadius:'16px',
-              padding:'20px',
-              boxShadow:'0 4px 12px rgba(0,0,0,0.04)'
-            }}>
-              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'14px'}}>
-                <span className="pill" style={{
-                  background: stream.is_live_2 ? '#dc2626' : '#64748b',
+            {/* Bottom Action Buttons */}
+            <div style={{display:'flex', gap:'8px', paddingTop:'12px', borderTop:'1px solid #f1f5f9', alignItems:'center'}}>
+              <a
+                href={item.zoom_link}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  flex: 1,
+                  background: '#2563eb',
                   color: '#fff',
-                  fontSize: '11px',
-                  fontWeight: '800',
-                  padding: '4px 8px'
-                }}>
-                  {stream.is_live_2 ? '🔴 LINK 2 LIVE' : '⚪ LINK 2 OFFLINE'}
-                </span>
-                <div style={{display:'flex', gap:'6px'}}>
-                  <button
-                    type="button"
-                    style={{
-                      background: stream.is_live_2 ? '#dc2626' : '#16a34a',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '6px',
-                      padding: '5px 10px',
-                      fontWeight: '700',
-                      fontSize: '12px',
-                      cursor: 'pointer'
-                    }}
-                    onClick={() => setStream(prev => ({ ...prev, is_live_2: prev.is_live_2 ? 0 : 1 }))}
-                  >
-                    {stream.is_live_2 ? 'Stop Live' : 'Go Live'}
-                  </button>
-                  {stream.zoom_link_2 && (
-                    <a
-                      href={stream.zoom_link_2}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{
-                        background: '#0891b2',
-                        color: '#fff',
-                        borderRadius: '6px',
-                        padding: '5px 10px',
-                        fontWeight: '600',
-                        fontSize: '12px',
-                        textDecoration: 'none',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px'
-                      }}
-                    >
-                      <ExternalLink size={13}/> Test
-                    </a>
-                  )}
-                  <button type="button" onClick={() => copyDetails(2)} style={{background:'#f1f5f9', border:'1px solid #cbd5e1', borderRadius:'6px', padding:'5px 8px', cursor:'pointer', fontSize:'12px'}}>
-                    <Copy size={13}/>
-                  </button>
-                </div>
-              </div>
-
-              <h4 style={{margin:'0 0 12px', color:'#0e7490', fontSize:'15px'}}>🎥 Zoom Link 2 (Hall B / Scientific Hall)</h4>
-              
-              <Field
-                label="Stream Title"
-                value={stream.stream_title_2 || 'Hall B - Scientific Hall (Zoom)'}
-                onChange={x => setStream(prev => ({ ...prev, stream_title_2: x }))}
-                placeholder="e.g. Hall B - Scientific Hall (Zoom)"
-              />
-              <div style={{height:'10px'}}/>
-              <Field
-                label="Zoom Direct Join URL"
-                value={stream.zoom_link_2 || ''}
-                onChange={x => setStream(prev => ({ ...prev, zoom_link_2: x }))}
-                placeholder="https://zoom.us/j/84512948124?pwd=MAPCON2026HALLB"
-              />
-              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginTop:'10px'}}>
-                <Field
-                  label="Meeting ID"
-                  value={stream.meeting_id_2 || ''}
-                  onChange={x => setStream(prev => ({ ...prev, meeting_id_2: x }))}
-                  placeholder="845 1294 8124"
-                />
-                <Field
-                  label="Passcode"
-                  value={stream.passcode_2 || ''}
-                  onChange={x => setStream(prev => ({ ...prev, passcode_2: x }))}
-                  placeholder="MAPCON2026B"
-                />
-              </div>
-              <div style={{marginTop:'10px'}}>
-                <Field
-                  textarea
-                  label="Instructions / Description"
-                  value={stream.stream_instructions_2 || ''}
-                  onChange={x => setStream(prev => ({ ...prev, stream_instructions_2: x }))}
-                  placeholder="e.g. Hall B Scientific Sessions & Free Papers..."
-                />
-              </div>
-            </div>
-
-          </div>
-
-          <div style={{display:'flex', justifyContent:'flex-end', alignItems:'center', background:'#fff', padding:'16px 20px', borderRadius:'12px', border:'1px solid #e2e8f0'}}>
-            <button className="primary" type="submit" disabled={busy} style={{padding:'12px 28px', fontSize:'14px', fontWeight:'700'}}>
-              {busy ? 'Saving...' : '💾 Save Both Zoom Stream Links'}
-            </button>
-          </div>
-        </form>
-      )}
-
-      {subTab === 'sessions' && (
-        <div>
-          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'16px', gap:'12px', flexWrap:'wrap'}}>
-            <input
-              placeholder="🔍 Search session by title, speaker or hall..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={{maxWidth:'360px', padding:'8px 14px', borderRadius:'8px', border:'1px solid #cbd5e1', fontSize:'13px'}}
-            />
-            <div style={{display:'flex', gap:'8px', alignItems:'center', fontSize:'13px', color:'#64748b'}}>
-              <span>Total Sessions: <b>{sessions.length}</b></span> |
-              <span style={{color:'#dc2626', fontWeight:'700'}}>🔴 Live Streams: <b>{sessions.filter(s=>s.is_live).length}</b></span>
+                  borderRadius: '8px',
+                  padding: '8px 12px',
+                  fontWeight: '700',
+                  fontSize: '12.5px',
+                  textDecoration: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '5px'
+                }}
+              >
+                <ExternalLink size={14}/> Test Link
+              </a>
+              <button
+                type="button"
+                onClick={() => copyDetails(item)}
+                title="Copy meeting info"
+                style={{background:'#f1f5f9', border:'1px solid #cbd5e1', borderRadius:'8px', padding:'8px 12px', cursor:'pointer', fontSize:'12px'}}
+              >
+                <Copy size={15}/>
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingLink(item)}
+                title="Edit Zoom link"
+                style={{background:'#eff6ff', color:'#2563eb', border:'1px solid #bfdbfe', borderRadius:'8px', padding:'8px 12px', cursor:'pointer', fontWeight:'600', fontSize:'12.5px'}}
+              >
+                ✏️ Edit
+              </button>
+              <button
+                type="button"
+                onClick={() => deleteLink(item.id)}
+                title="Delete Zoom link"
+                style={{background:'#fff', color:'#dc2626', border:'1px solid #fca5a5', borderRadius:'8px', padding:'8px 12px', cursor:'pointer', fontWeight:'600', fontSize:'12.5px'}}
+              >
+                🗑️
+              </button>
             </div>
           </div>
+        ))}
 
-          <table>
-            <thead>
-              <tr>
-                <th>Schedule</th>
-                <th>Session Details</th>
-                <th>Hall & Speaker</th>
-                <th>Zoom Stream Config</th>
-                <th>Live Status Switch</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredSessions.map(s => (
-                <tr key={s.id} style={{background: s.is_live ? '#fff5f5' : 'inherit'}}>
-                  <td style={{fontSize:'12.5px', whiteSpace:'nowrap'}}>
-                    <b>{toInputDate(s.session_date)}</b><br/>
-                    <span style={{color:'#64748b'}}>{s.start_time} - {s.end_time}</span>
-                  </td>
-                  <td>
-                    <b style={{fontSize:'14px', color:'#1e293b'}}>{s.title}</b><br/>
-                    <small style={{color:'#64748b'}}>{s.category || 'Session'}</small>
-                  </td>
-                  <td>
-                    <div>📍 <b>{s.hall_name || 'Main Hall'}</b></div>
-                    <small style={{color:'#64748b'}}>👨‍🏫 {s.speaker_name || 'Faculty'}</small>
-                  </td>
-                  <td>
-                    {s.zoom_link ? (
-                      <div style={{fontSize:'12px'}}>
-                        <span style={{color:'#2563eb', fontWeight:'700', wordBreak:'break-all'}}>Zoom Configured</span>
-                        {s.meeting_id && <div style={{color:'#64748b', fontSize:'11px'}}>ID: {s.meeting_id}</div>}
-                      </div>
-                    ) : (
-                      <span style={{color:'#94a3b8', fontSize:'12px'}}>Uses Master Zoom Link</span>
-                    )}
-                  </td>
-                  <td>
-                    <button
-                      onClick={() => toggleSessionLive(s.id)}
-                      style={{
-                        background: s.is_live ? '#dc2626' : '#f1f5f9',
-                        color: s.is_live ? '#fff' : '#334155',
-                        border: `1.5px solid ${s.is_live ? '#dc2626' : '#cbd5e1'}`,
-                        borderRadius: '20px',
-                        padding: '6px 14px',
-                        fontSize: '12px',
-                        fontWeight: '800',
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px'
-                      }}
-                    >
-                      {s.is_live ? '🔴 LIVE NOW (Click to End)' : '▶️ Go LIVE'}
-                    </button>
-                  </td>
-                  <td>
-                    <button
-                      className="icon"
-                      title="Edit Zoom Link"
-                      onClick={() => setEditSession(s)}
-                      style={{background:'#eff6ff', color:'#2563eb', border:'1px solid #bfdbfe', borderRadius:'6px', padding:'6px'}}
-                    >
-                      <Video size={16}/>
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {!filteredSessions.length && (
-                <tr>
-                  <td colSpan={6} style={{textAlign:'center', padding:'30px', color:'#94a3b8'}}>
-                    No sessions found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-
-          {editSession && (
-            <SessionStreamModal
-              session={editSession}
-              onSave={saveSessionStream}
-              onClose={() => setEditSession(null)}
-            />
-          )}
-        </div>
-      )}
-
-      {subTab === 'attendees' && (
-        <div>
-          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'16px', gap:'12px', flexWrap:'wrap'}}>
-            <input
-              placeholder="🔍 Search hybrid attendee by name, email, reg no..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={{maxWidth:'360px', padding:'8px 14px', borderRadius:'8px', border:'1px solid #cbd5e1', fontSize:'13px'}}
-            />
-            <div style={{fontSize:'13px', color:'#64748b'}}>
-              <span>Total Hybrid Attendees: <b style={{color:'#2563eb'}}>{hybridUsers.length}</b></span>
-            </div>
+        {!links.length && !busy && (
+          <div style={{gridColumn:'1 / -1', padding:'50px 20px', textAlign:'center', color:'#94a3b8', background:'#f8fafc', borderRadius:'14px', border:'1px dashed #cbd5e1'}}>
+            <Video size={40} style={{marginBottom:'10px', color:'#cbd5e1'}}/><br/>
+            <strong>No Zoom links created yet.</strong>
+            <p style={{fontSize:'13px', margin:'6px 0 16px'}}>Click "+ Add Zoom Link" above to add your first conference hall or track Zoom broadcast link.</p>
+            <button className="primary" onClick={() => setShowAddModal(true)}>➕ Add First Zoom Link</button>
           </div>
+        )}
+      </div>
 
-          <div style={{background:'#eff6ff', border:'1px solid #bfdbfe', padding:'12px 16px', borderRadius:'10px', marginBottom:'16px', fontSize:'13px', color:'#1e40af'}}>
-            💡 <b>Note:</b> Delegates listed below have active access to the <b>Hybrid & Online Stage (Zoom)</b> card in the mobile app and web platform.
-          </div>
-
-          <table>
-            <thead>
-              <tr>
-                <th>Reg No.</th>
-                <th>Delegate Name</th>
-                <th>Email & Phone</th>
-                <th>Category / Access</th>
-                <th>Mode Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredAttendees.map(u => (
-                <tr key={u.id}>
-                  <td><b>{u.registration_no || '—'}</b></td>
-                  <td>
-                    <b>{u.name}</b><br/>
-                    <small style={{color:'#64748b'}}>{u.designation || u.university || 'Delegate'}</small>
-                  </td>
-                  <td>
-                    {u.email}<br/>
-                    <small style={{color:'#64748b'}}>{u.phone || '—'}</small>
-                  </td>
-                  <td>
-                    <span className="pill" style={{background:'#2563eb', color:'#fff', fontSize:'11px', fontWeight:'700'}}>
-                      {u.category || 'Hybrid Delegate'}
-                    </span>
-                  </td>
-                  <td>
-                    <button
-                      onClick={() => toggleParticipantHybrid(u.id)}
-                      style={{
-                        background: '#fff',
-                        color: '#dc2626',
-                        border: '1px solid #fca5a5',
-                        borderRadius: '6px',
-                        padding: '4px 10px',
-                        fontSize: '12px',
-                        fontWeight: '700',
-                        cursor: 'pointer'
-                      }}
-                      title="Switch to Regular in-person attendee"
-                    >
-                      Make Regular
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {!filteredAttendees.length && (
-                <tr>
-                  <td colSpan={5} style={{textAlign:'center', padding:'30px', color:'#94a3b8'}}>
-                    No hybrid attendees found. You can set any attendee category to "Hybrid Delegate" in the Participants tab.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+      {/* Add / Edit Modal */}
+      {(showAddModal || editingLink) && (
+        <ZoomLinkModal
+          item={editingLink || {}}
+          isEdit={!!editingLink}
+          onSave={saveLink}
+          onClose={() => { setShowAddModal(false); setEditingLink(null); }}
+        />
       )}
     </div>
   );
 }
 
-function SessionStreamModal({session, onSave, onClose}){
-  const [v, set] = formState({
-    ...session,
-    zoom_link: session.zoom_link || '',
-    meeting_id: session.meeting_id || '',
-    passcode: session.passcode || '',
-    is_live: session.is_live ? 1 : 0
+function ZoomLinkModal({item, isEdit, onSave, onClose}){
+  const [formData, setFormData] = useState({
+    id: item.id || null,
+    title: item.title || '',
+    zoom_link: item.zoom_link || '',
+    meeting_id: item.meeting_id || '',
+    passcode: item.passcode || '',
+    instructions: item.instructions || '',
+    is_live: item.is_live ?? 1,
+    display_order: item.display_order || 0
   });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!formData.title.trim()) {
+      alert('Please enter a link title (e.g. Hall A - Main Stage)');
+      return;
+    }
+    if (!formData.zoom_link.trim()) {
+      alert('Please enter the Zoom Join URL');
+      return;
+    }
+    onSave(formData);
+  };
 
   return (
     <div className="modal-overlay">
       <div className="modal" style={{maxWidth:'580px'}}>
-        <div className="modal-header">
-          <h3>📹 Configure Session Zoom Link</h3>
-          <button className="close" onClick={onClose}>&times;</button>
+        <div className="modal-header" style={{background:'#1e3a8a', color:'#fff'}}>
+          <h3>{isEdit ? '✏️ Edit Zoom Link' : '➕ Add New Zoom Link'}</h3>
+          <button className="close" onClick={onClose} style={{color:'#fff'}}>&times;</button>
         </div>
-        <div className="modal-body">
-          <div style={{background:'#f8fafc', padding:'12px', borderRadius:'8px', marginBottom:'14px', border:'1px solid #e2e8f0'}}>
-            <strong style={{color:'#1e293b', fontSize:'14px'}}>{session.title}</strong>
-            <div style={{fontSize:'12px', color:'#64748b', marginTop:'4px'}}>
-              🕒 {toInputDate(session.session_date)} ({session.start_time} - {session.end_time}) | 📍 {session.hall_name || 'Hall'}
-            </div>
-          </div>
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body" style={{display:'flex', flexDirection:'column', gap:'14px'}}>
+            <Field
+              label="Stream / Stage Title *"
+              value={formData.title}
+              onChange={x => setFormData(p => ({ ...p, title: x }))}
+              placeholder="e.g. Hall A - Main Stage (Zoom)"
+            />
 
-          <div className="formgrid">
-            <div style={{gridColumn:'1/-1'}}>
+            <Field
+              label="Zoom Direct Join URL *"
+              value={formData.zoom_link}
+              onChange={x => setFormData(p => ({ ...p, zoom_link: x }))}
+              placeholder="https://zoom.us/j/84512948123?pwd=..."
+            />
+
+            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px'}}>
               <Field
-                label="Session-Specific Zoom Link"
-                value={v.zoom_link}
-                onChange={x => set('zoom_link', x)}
-                placeholder="https://zoom.us/j/..."
+                label="Zoom Meeting ID"
+                value={formData.meeting_id}
+                onChange={x => setFormData(p => ({ ...p, meeting_id: x }))}
+                placeholder="e.g. 845 1294 8123"
+              />
+              <Field
+                label="Zoom Passcode"
+                value={formData.passcode}
+                onChange={x => setFormData(p => ({ ...p, passcode: x }))}
+                placeholder="e.g. MAPCON2026"
               />
             </div>
+
             <Field
-              label="Meeting ID"
-              value={v.meeting_id}
-              onChange={x => set('meeting_id', x)}
-              placeholder="e.g. 845 1294 8123"
+              textarea
+              label="Description / Session Instructions"
+              value={formData.instructions}
+              onChange={x => setFormData(p => ({ ...p, instructions: x }))}
+              placeholder="e.g. Hall A Keynote lectures and plenary sessions..."
             />
-            <Field
-              label="Passcode"
-              value={v.passcode}
-              onChange={x => set('passcode', x)}
-              placeholder="e.g. MAPCON2026"
-            />
-            <div style={{gridColumn:'1/-1', display:'flex', alignItems:'center', gap:'10px', marginTop:'10px'}}>
-              <input
-                type="checkbox"
-                id="sess_live_chk"
-                checked={!!v.is_live}
-                onChange={e => set('is_live', e.target.checked ? 1 : 0)}
-                style={{width:'18px', height:'18px', cursor:'pointer'}}
+
+            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px', alignItems:'center', background:'#f8fafc', padding:'12px', borderRadius:'10px', border:'1px solid #e2e8f0'}}>
+              <Field
+                type="number"
+                label="Display Order (0 = first)"
+                value={formData.display_order}
+                onChange={x => setFormData(p => ({ ...p, display_order: Number(x) }))}
               />
-              <label htmlFor="sess_live_chk" style={{fontWeight:'700', fontSize:'13px', color: v.is_live ? '#dc2626' : '#1e293b', cursor:'pointer'}}>
-                {v.is_live ? '🔴 Session is CURRENTLY LIVE STREAMING' : 'Mark as Live Stream Active'}
+              <label style={{cursor:'pointer', display:'flex', alignItems:'center', gap:'8px', marginTop:'18px'}}>
+                <input
+                  type="checkbox"
+                  checked={!!formData.is_live}
+                  onChange={e => setFormData(p => ({ ...p, is_live: e.target.checked ? 1 : 0 }))}
+                  style={{width:'18px', height:'18px', cursor:'pointer'}}
+                />
+                <span style={{fontWeight:'700', fontSize:'13px', color: formData.is_live ? '#dc2626' : '#64748b'}}>
+                  {formData.is_live ? '🔴 Set Stream as LIVE NOW' : '⚪ Stream is Offline'}
+                </span>
               </label>
             </div>
           </div>
-        </div>
-        <div className="modal-footer">
-          <button onClick={onClose}>Cancel</button>
-          <button className="primary" onClick={() => onSave(v)}>Save Zoom Link</button>
-        </div>
+          <div className="modal-footer">
+            <button type="button" onClick={onClose}>Cancel</button>
+            <button type="submit" className="primary">
+              {isEdit ? '💾 Update Zoom Link' : '➕ Add Zoom Link'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

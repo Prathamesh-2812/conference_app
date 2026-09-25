@@ -407,6 +407,36 @@ async function runMigrations(){
       console.warn("Stream table migration notice:", streamErr.message);
     }
     try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS zoom_streams (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          conference_id INT NOT NULL DEFAULT 1,
+          title VARCHAR(255) NOT NULL,
+          zoom_link TEXT NOT NULL,
+          meeting_id VARCHAR(100) DEFAULT '',
+          passcode VARCHAR(100) DEFAULT '',
+          stream_platform VARCHAR(50) DEFAULT 'ZOOM',
+          is_live TINYINT(1) DEFAULT 1,
+          instructions TEXT,
+          display_order INT DEFAULT 0,
+          active TINYINT(1) DEFAULT 1,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_zoom_conf (conference_id)
+        )
+      `);
+
+      const [zRows] = await pool.query('SELECT id FROM zoom_streams WHERE conference_id = 1 LIMIT 1');
+      if (!zRows.length) {
+        await pool.query(`
+          INSERT INTO zoom_streams (conference_id, title, zoom_link, meeting_id, passcode, stream_platform, is_live, instructions, display_order, active)
+          VALUES
+          (1, 'Hall A - Main Stage (Zoom)', 'https://zoom.us/j/84512948123?pwd=MAPCON2026HYBRID', '845 1294 8123', 'MAPCON2026', 'ZOOM', 1, 'Hall A Live broadcast for keynotes, presidential orations & plenary sessions.', 1, 1),
+          (1, 'Hall B - Scientific Hall (Zoom)', 'https://zoom.us/j/84512948124?pwd=MAPCON2026HALLB', '845 1294 8124', 'MAPCON2026B', 'ZOOM', 1, 'Hall B Live broadcast for scientific papers, symposia & discussions.', 2, 1)
+        `).catch(() => {});
+      }
+    } catch(_) {}
+    try {
       await pool.query(`ALTER TABLE conference_streams ADD COLUMN zoom_link_2 TEXT`).catch(() => {});
       await pool.query(`ALTER TABLE conference_streams ADD COLUMN meeting_id_2 VARCHAR(100) DEFAULT '845 1294 8124'`).catch(() => {});
       await pool.query(`ALTER TABLE conference_streams ADD COLUMN passcode_2 VARCHAR(100) DEFAULT 'MAPCON2026B'`).catch(() => {});
@@ -1113,95 +1143,103 @@ app.delete('/api/admin/sliders/:id', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncR
   ok(res, null, 'Slider deleted');
 }));
 
-// HYBRID & LIVE STREAM (ZOOM) ENDPOINTS
+// ZOOM STREAMS & VIRTUAL STAGE ENDPOINTS
+app.get('/api/zoom-links', asyncRoute(async(req, res) => {
+  const confId = req.query.conferenceId || 1;
+  const [streams] = await pool.query('SELECT * FROM zoom_streams WHERE conference_id = ? AND active = 1 ORDER BY display_order ASC, id ASC', [confId]);
+  ok(res, streams);
+}));
+
 app.get('/api/stream/settings', asyncRoute(async(req, res) => {
   const conferenceId = req.query.conferenceId || 1;
-  const [[stream]] = await pool.query('SELECT * FROM conference_streams WHERE conference_id = ? LIMIT 1', [conferenceId]);
-  if (!stream) {
-    return ok(res, {
-      zoom_link: 'https://zoom.us/j/84512948123?pwd=MAPCON2026HYBRID',
-      meeting_id: '845 1294 8123',
-      passcode: 'MAPCON2026',
-      stream_platform: 'ZOOM',
-      is_live: 1,
-      stream_title: 'Hall A - Main Stage (Zoom)',
-      stream_instructions: 'Hall A Live broadcast for keynotes and plenary sessions.',
-      zoom_link_2: 'https://zoom.us/j/84512948124?pwd=MAPCON2026HALLB',
-      meeting_id_2: '845 1294 8124',
-      passcode_2: 'MAPCON2026B',
-      stream_platform_2: 'ZOOM',
-      is_live_2: 1,
-      stream_title_2: 'Hall B - Scientific Hall (Zoom)',
-      stream_instructions_2: 'Hall B Live broadcast for scientific papers and workshops.'
-    });
-  }
-  ok(res, stream);
+  const [streams] = await pool.query('SELECT * FROM zoom_streams WHERE conference_id = ? AND active = 1 ORDER BY display_order ASC, id ASC', [conferenceId]);
+  const s1 = streams[0] || {};
+  const s2 = streams[1] || {};
+  ok(res, {
+    streams,
+    zoom_link: s1.zoom_link || 'https://zoom.us/j/84512948123?pwd=MAPCON2026HYBRID',
+    meeting_id: s1.meeting_id || '845 1294 8123',
+    passcode: s1.passcode || 'MAPCON2026',
+    stream_platform: s1.stream_platform || 'ZOOM',
+    is_live: s1.is_live ?? 1,
+    stream_title: s1.title || 'Hall A - Main Stage (Zoom)',
+    stream_instructions: s1.instructions || 'Hall A Live broadcast for keynotes and plenary sessions.',
+    zoom_link_2: s2.zoom_link || 'https://zoom.us/j/84512948124?pwd=MAPCON2026HALLB',
+    meeting_id_2: s2.meeting_id || '845 1294 8124',
+    passcode_2: s2.passcode || 'MAPCON2026B',
+    stream_platform_2: s2.stream_platform || 'ZOOM',
+    is_live_2: s2.is_live ?? 1,
+    stream_title_2: s2.title || 'Hall B - Scientific Hall (Zoom)',
+    stream_instructions_2: s2.instructions || 'Hall B Live broadcast for scientific papers and workshops.'
+  });
 }));
 
-app.get('/api/admin/stream/settings', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncRoute(async(req, res) => {
-  const conferenceId = req.query.conferenceId || 1;
-  const [[stream]] = await pool.query('SELECT * FROM conference_streams WHERE conference_id = ? LIMIT 1', [conferenceId]);
-  if (!stream) {
-    return ok(res, {
-      conference_id: Number(conferenceId),
-      zoom_link: 'https://zoom.us/j/84512948123?pwd=MAPCON2026HYBRID',
-      meeting_id: '845 1294 8123',
-      passcode: 'MAPCON2026',
-      stream_platform: 'ZOOM',
-      is_live: 1,
-      stream_title: 'Hall A - Main Stage (Zoom)',
-      stream_instructions: 'Hall A Live broadcast for keynotes and plenary sessions.',
-      zoom_link_2: 'https://zoom.us/j/84512948124?pwd=MAPCON2026HALLB',
-      meeting_id_2: '845 1294 8124',
-      passcode_2: 'MAPCON2026B',
-      stream_platform_2: 'ZOOM',
-      is_live_2: 1,
-      stream_title_2: 'Hall B - Scientific Hall (Zoom)',
-      stream_instructions_2: 'Hall B Live broadcast for scientific papers and workshops.'
-    });
-  }
-  ok(res, stream);
+app.get('/api/admin/zoom-links', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncRoute(async(req, res) => {
+  const confId = req.query.conferenceId || 1;
+  const [streams] = await pool.query('SELECT * FROM zoom_streams WHERE conference_id = ? ORDER BY display_order ASC, id ASC', [confId]);
+  ok(res, streams);
 }));
 
-app.put('/api/admin/stream/settings', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncRoute(async(req, res) => {
-  const conferenceId = req.body.conferenceId || 1;
-  const {
-    zoom_link, meeting_id, passcode, stream_platform, is_live, stream_instructions, stream_title,
-    zoom_link_2, meeting_id_2, passcode_2, stream_platform_2, is_live_2, stream_instructions_2, stream_title_2
-  } = req.body;
+app.post('/api/admin/zoom-links', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncRoute(async(req, res) => {
+  const confId = req.body.conferenceId || 1;
+  const { title, zoom_link, meeting_id, passcode, stream_platform, is_live, instructions, display_order, active } = req.body;
+  if (!title || !zoom_link) {
+    return res.status(400).json({ message: 'Title and Zoom URL are required' });
+  }
   const liveVal = is_live === 1 || is_live === true || is_live === '1' ? 1 : 0;
-  const liveVal2 = is_live_2 === 1 || is_live_2 === true || is_live_2 === '1' ? 1 : 0;
-  await pool.query(`
-    INSERT INTO conference_streams (
-      conference_id,
-      zoom_link, meeting_id, passcode, stream_platform, is_live, stream_instructions, stream_title,
-      zoom_link_2, meeting_id_2, passcode_2, stream_platform_2, is_live_2, stream_instructions_2, stream_title_2
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON DUPLICATE KEY UPDATE
-      zoom_link = VALUES(zoom_link),
-      meeting_id = VALUES(meeting_id),
-      passcode = VALUES(passcode),
-      stream_platform = VALUES(stream_platform),
-      is_live = VALUES(is_live),
-      stream_instructions = VALUES(stream_instructions),
-      stream_title = VALUES(stream_title),
-      zoom_link_2 = VALUES(zoom_link_2),
-      meeting_id_2 = VALUES(meeting_id_2),
-      passcode_2 = VALUES(passcode_2),
-      stream_platform_2 = VALUES(stream_platform_2),
-      is_live_2 = VALUES(is_live_2),
-      stream_instructions_2 = VALUES(stream_instructions_2),
-      stream_title_2 = VALUES(stream_title_2)
-  `, [
-    conferenceId,
-    zoom_link, meeting_id, passcode, stream_platform || 'ZOOM', liveVal, stream_instructions, stream_title,
-    zoom_link_2, meeting_id_2, passcode_2, stream_platform_2 || 'ZOOM', liveVal2, stream_instructions_2, stream_title_2
-  ]);
+  const actVal = active === 0 || active === false || active === '0' ? 0 : 1;
+  const [r] = await pool.query(`
+    INSERT INTO zoom_streams (conference_id, title, zoom_link, meeting_id, passcode, stream_platform, is_live, instructions, display_order, active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [confId, title, zoom_link, meeting_id || '', passcode || '', stream_platform || 'ZOOM', liveVal, instructions || '', Number(display_order || 0), actVal]);
 
-  const [[updated]] = await pool.query('SELECT * FROM conference_streams WHERE conference_id = ?', [conferenceId]);
-  io.emit('stream_settings_updated', { conferenceId, stream: updated });
-  ok(res, updated, 'Zoom stream settings saved successfully');
+  const [[created]] = await pool.query('SELECT * FROM zoom_streams WHERE id = ?', [r.insertId]);
+  io.emit('zoom_streams_updated', { conferenceId: confId });
+  ok(res, created, 'Zoom link added successfully');
+}));
+
+app.put('/api/admin/zoom-links/:id', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncRoute(async(req, res) => {
+  const { title, zoom_link, meeting_id, passcode, stream_platform, is_live, instructions, display_order, active } = req.body;
+  const [[existing]] = await pool.query('SELECT * FROM zoom_streams WHERE id = ?', [req.params.id]);
+  if (!existing) return res.status(404).json({ message: 'Zoom link not found' });
+
+  const liveVal = is_live !== undefined ? (is_live === 1 || is_live === true || is_live === '1' ? 1 : 0) : existing.is_live;
+  const actVal = active !== undefined ? (active === 0 || active === false || active === '0' ? 0 : 1) : existing.active;
+
+  await pool.query(`
+    UPDATE zoom_streams SET
+      title = COALESCE(?, title),
+      zoom_link = COALESCE(?, zoom_link),
+      meeting_id = COALESCE(?, meeting_id),
+      passcode = COALESCE(?, passcode),
+      stream_platform = COALESCE(?, stream_platform),
+      is_live = ?,
+      instructions = COALESCE(?, instructions),
+      display_order = COALESCE(?, display_order),
+      active = ?
+    WHERE id = ?
+  `, [title, zoom_link, meeting_id, passcode, stream_platform, liveVal, instructions, display_order, actVal, req.params.id]);
+
+  const [[updated]] = await pool.query('SELECT * FROM zoom_streams WHERE id = ?', [req.params.id]);
+  io.emit('zoom_streams_updated', { conferenceId: updated?.conference_id });
+  ok(res, updated, 'Zoom link updated successfully');
+}));
+
+app.put('/api/admin/zoom-links/:id/toggle-live', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncRoute(async(req, res) => {
+  const [[stream]] = await pool.query('SELECT id, conference_id, is_live FROM zoom_streams WHERE id = ?', [req.params.id]);
+  if (!stream) return res.status(404).json({ message: 'Zoom link not found' });
+  const newLive = stream.is_live ? 0 : 1;
+  await pool.query('UPDATE zoom_streams SET is_live = ? WHERE id = ?', [newLive, req.params.id]);
+  const [[updated]] = await pool.query('SELECT * FROM zoom_streams WHERE id = ?', [req.params.id]);
+  io.emit('zoom_streams_updated', { conferenceId: stream.conference_id });
+  ok(res, updated, newLive ? 'Stream marked as LIVE 🔴' : 'Stream marked as OFFLINE ⚪');
+}));
+
+app.delete('/api/admin/zoom-links/:id', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncRoute(async(req, res) => {
+  const [[stream]] = await pool.query('SELECT conference_id FROM zoom_streams WHERE id = ?', [req.params.id]);
+  await pool.query('DELETE FROM zoom_streams WHERE id = ?', [req.params.id]);
+  io.emit('zoom_streams_updated', { conferenceId: stream?.conference_id });
+  ok(res, null, 'Zoom link deleted successfully');
 }));
 
 app.put('/api/admin/sessions/:id/live-toggle', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncRoute(async(req, res) => {
@@ -3722,6 +3760,103 @@ app.get('/api/admin/stats',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(re
     vehicles: await q('SELECT COUNT(*) FROM vehicles'),
     assignments: await q('SELECT COUNT(*) FROM transport_assignments')
   });
+}));
+
+// ==========================================
+// ZOOM STREAM LINKS MANAGEMENT ENDPOINTS
+// ==========================================
+app.get('/api/zoom-links', asyncRoute(async (req, res) => {
+  const confId = req.query.conferenceId || 1;
+  const [rows] = await pool.query('SELECT * FROM zoom_streams WHERE conference_id=? AND active=1 ORDER BY display_order ASC, id ASC', [confId]);
+  res.json(rows);
+}));
+
+app.get('/api/stream/settings', asyncRoute(async (req, res) => {
+  const confId = req.query.conferenceId || 1;
+  const [streams] = await pool.query('SELECT * FROM zoom_streams WHERE conference_id=? AND active=1 ORDER BY display_order ASC, id ASC', [confId]);
+  const s1 = streams[0] || {};
+  const s2 = streams[1] || {};
+  res.json({
+    streams: streams,
+    zoom_link: s1.zoom_link || 'https://zoom.us/j/84512948123?pwd=MAPCON2026HYBRID',
+    meeting_id: s1.meeting_id || '845 1294 8123',
+    passcode: s1.passcode || 'MAPCON2026',
+    stream_title: s1.title || 'Hall A - Main Stage (Zoom)',
+    stream_instructions: s1.instructions || 'Hall A Live broadcast for keynotes & plenary sessions.',
+    is_live: s1.is_live ?? 1,
+    zoom_link_2: s2.zoom_link || 'https://zoom.us/j/84512948124?pwd=MAPCON2026HALLB',
+    meeting_id_2: s2.meeting_id || '845 1294 8124',
+    passcode_2: s2.passcode || 'MAPCON2026B',
+    stream_title_2: s2.title || 'Hall B - Scientific Hall (Zoom)',
+    stream_instructions_2: s2.instructions || 'Hall B Live broadcast for scientific papers & symposia.',
+    is_live_2: s2.is_live ?? 1,
+  });
+}));
+
+app.get('/api/admin/zoom-links', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncRoute(async (req, res) => {
+  const confId = req.query.conferenceId || 1;
+  const [rows] = await pool.query('SELECT * FROM zoom_streams WHERE conference_id=? ORDER BY display_order ASC, id ASC', [confId]);
+  res.json(rows);
+}));
+
+app.post('/api/admin/zoom-links', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncRoute(async (req, res) => {
+  const confId = req.body.conferenceId || 1;
+  const title = (req.body.title || 'Zoom Stage').trim();
+  const zoom_link = (req.body.zoom_link || '').trim();
+  const meeting_id = (req.body.meeting_id || '').trim();
+  const passcode = (req.body.passcode || '').trim();
+  const instructions = (req.body.instructions || '').trim();
+  const is_live = req.body.is_live !== undefined ? (req.body.is_live ? 1 : 0) : 1;
+  const display_order = Number(req.body.display_order) || 0;
+  const [r] = await pool.query(
+    'INSERT INTO zoom_streams (conference_id, title, zoom_link, meeting_id, passcode, stream_platform, is_live, instructions, display_order, active) VALUES (?, ?, ?, ?, ?, "ZOOM", ?, ?, ?, 1)',
+    [confId, title, zoom_link, meeting_id, passcode, is_live, instructions, display_order]
+  );
+  io.emit('zoom_streams_updated', { action: 'create', id: r.insertId });
+  created(res, { id: r.insertId }, 'Zoom stream link added');
+}));
+
+app.put('/api/admin/zoom-links/:id', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncRoute(async (req, res) => {
+  await pool.query(
+    `UPDATE zoom_streams SET
+      title = COALESCE(?, title),
+      zoom_link = COALESCE(?, zoom_link),
+      meeting_id = COALESCE(?, meeting_id),
+      passcode = COALESCE(?, passcode),
+      instructions = COALESCE(?, instructions),
+      is_live = COALESCE(?, is_live),
+      display_order = COALESCE(?, display_order),
+      active = COALESCE(?, active)
+     WHERE id = ?`,
+    [
+      req.body.title ? req.body.title.trim() : null,
+      req.body.zoom_link ? req.body.zoom_link.trim() : null,
+      req.body.meeting_id !== undefined ? req.body.meeting_id.trim() : null,
+      req.body.passcode !== undefined ? req.body.passcode.trim() : null,
+      req.body.instructions !== undefined ? req.body.instructions.trim() : null,
+      req.body.is_live !== undefined ? (req.body.is_live ? 1 : 0) : null,
+      req.body.display_order !== undefined ? Number(req.body.display_order) : null,
+      req.body.active !== undefined ? (req.body.active ? 1 : 0) : null,
+      req.params.id
+    ]
+  );
+  io.emit('zoom_streams_updated', { action: 'update', id: req.params.id });
+  ok(res, null, 'Zoom stream link updated');
+}));
+
+app.put('/api/admin/zoom-links/:id/toggle-live', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncRoute(async (req, res) => {
+  const [[item]] = await pool.query('SELECT is_live, title FROM zoom_streams WHERE id = ?', [req.params.id]);
+  if (!item) return res.status(404).json({ message: 'Zoom link not found' });
+  const newLive = item.is_live ? 0 : 1;
+  await pool.query('UPDATE zoom_streams SET is_live = ? WHERE id = ?', [newLive, req.params.id]);
+  io.emit('zoom_streams_updated', { action: 'toggle_live', id: req.params.id, is_live: newLive });
+  ok(res, { is_live: newLive }, `${item.title} is now ${newLive ? 'LIVE' : 'OFFLINE'}`);
+}));
+
+app.delete('/api/admin/zoom-links/:id', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncRoute(async (req, res) => {
+  await pool.query('DELETE FROM zoom_streams WHERE id = ?', [req.params.id]);
+  io.emit('zoom_streams_updated', { action: 'delete', id: req.params.id });
+  ok(res, null, 'Zoom stream link deleted');
 }));
 
 io.use((socket, next) => {

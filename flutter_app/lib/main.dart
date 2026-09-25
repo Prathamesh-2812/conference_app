@@ -2987,7 +2987,26 @@ class _VirtualStageScreenState extends State<VirtualStageScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Stream 1
+    final streamsList = (_streamSettings != null && _streamSettings!['streams'] is List && (_streamSettings!['streams'] as List).isNotEmpty)
+        ? (_streamSettings!['streams'] as List)
+        : null;
+
+    final primaryColors = [
+      const Color(0xFF2563EB),
+      const Color(0xFF0891B2),
+      const Color(0xFF7C3AED),
+      const Color(0xFF059669),
+      const Color(0xFFD97706),
+    ];
+    final accentColors = [
+      const Color(0xFF60A5FA),
+      const Color(0xFF22D3EE),
+      const Color(0xFFA78BFA),
+      const Color(0xFF34D399),
+      const Color(0xFFFBBF24),
+    ];
+
+    // Fallback Stream 1
     final zoom1 = (_streamSettings?['zoom_link'] ?? 'https://zoom.us/j/84512948123?pwd=MAPCON2026HYBRID').toString().trim();
     final meetingId1 = (_streamSettings?['meeting_id'] ?? '845 1294 8123').toString().trim();
     final passcode1 = (_streamSettings?['passcode'] ?? 'MAPCON2026').toString().trim();
@@ -2995,7 +3014,7 @@ class _VirtualStageScreenState extends State<VirtualStageScreen> {
     final instructions1 = (_streamSettings?['stream_instructions'] ?? 'Keynotes, Plenary Sessions, and Presidential Orations.').toString().trim();
     final isLive1 = _streamSettings == null ? true : (_streamSettings?['is_live'] == 1 || _streamSettings?['is_live'] == true || _streamSettings?['is_live'] == '1');
 
-    // Stream 2
+    // Fallback Stream 2
     final zoom2 = (_streamSettings?['zoom_link_2'] ?? 'https://zoom.us/j/84512948124?pwd=MAPCON2026HALLB').toString().trim();
     final meetingId2 = (_streamSettings?['meeting_id_2'] ?? '845 1294 8124').toString().trim();
     final passcode2 = (_streamSettings?['passcode_2'] ?? 'MAPCON2026B').toString().trim();
@@ -3059,35 +3078,54 @@ class _VirtualStageScreenState extends State<VirtualStageScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // STREAM CARD 1 (HALL A)
-                  _buildZoomCard(
-                    hallLabel: 'HALL A',
-                    title: title1.isNotEmpty ? title1 : 'Hall A - Main Stage (Zoom)',
-                    instructions: instructions1,
-                    meetingId: meetingId1,
-                    passcode: passcode1,
-                    zoomUrl: zoom1,
-                    isLive: isLive1,
-                    primaryColor: const Color(0xFF2563EB),
-                    accentColor: const Color(0xFF60A5FA),
-                  ),
+                  if (streamsList != null) ...[
+                    for (int i = 0; i < streamsList.length; i++) ...[
+                      _buildZoomCard(
+                        hallLabel: (streamsList[i]['title'] != null && streamsList[i]['title'].toString().toUpperCase().contains('HALL'))
+                            ? streamsList[i]['title'].toString().split('-').first.trim().toUpperCase()
+                            : 'STREAM ${i + 1}',
+                        title: (streamsList[i]['title'] ?? 'Zoom Stage ${i + 1}').toString().trim(),
+                        instructions: (streamsList[i]['instructions'] ?? '').toString().trim(),
+                        meetingId: (streamsList[i]['meeting_id'] ?? '').toString().trim(),
+                        passcode: (streamsList[i]['passcode'] ?? '').toString().trim(),
+                        zoomUrl: (streamsList[i]['zoom_link'] ?? '').toString().trim(),
+                        isLive: streamsList[i]['is_live'] == 1 || streamsList[i]['is_live'] == true || streamsList[i]['is_live'] == '1',
+                        primaryColor: primaryColors[i % primaryColors.length],
+                        accentColor: accentColors[i % accentColors.length],
+                      ),
+                      const SizedBox(height: 18),
+                    ],
+                  ] else ...[
+                    // Fallback STREAM CARD 1 (HALL A)
+                    _buildZoomCard(
+                      hallLabel: 'HALL A',
+                      title: title1.isNotEmpty ? title1 : 'Hall A - Main Stage (Zoom)',
+                      instructions: instructions1,
+                      meetingId: meetingId1,
+                      passcode: passcode1,
+                      zoomUrl: zoom1,
+                      isLive: isLive1,
+                      primaryColor: primaryColors[0],
+                      accentColor: accentColors[0],
+                    ),
 
-                  const SizedBox(height: 18),
+                    const SizedBox(height: 18),
 
-                  // STREAM CARD 2 (HALL B)
-                  _buildZoomCard(
-                    hallLabel: 'HALL B',
-                    title: title2.isNotEmpty ? title2 : 'Hall B - Scientific Hall (Zoom)',
-                    instructions: instructions2,
-                    meetingId: meetingId2,
-                    passcode: passcode2,
-                    zoomUrl: zoom2,
-                    isLive: isLive2,
-                    primaryColor: const Color(0xFF0891B2),
-                    accentColor: const Color(0xFF22D3EE),
-                  ),
+                    // Fallback STREAM CARD 2 (HALL B)
+                    _buildZoomCard(
+                      hallLabel: 'HALL B',
+                      title: title2.isNotEmpty ? title2 : 'Hall B - Scientific Hall (Zoom)',
+                      instructions: instructions2,
+                      meetingId: meetingId2,
+                      passcode: passcode2,
+                      zoomUrl: zoom2,
+                      isLive: isLive2,
+                      primaryColor: primaryColors[1],
+                      accentColor: accentColors[1],
+                    ),
 
-                  const SizedBox(height: 20),
+                    const SizedBox(height: 20),
+                  ],
 
                   // Guidelines Box
                   Container(
