@@ -2325,7 +2325,7 @@ function TransportAssignmentModal({participants,vehicles,onSave,onClose}){
   </div></div><div className="modal-footer"><button onClick={onClose}>Cancel</button><button className="primary" onClick={()=>onSave(v)}>Assign Transport</button></div></div></div>
 }
 function Speakers({tab, notify}){
-  const[d,setD]=useState([]),[busy,setBusy]=useState(false),[edit,setEdit]=useState(null);
+  const[d,setD]=useState([]),[q,setQ]=useState(''),[busy,setBusy]=useState(false),[edit,setEdit]=useState(null);
   const load=async()=>{setBusy(true);try{const r=await req('/admin/speakers?conferenceId=1');setD(r)}finally{setBusy(false)}};
   useEffect(()=>{load()},[]);
   useEffect(()=>{if(tab==='Add Speaker')setEdit({})},[tab]);
@@ -2339,38 +2339,74 @@ function Speakers({tab, notify}){
     load();
   };
 
+  const filtered = d.filter(x => {
+    if (!q) return true;
+    const term = q.toLowerCase();
+    return (x.name||'').toLowerCase().includes(term) ||
+           (x.designation||'').toLowerCase().includes(term) ||
+           (x.organization||'').toLowerCase().includes(term) ||
+           (x.bio||'').toLowerCase().includes(term);
+  });
+
   return <div className="panel">
     <div className="pagehead">
-      <div><h3>Speakers</h3><p>Manage keynote speakers and presenters.</p></div>
-      <div className="actions"><button onClick={()=>setEdit({})}>Add Speaker</button></div>
+      <div>
+        <h3>Speakers & Dignitaries</h3>
+        <p>Manage keynote speakers, presenters, session chairs, and faculty profiles ({d.length} Total).</p>
+      </div>
+      <div className="actions">
+        <button className="primary" onClick={()=>setEdit({})}>+ Add Speaker</button>
+      </div>
     </div>
-    <div className="grid" style={{gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))',gap:'20px'}}>
-      {d.map(x=><div className="speaker-card" key={x.id}>
-        <div className="speaker-avatar-wrap">
-          <img 
-            src={resolveMediaUrl(x.photo)} 
-            alt={x.name} 
-            onError={(e)=>{e.target.src='https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500'}}
-          />
-        </div>
-        <div className="info">
-          <h4>{x.name}</h4>
-          <span className="pill" style={{background:'#8C1119',color:'#fff',fontSize:'11px',marginBottom:'8px'}}>
-            {x.designation||'Speaker'}
-          </span>
-          <p className="org">{x.organization||'Conference Keynote'}</p>
-          {x.bio && <p className="bio">{x.bio}</p>}
-          {(x.email || x.phone) && <div className="contact-info">
-            {x.email && <div>✉ {x.email}</div>}
-            {x.phone && <div>📞 {x.phone}</div>}
+
+    <div className="toolbar" style={{display:'flex',gap:'10px',alignItems:'center',background:'#f8fafc',padding:'12px 16px',borderRadius:'12px',border:'1px solid #e2e8f0',marginBottom:'18px'}}>
+      <div className="search" style={{flex:1,maxWidth:'400px'}}><Search size={18}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search speaker name, designation, topic..."/></div>
+      <span style={{fontSize:'12.5px',color:'#64748b',fontWeight:600}}>Showing {filtered.length} of {d.length} speakers</span>
+    </div>
+
+    <div className="grid" style={{gridTemplateColumns:'repeat(auto-fill, minmax(300px, 1fr))',gap:'20px'}}>
+      {filtered.map(x=>{
+        const isKeynote = (x.designation||'').toLowerCase().includes('keynote') || (x.designation||'').toLowerCase().includes('president') || (x.designation||'').toLowerCase().includes('chair');
+        return <div className="speaker-card" key={x.id} style={{border: isKeynote ? '1.5px solid #fbcfe8' : '1px solid #e2e8f0', overflow:'hidden', padding:0, display:'flex', flexDirection:'column'}}>
+          {isKeynote && <div style={{background:'linear-gradient(90deg, #8C1119, #be123c)', color:'#fff', padding:'5px 12px', fontSize:'11px', fontWeight:800, letterSpacing:'0.5px', textAlign:'center'}}>
+            ⭐ KEYNOTE SPEAKER
           </div>}
-          <div className="rowactions" style={{display:'flex',gap:'8px',width:'100%',marginTop:'auto'}}>
-            <button style={{flex:1,padding:'8px',borderRadius:'6px',fontSize:'12.5px',fontWeight:'700'}} onClick={()=>setEdit(x)}>Edit</button>
-            <button style={{flex:1,padding:'8px',borderRadius:'6px',fontSize:'12.5px',fontWeight:'700',color:'#ef4444',borderColor:'#fecaca'}} onClick={async()=>{if(confirm('Delete this speaker?')){await req(`/admin/speakers/${x.id}`,{method:'DELETE'});load()}}}>Delete</button>
+          <div style={{padding:'20px', display:'flex', flexDirection:'column', alignItems:'center', flex:1}}>
+            <div className="speaker-avatar-wrap" style={{position:'relative', width:'90px', height:'90px', marginBottom:'14px'}}>
+              <img 
+                src={resolveMediaUrl(x.photo)} 
+                alt={x.name} 
+                style={{width:'90px', height:'90px', borderRadius:'22px', border:'2.5px solid #8C1119', objectFit:'cover', boxShadow:'0 4px 12px rgba(140,17,25,0.12)'}}
+                onError={(e)=>{e.target.src='https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500'}}
+              />
+              <div style={{position:'absolute', bottom:'-4px', right:'-4px', background:'#d97706', color:'#fff', borderRadius:'50%', width:'22px', height:'22px', display:'grid', placeItems:'center', fontSize:'11px', border:'2px solid #fff', boxShadow:'0 2px 4px rgba(0,0,0,0.15)'}}>
+                🎙️
+              </div>
+            </div>
+            <div className="info" style={{textAlign:'center', width:'100%', display:'flex', flexDirection:'column', flex:1}}>
+              <h4 style={{fontSize:'17px', fontWeight:800, color:'#0f172a', margin:'0 0 6px 0'}}>{x.name}</h4>
+              <div>
+                <span className="pill" style={{background:'#fef2f2', color:'#8C1119', border:'1px solid #fecaca', fontSize:'11.5px', fontWeight:700, padding:'3px 10px', borderRadius:'16px', display:'inline-block', marginBottom:'6px'}}>
+                  {x.designation||'Speaker'}
+                </span>
+              </div>
+              <p className="org" style={{color:'#64748b', fontSize:'12.5px', fontWeight:600, margin:'0 0 10px 0'}}>🏛 {x.organization||'Conference Guest'}</p>
+              {x.bio && <div style={{background:'#f8fafc', padding:'10px', borderRadius:'10px', border:'1px solid #f1f5f9', fontSize:'12px', color:'#475569', lineHeight:'1.45', margin:'8px 0', textAlign:'left', maxHeight:'70px', overflow:'hidden', textOverflow:'ellipsis'}}>
+                "{x.bio}"
+              </div>}
+              {(x.email || x.phone) && <div className="contact-info" style={{marginTop:'auto', paddingTop:'8px', display:'flex', flexDirection:'column', gap:'4px', fontSize:'11.5px', color:'#475569'}}>
+                {x.email && <div style={{display:'flex', alignItems:'center', gap:'4px', justifyContent:'center'}}><span>✉</span> <a href={`mailto:${x.email}`} style={{color:'#0284c7', textDecoration:'none'}}>{x.email}</a></div>}
+                {x.phone && <div style={{display:'flex', alignItems:'center', gap:'4px', justifyContent:'center'}}><span>📞</span> <a href={`tel:${x.phone}`} style={{color:'#16a34a', textDecoration:'none'}}>{x.phone}</a></div>}
+              </div>}
+              <div className="rowactions" style={{display:'flex', gap:'8px', width:'100%', marginTop:'14px', paddingTop:'12px', borderTop:'1px solid #f1f5f9'}}>
+                <button style={{flex:1, padding:'7px', borderRadius:'8px', fontSize:'12.5px', fontWeight:700, background:'#f8fafc', border:'1px solid #cbd5e1', cursor:'pointer'}} onClick={()=>setEdit(x)}>Edit</button>
+                <button style={{flex:1, padding:'7px', borderRadius:'8px', fontSize:'12.5px', fontWeight:700, color:'#dc2626', background:'#fef2f2', border:'1px solid #fecaca', cursor:'pointer'}} onClick={async()=>{if(confirm('Delete this speaker?')){await req(`/admin/speakers/${x.id}`,{method:'DELETE'});load()}}}>Delete</button>
+              </div>
+            </div>
           </div>
         </div>
-      </div>)}
-      {!d.length && !busy && <div style={{gridColumn:'1/-1',textAlign:'center',padding:'40px',color:'#888'}}>No speakers added yet. Click "+ Add Speaker" to create one.</div>}
+      })}
+      {!filtered.length && !busy && <div style={{gridColumn:'1/-1',textAlign:'center',padding:'40px',color:'#888'}}>No speakers found. Click "+ Add Speaker" to create one.</div>}
     </div>
     {edit && <SpeakerModal value={edit} onSave={save} onClose={()=>setEdit(null)} notify={notify}/>}
   </div>

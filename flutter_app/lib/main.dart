@@ -4097,6 +4097,9 @@ class SpeakersScreen extends StatefulWidget {
 }
 
 class _SpeakersScreenState extends State<SpeakersScreen> {
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -4109,199 +4112,523 @@ class _SpeakersScreenState extends State<SpeakersScreen> {
 
   @override
   void dispose() {
+    _searchController.dispose();
     RealtimeSyncService.instance.syncNotifier.removeListener(_onSync);
     super.dispose();
+  }
+
+  void _launchWhatsApp(String phone, String name) async {
+    String cleanPhone = phone.replaceAll(RegExp(r'[^0-9]'), '');
+    if (cleanPhone.length == 10) cleanPhone = '91$cleanPhone';
+    if (cleanPhone.isEmpty) return;
+    final msg = Uri.encodeComponent('Namaste $name! 🙏 Connecting regarding the conference session.');
+    final url = Uri.parse('https://wa.me/$cleanPhone?text=$msg');
+    try {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (_) {}
   }
 
   @override
   Widget build(BuildContext context) {
     final conference = ConferenceScope.of(context);
+    final primary = conference.primaryColor;
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Conference Speakers', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: conference.primaryColor,
+        title: const Text('Conference Speakers', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 19)),
+        backgroundColor: primary,
         foregroundColor: Colors.white,
         elevation: 0,
+        centerTitle: true,
       ),
-      body: Center(
-        child: RefreshIndicator(
-          color: maroon,
-          onRefresh: () async {
-            setState(() {});
-            await Future.delayed(const Duration(milliseconds: 500));
-          },
-          child: FutureBuilder(
-            future: ApiService.get('/speakers'),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator(color: maroon));
-              }
+      body: Column(
+        children: [
+          // Search & Header Banner
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.02),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (v) => setState(() => _searchQuery = v.trim().toLowerCase()),
+              decoration: InputDecoration(
+                hintText: 'Search speaker name, designation, topic...',
+                hintStyle: TextStyle(fontSize: 13.5, color: Colors.grey.shade500),
+                prefixIcon: Icon(Icons.search_rounded, color: primary, size: 22),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, size: 18, color: Colors.grey),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                      )
+                    : null,
+                filled: true,
+                fillColor: const Color(0xFFF1F5F9),
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ),
 
-              if (snapshot.hasError) {
-                return const Center(child: Text('Unable to load speakers'));
-              }
+          // Speakers List
+          Expanded(
+            child: RefreshIndicator(
+              color: primary,
+              onRefresh: () async {
+                setState(() {});
+                await Future.delayed(const Duration(milliseconds: 500));
+              },
+              child: FutureBuilder(
+                future: ApiService.get('/speakers'),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Center(child: CircularProgressIndicator(color: primary));
+                  }
 
-              final list = snapshot.data is List ? snapshot.data as List : [];
-              if (list.isEmpty) {
-                return const Center(child: Text('No speakers announced yet'));
-              }
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.error_outline_rounded, size: 48, color: Colors.red.shade300),
+                          const SizedBox(height: 10),
+                          const Text('Unable to load speakers', style: TextStyle(fontWeight: FontWeight.w700, color: slate)),
+                          const SizedBox(height: 6),
+                          TextButton(onPressed: () => setState(() {}), child: const Text('Try Again')),
+                        ],
+                      ),
+                    );
+                  }
 
-              return ListView.builder(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-                itemCount: list.length,
-                itemBuilder: (context, index) {
-                  final s = list[index];
-                  final photoUrl = resolveSpeakerPhoto(s['photo']);
+                  final list = snapshot.data is List ? snapshot.data as List : [];
+                  final filtered = list.where((s) {
+                    if (_searchQuery.isEmpty) return true;
+                    final name = (s['name'] ?? '').toString().toLowerCase();
+                    final desig = (s['designation'] ?? '').toString().toLowerCase();
+                    final org = (s['organization'] ?? '').toString().toLowerCase();
+                    final bio = (s['bio'] ?? '').toString().toLowerCase();
+                    return name.contains(_searchQuery) ||
+                        desig.contains(_searchQuery) ||
+                        org.contains(_searchQuery) ||
+                        bio.contains(_searchQuery);
+                  }).toList();
 
-                return Card(
-                  elevation: 0,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                    side: BorderSide(color: Colors.grey.shade200, width: 1.2),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              width: 78,
-                              height: 78,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(color: conference.primaryColor, width: 2),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.08),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 3),
-                                  ),
-                                ],
-                              ),
-                              child: ClipOval(
-                                child: Image.network(
-                                  photoUrl,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(
-                                    color: conference.primaryColor.withOpacity(0.1),
-                                    child: Icon(Icons.person, size: 40, color: conference.primaryColor),
-                                  ),
-                                ),
-                              ),
+                  if (filtered.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: primary.withOpacity(0.08),
+                              shape: BoxShape.circle,
                             ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '${s['name'] ?? ''}',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w900,
-                                      color: conference.primaryColor,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 5),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: conference.primaryColor.withOpacity(0.08),
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Text(
-                                      '${s['designation'] ?? 'Dignitary'}',
-                                      style: TextStyle(
-                                        color: conference.primaryColor,
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 11.5,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 5),
-                                  Text(
-                                    '${s['organization'] ?? 'Conference Guest'}',
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: muted,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                            child: Icon(Icons.record_voice_over_rounded, size: 48, color: primary),
+                          ),
+                          const SizedBox(height: 14),
+                          Text(
+                            _searchQuery.isNotEmpty ? 'No matching speakers found' : 'No speakers announced yet',
+                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: slate),
+                          ),
+                          if (_searchQuery.isNotEmpty)
+                            TextButton(
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() => _searchQuery = '');
+                              },
+                              child: const Text('Clear Search'),
+                            ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  return ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 30),
+                    itemCount: filtered.length,
+                    itemBuilder: (context, index) {
+                      final s = filtered[index];
+                      final photoUrl = resolveSpeakerPhoto(s['photo']);
+                      final name = s['name'] ?? 'Guest Speaker';
+                      final designation = s['designation'] ?? 'Keynote Speaker';
+                      final organization = s['organization'] ?? 'Conference Dignitary';
+                      final bio = (s['bio'] ?? '').toString().trim();
+                      final email = (s['email'] ?? '').toString().trim();
+                      final phone = (s['phone'] ?? '').toString().trim();
+                      final isKeynote = designation.toLowerCase().contains('keynote') ||
+                          designation.toLowerCase().contains('president') ||
+                          designation.toLowerCase().contains('chair') ||
+                          index == 0;
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 18),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: isKeynote ? primary.withOpacity(0.25) : const Color(0xFFE2E8F0),
+                            width: isKeynote ? 1.4 : 1.0,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: isKeynote
+                                  ? primary.withOpacity(0.08)
+                                  : Colors.black.withOpacity(0.04),
+                              blurRadius: 14,
+                              offset: const Offset(0, 4),
                             ),
                           ],
                         ),
-                        if (s['bio'] != null && s['bio'].toString().isNotEmpty) ...[
-                          const SizedBox(height: 14),
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF8FAFC),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.grey.shade200),
-                            ),
-                            child: Text(
-                              '${s['bio']}',
-                              style: const TextStyle(
-                                fontSize: 13,
-                                color: slate,
-                                height: 1.4,
-                              ),
-                            ),
-                          ),
-                        ],
-                        if ((s['email'] != null && s['email'].toString().isNotEmpty) ||
-                            (s['phone'] != null && s['phone'].toString().isNotEmpty)) ...[
-                          const SizedBox(height: 14),
-                          Wrap(
-                            spacing: 10,
-                            runSpacing: 8,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              if (s['email'] != null && s['email'].toString().isNotEmpty)
-                                OutlinedButton.icon(
-                                  icon: const Icon(Icons.email_outlined, size: 16),
-                                  label: Text('${s['email']}'),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: conference.primaryColor,
-                                    side: BorderSide(color: Colors.grey.shade300),
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              // Top Accent Banner for Keynote/Featured
+                              if (isKeynote)
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [primary, primary.withOpacity(0.85)],
+                                      begin: Alignment.centerLeft,
+                                      end: Alignment.centerRight,
+                                    ),
                                   ),
-                                  onPressed: () => launchUrl(Uri.parse('mailto:${s['email']}')),
-                                ),
-                              if (s['phone'] != null && s['phone'].toString().isNotEmpty)
-                                OutlinedButton.icon(
-                                  icon: const Icon(Icons.phone_outlined, size: 16, color: Colors.green),
-                                  label: Text('${s['phone']}'),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: slate,
-                                    side: BorderSide(color: Colors.grey.shade300),
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  child: const Row(
+                                    children: [
+                                      Icon(Icons.star_rounded, color: Colors.amber, size: 16),
+                                      SizedBox(width: 6),
+                                      Text(
+                                        'DISTINGUISHED KEYNOTE SPEAKER',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: 0.8,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  onPressed: () => launchUrl(Uri.parse('tel:${s['phone']}')),
                                 ),
+
+                              Padding(
+                                padding: const EdgeInsets.all(18),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Main Row: Avatar + Info
+                                    Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        // Profile Avatar with Gradient Ring & Badge
+                                        Stack(
+                                          clipBehavior: Clip.none,
+                                          children: [
+                                            Container(
+                                              width: 82,
+                                              height: 82,
+                                              decoration: BoxDecoration(
+                                                borderRadius: BorderRadius.circular(22),
+                                                gradient: LinearGradient(
+                                                  colors: [primary, Colors.amber.shade700],
+                                                  begin: Alignment.topLeft,
+                                                  end: Alignment.bottomRight,
+                                                ),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: primary.withOpacity(0.2),
+                                                    blurRadius: 10,
+                                                    offset: const Offset(0, 4),
+                                                  ),
+                                                ],
+                                              ),
+                                              padding: const EdgeInsets.all(2.5),
+                                              child: ClipRRect(
+                                                borderRadius: BorderRadius.circular(20),
+                                                child: Image.network(
+                                                  photoUrl,
+                                                  fit: BoxFit.cover,
+                                                  errorBuilder: (_, __, ___) => Container(
+                                                    color: const Color(0xFFF1F5F9),
+                                                    child: Center(
+                                                      child: Text(
+                                                        name.isNotEmpty ? name[0].toUpperCase() : 'S',
+                                                        style: TextStyle(
+                                                          fontSize: 32,
+                                                          fontWeight: FontWeight.w900,
+                                                          color: primary,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            // Verified Icon Badge
+                                            Positioned(
+                                              bottom: -4,
+                                              right: -4,
+                                              child: Container(
+                                                padding: const EdgeInsets.all(3.5),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.amber.shade600,
+                                                  shape: BoxShape.circle,
+                                                  border: Border.all(color: Colors.white, width: 2),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: Colors.black.withOpacity(0.12),
+                                                      blurRadius: 4,
+                                                    ),
+                                                  ],
+                                                ),
+                                                child: const Icon(
+                                                  Icons.mic_rounded,
+                                                  size: 13,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(width: 16),
+
+                                        // Speaker Details
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                name,
+                                                style: const TextStyle(
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.w900,
+                                                  color: Color(0xFF0F172A),
+                                                  height: 1.2,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 6),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3.5),
+                                                decoration: BoxDecoration(
+                                                  color: primary.withOpacity(0.09),
+                                                  borderRadius: BorderRadius.circular(20),
+                                                  border: Border.all(color: primary.withOpacity(0.2)),
+                                                ),
+                                                child: Text(
+                                                  designation,
+                                                  style: TextStyle(
+                                                    color: primary,
+                                                    fontWeight: FontWeight.w800,
+                                                    fontSize: 11.5,
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 6),
+                                              Row(
+                                                children: [
+                                                  Icon(Icons.account_balance_outlined, size: 14, color: Colors.grey.shade600),
+                                                  const SizedBox(width: 5),
+                                                  Expanded(
+                                                    child: Text(
+                                                      organization,
+                                                      style: TextStyle(
+                                                        fontSize: 12.5,
+                                                        fontWeight: FontWeight.w600,
+                                                        color: Colors.grey.shade700,
+                                                      ),
+                                                      maxLines: 2,
+                                                      overflow: TextOverflow.ellipsis,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+
+                                    // Bio Box if available
+                                    if (bio.isNotEmpty) ...[
+                                      const SizedBox(height: 14),
+                                      Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFF8FAFC),
+                                          borderRadius: BorderRadius.circular(14),
+                                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                                        ),
+                                        child: Row(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Container(
+                                              margin: const EdgeInsets.only(top: 2, right: 8),
+                                              padding: const EdgeInsets.all(3),
+                                              decoration: BoxDecoration(
+                                                color: primary.withOpacity(0.1),
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: Icon(Icons.format_quote_rounded, size: 14, color: primary),
+                                            ),
+                                            Expanded(
+                                              child: Text(
+                                                bio,
+                                                style: const TextStyle(
+                                                  fontSize: 12.5,
+                                                  color: Color(0xFF334155),
+                                                  height: 1.45,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+
+                                    // Contact & Connect Action Pills
+                                    if (email.isNotEmpty || phone.isNotEmpty) ...[
+                                      const SizedBox(height: 14),
+                                      Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        children: [
+                                          if (email.isNotEmpty)
+                                            Material(
+                                              color: Colors.transparent,
+                                              child: InkWell(
+                                                onTap: () => launchUrl(Uri.parse('mailto:$email')),
+                                                borderRadius: BorderRadius.circular(20),
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                                  decoration: BoxDecoration(
+                                                    color: primary.withOpacity(0.06),
+                                                    borderRadius: BorderRadius.circular(20),
+                                                    border: Border.all(color: primary.withOpacity(0.25)),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      Icon(Icons.email_outlined, size: 14, color: primary),
+                                                      const SizedBox(width: 5),
+                                                      Text(
+                                                        email,
+                                                        style: TextStyle(
+                                                          color: primary,
+                                                          fontSize: 11.5,
+                                                          fontWeight: FontWeight.w700,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          if (phone.isNotEmpty)
+                                            Material(
+                                              color: Colors.transparent,
+                                              child: InkWell(
+                                                onTap: () => launchUrl(Uri.parse('tel:$phone')),
+                                                borderRadius: BorderRadius.circular(20),
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFFECFDF5),
+                                                    borderRadius: BorderRadius.circular(20),
+                                                    border: Border.all(color: const Color(0xFFA7F3D0)),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      const Icon(Icons.phone_outlined, size: 14, color: Color(0xFF059669)),
+                                                      const SizedBox(width: 5),
+                                                      Text(
+                                                        phone,
+                                                        style: const TextStyle(
+                                                          color: Color(0xFF065F46),
+                                                          fontSize: 11.5,
+                                                          fontWeight: FontWeight.w700,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          if (phone.isNotEmpty)
+                                            Material(
+                                              color: Colors.transparent,
+                                              child: InkWell(
+                                                onTap: () => _launchWhatsApp(phone, name),
+                                                borderRadius: BorderRadius.circular(20),
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFFF0FDF4),
+                                                    borderRadius: BorderRadius.circular(20),
+                                                    border: Border.all(color: const Color(0xFF86EFAC)),
+                                                  ),
+                                                  child: const Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      Icon(Icons.chat_bubble_outline_rounded, size: 14, color: Color(0xFF16A34A)),
+                                                      SizedBox(width: 5),
+                                                      Text(
+                                                        'WhatsApp',
+                                                        style: TextStyle(
+                                                          color: Color(0xFF15803D),
+                                                          fontSize: 11.5,
+                                                          fontWeight: FontWeight.w700,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
                             ],
                           ),
-                        ],
-                      ],
-                    ),
-                  ),
-                );
-              },
-            );
-            },
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
 }
+
+// ----------------------------------------------------
 
 // ----------------------------------------------------
 // NOTICES SCREEN
