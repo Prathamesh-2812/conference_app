@@ -1150,6 +1150,54 @@ app.get('/api/admin/conference-staff', auth, roles('ADMIN', 'SUPER_ADMIN', 'SUB_
   ok(res, parsed, 'Conference staff retrieved');
 }));
 
+app.get('/api/admin/all-conferences-staff', auth, roles('SUPER_ADMIN'), asyncRoute(async(req, res) => {
+  const [conferences] = await pool.query('SELECT * FROM conferences ORDER BY start_date DESC, id DESC');
+  const [staffRows] = await pool.query(`
+    SELECT cs.id, cs.user_id, cs.conference_id, cs.role as staff_role, cs.permissions, cs.created_at, cs.updated_at,
+           u.name, u.email, u.phone, u.role as global_role, u.designation, u.last_login_at,
+           c.name as conference_name, c.short_name as conference_short_name
+    FROM conference_staff cs
+    JOIN users u ON u.id = cs.user_id
+    JOIN conferences c ON c.id = cs.conference_id
+    ORDER BY c.id ASC, cs.role ASC, u.name ASC
+  `);
+
+  const [partCounts] = await pool.query(`
+    SELECT conference_id, COUNT(*) as count FROM participants GROUP BY conference_id
+  `);
+  const partCountMap = {};
+  partCounts.forEach(r => { partCountMap[r.conference_id] = r.count; });
+
+  const parsedStaff = staffRows.map(r => {
+    let perms = r.permissions;
+    if (typeof perms === 'string') {
+      try { perms = JSON.parse(perms); } catch(_) { perms = []; }
+    }
+    return { ...r, permissions: perms || [] };
+  });
+
+  const conferenceCards = conferences.map(conf => {
+    const cStaff = parsedStaff.filter(s => s.conference_id === conf.id);
+    const admins = cStaff.filter(s => s.staff_role === 'ADMIN');
+    const subAdmins = cStaff.filter(s => s.staff_role === 'SUB_ADMIN');
+    return {
+      ...conf,
+      participantCount: partCountMap[conf.id] || 0,
+      admins,
+      subAdmins,
+      totalStaffCount: cStaff.length
+    };
+  });
+
+  ok(res, {
+    totalConferences: conferences.length,
+    totalAdmins: parsedStaff.filter(s => s.staff_role === 'ADMIN').length,
+    totalSubAdmins: parsedStaff.filter(s => s.staff_role === 'SUB_ADMIN').length,
+    conferences: conferenceCards,
+    allStaff: parsedStaff
+  }, 'All conferences and staff retrieved for CRM');
+}));
+
 app.post('/api/admin/conference-staff', auth, roles('ADMIN', 'SUPER_ADMIN'), [
   body('email').isEmail(),
   body('name').notEmpty()

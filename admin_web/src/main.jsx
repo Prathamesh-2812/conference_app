@@ -66,6 +66,7 @@ const MODULE_PERMISSIONS = [
 
 const fullMenu = [
   { key: 'dashboard', title: 'Dashboard', icon: LayoutDashboard },
+  { key: 'global_crm', title: 'Admins & Conferences CRM', icon: ShieldCheck },
   { key: 'active_inactive', title: 'Active / Inactive Menus', icon: SlidersHorizontal },
   { key: 'conference', title: 'Conference', icon: Building2, children: ['Conference Details', 'Active / Inactive Menus', 'Venue & Location', 'Branding', 'Main Screen Slider'] },
   { key: 'participants', title: 'Participants', icon: Users, children: ['All Participants', 'Add Participant', 'Import Participants', 'Registration & Passes', 'QR Codes'] },
@@ -81,7 +82,7 @@ const fullMenu = [
   { key: 'feedback', title: 'Feedback', icon: MessageCircle, children: ['CME Feedback & Ratings', 'Feedback Analytics'] },
   { key: 'chat', title: 'Chat', icon: Bell, children: ['Live Chat', 'Broadcast Message'] },
   { key: 'reports', title: 'Reports', icon: FileCheck, children: ['Participant Reports', 'Accommodation Reports', 'Transport Reports', 'Certificate Reports', 'CME Feedback Reports'] },
-  { key: 'team', title: 'Team & Sub-Admins', icon: ShieldCheck, children: ['Conference Staff & Sub-Admins', 'Audit Logs'] },
+  { key: 'team', title: 'Team & Sub-Admins', icon: Users, children: ['Conference Staff & Sub-Admins', 'Audit Logs'] },
   { key: 'settings', title: 'System Settings', icon: Settings },
 ];
 
@@ -307,6 +308,7 @@ function renderPage(tab,conference,setConference,notify,selectedConferenceId,cur
   if(['Feedback','CME Feedback & Ratings','Feedback Analytics'].includes(tab))return <FeedbackView tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
   if(['Chat','Live Chat','Broadcast Message'].includes(tab))return <Chat tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
   if(['Reports','Participant Reports','Attendance Reports','Accommodation Reports','Transport Reports','Meal Reports','Certificate Reports','CME Feedback Reports'].includes(tab))return <Reports tab={tab} notify={notify} selectedConferenceId={selectedConferenceId}/>;
+  if(['Admins & Conferences CRM','Global Admins CRM','Admins CRM'].includes(tab))return <GlobalAdminsCrm notify={notify} onSelectConference={id => { setSelectedConferenceId(id); setTab('Conference Details'); }} onManageStaff={(confId) => { setSelectedConferenceId(confId); setTab('Conference Staff & Sub-Admins'); }} />;
   if(['Team & Sub-Admins','Conference Staff & Sub-Admins','Team & Permissions'].includes(tab))return <ConferenceStaffManager conferenceId={selectedConferenceId} conference={conference} notify={notify} isSuperAdmin={currentUser?.isSuperAdmin}/>;
   if(['Admin Users','Admin Users List','Audit Logs'].includes(tab))return <AdminUsers tab={tab} notify={notify}/>;
   if(tab==='System Settings')return <SystemSettings notify={notify}/>;
@@ -419,6 +421,346 @@ function CreateConferenceModal({ onClose, onCreated, notify }) {
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+function GlobalAdminsCrm({ notify, onSelectConference, onManageStaff }) {
+  const [data, setData] = useState({ conferences: [], allStaff: [], totalConferences: 0, totalAdmins: 0, totalSubAdmins: 0 });
+  const [busy, setBusy] = useState(false);
+  const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('ALL');
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showCreateConfModal, setShowCreateConfModal] = useState(false);
+  const [targetConferenceId, setTargetConferenceId] = useState(1);
+  const [editingStaff, setEditingStaff] = useState(null);
+
+  const loadData = async () => {
+    setBusy(true);
+    try {
+      const res = await req('/admin/all-conferences-staff');
+      const payload = res.data || res;
+      setData({
+        conferences: payload.conferences || [],
+        allStaff: payload.allStaff || [],
+        totalConferences: payload.totalConferences || (payload.conferences?.length || 0),
+        totalAdmins: payload.totalAdmins || 0,
+        totalSubAdmins: payload.totalSubAdmins || 0
+      });
+      if (payload.conferences?.length) {
+        setTargetConferenceId(payload.conferences[0].id);
+      }
+    } catch (err) {
+      console.warn('CRM load error:', err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  useEffect(() => { loadData(); }, []);
+
+  const handleDeleteStaff = async (staffMember) => {
+    if (!confirm(`Are you sure you want to remove ${staffMember.name} from managing "${staffMember.conference_name}"?`)) return;
+    try {
+      await req(`/admin/conference-staff/${staffMember.id}`, { method: 'DELETE' });
+      notify('Staff assignment revoked successfully');
+      loadData();
+    } catch(err) {
+      alert('Error deleting staff: ' + err.message);
+    }
+  };
+
+  const filteredStaff = useMemo(() => {
+    return (data.allStaff || []).filter(s => {
+      const matchSearch = !search || 
+        s.name?.toLowerCase().includes(search.toLowerCase()) || 
+        s.email?.toLowerCase().includes(search.toLowerCase()) || 
+        (s.phone && s.phone.includes(search)) || 
+        s.conference_name?.toLowerCase().includes(search.toLowerCase());
+      const matchRole = roleFilter === 'ALL' || s.staff_role === roleFilter;
+      return matchSearch && matchRole;
+    });
+  }, [data.allStaff, search, roleFilter]);
+
+  return (
+    <div className="crm-container" style={{display:'flex', flexDirection:'column', gap:'24px'}}>
+      {/* Hero Banner */}
+      <div className="crm-hero" style={{background:'linear-gradient(135deg, #8C1119 0%, #4a0408 100%)', padding:'26px 30px', borderRadius:'16px', color:'#fff', display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:'16px', boxShadow:'0 10px 25px rgba(140, 17, 25, 0.25)'}}>
+        <div>
+          <span style={{fontSize:'12px', fontWeight:800, letterSpacing:'1.5px', background:'rgba(200,164,90,0.3)', color:'#FDE68A', padding:'4px 10px', borderRadius:'20px', border:'1px solid rgba(200,164,90,0.4)'}}>
+            👑 SUPER ADMIN CENTRAL CONTROL
+          </span>
+          <h2 style={{fontSize:'26px', fontWeight:800, margin:'10px 0 6px 0', color:'#fff'}}>Conferences & Admins Master CRM</h2>
+          <p style={{margin:0, color:'rgba(255,255,255,0.85)', fontSize:'14px', maxWidth:'650px'}}>
+            Create conferences, appoint dedicated Conference Admins, and supervise module-level Sub-Admin permissions across the organization.
+          </p>
+        </div>
+        <div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>
+          <button className="btn" style={{background:'#F59E0B', color:'#1e293b', fontWeight:800, padding:'10px 16px', borderRadius:'10px', border:'none', cursor:'pointer', display:'flex', alignItems:'center', gap:'6px'}} onClick={() => setShowCreateConfModal(true)}>
+            <Building2 size={16}/> + Host New Conference
+          </button>
+          <button className="btn" style={{background:'#fff', color:'#8C1119', fontWeight:800, padding:'10px 16px', borderRadius:'10px', border:'none', cursor:'pointer', display:'flex', alignItems:'center', gap:'6px'}} onClick={() => { setEditingStaff(null); setShowAssignModal(true); }}>
+            <UserPlus size={16}/> + Appoint Admin / Staff
+          </button>
+        </div>
+      </div>
+
+      {/* KPI Stats */}
+      <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))', gap:'16px'}}>
+        <div className="card stat-card" style={{padding:'20px', background:'#fff', borderRadius:'14px', border:'1px solid #e2e8f0', display:'flex', alignItems:'center', gap:'16px'}}>
+          <div style={{width:'50px', height:'50px', borderRadius:'12px', background:'#fee2e2', color:'#8C1119', display:'flex', alignItems:'center', justifyContent:'center'}}>
+            <Building2 size={26}/>
+          </div>
+          <div>
+            <div style={{fontSize:'12px', color:'#64748b', fontWeight:700, textTransform:'uppercase'}}>Total Conferences</div>
+            <div style={{fontSize:'24px', fontWeight:900, color:'#1e293b'}}>{data.totalConferences}</div>
+          </div>
+        </div>
+
+        <div className="card stat-card" style={{padding:'20px', background:'#fff', borderRadius:'14px', border:'1px solid #e2e8f0', display:'flex', alignItems:'center', gap:'16px'}}>
+          <div style={{width:'50px', height:'50px', borderRadius:'12px', background:'#fef3c7', color:'#b45309', display:'flex', alignItems:'center', justifyContent:'center'}}>
+            <ShieldCheck size={26}/>
+          </div>
+          <div>
+            <div style={{fontSize:'12px', color:'#64748b', fontWeight:700, textTransform:'uppercase'}}>Conference Admins</div>
+            <div style={{fontSize:'24px', fontWeight:900, color:'#1e293b'}}>{data.totalAdmins}</div>
+          </div>
+        </div>
+
+        <div className="card stat-card" style={{padding:'20px', background:'#fff', borderRadius:'14px', border:'1px solid #e2e8f0', display:'flex', alignItems:'center', gap:'16px'}}>
+          <div style={{width:'50px', height:'50px', borderRadius:'12px', background:'#e0f2fe', color:'#0284c7', display:'flex', alignItems:'center', justifyContent:'center'}}>
+            <Users size={26}/>
+          </div>
+          <div>
+            <div style={{fontSize:'12px', color:'#64748b', fontWeight:700, textTransform:'uppercase'}}>Sub-Admins / Staff</div>
+            <div style={{fontSize:'24px', fontWeight:900, color:'#1e293b'}}>{data.totalSubAdmins}</div>
+          </div>
+        </div>
+
+        <div className="card stat-card" style={{padding:'20px', background:'#fff', borderRadius:'14px', border:'1px solid #e2e8f0', display:'flex', alignItems:'center', gap:'16px'}}>
+          <div style={{width:'50px', height:'50px', borderRadius:'12px', background:'#dcfce7', color:'#16a34a', display:'flex', alignItems:'center', justifyContent:'center'}}>
+            <UserCheck size={26}/>
+          </div>
+          <div>
+            <div style={{fontSize:'12px', color:'#64748b', fontWeight:700, textTransform:'uppercase'}}>Total CRM Users</div>
+            <div style={{fontSize:'24px', fontWeight:900, color:'#1e293b'}}>{data.allStaff.length}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Section 1: Conferences & Assigned Admins Overview Cards */}
+      <div className="panel" style={{background:'#fff', borderRadius:'14px', padding:'22px', border:'1px solid #e2e8f0'}}>
+        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'16px', flexWrap:'wrap', gap:'10px'}}>
+          <div>
+            <h3 style={{margin:0, fontSize:'18px', fontWeight:800, color:'#1e293b'}}>🏢 Conferences & Assigned Admins Overview</h3>
+            <p style={{margin:'4px 0 0 0', color:'#64748b', fontSize:'13px'}}>See which Conference Admin manages each conference and jump into managing team permissions.</p>
+          </div>
+        </div>
+
+        <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(340px, 1fr))', gap:'16px'}}>
+          {data.conferences.map(conf => (
+            <div key={conf.id} style={{border:'1.5px solid #e2e8f0', borderRadius:'14px', padding:'18px', background:'#fafafa', display:'flex', flexDirection:'column', justifyContent:'space-between', boxShadow:'0 2px 8px rgba(0,0,0,0.03)'}}>
+              <div>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:'8px', marginBottom:'8px'}}>
+                  <div>
+                    <span style={{fontSize:'11px', fontWeight:800, background:'#8C1119', color:'#fff', padding:'2px 8px', borderRadius:'6px'}}>
+                      ID: {conf.id}
+                    </span>
+                    <h4 style={{margin:'6px 0 2px 0', fontSize:'16px', fontWeight:800, color:'#1e293b'}}>{conf.name}</h4>
+                    {conf.short_name && <span style={{fontSize:'12px', color:'#64748b', fontWeight:600}}>{conf.short_name}</span>}
+                  </div>
+                  <span className="pill" style={{background: conf.active ? '#dcfce7' : '#fee2e2', color: conf.active ? '#15803d' : '#b91c1c', fontWeight:700, fontSize:'11px'}}>
+                    {conf.active ? 'ACTIVE' : 'INACTIVE'}
+                  </span>
+                </div>
+
+                <div style={{fontSize:'12px', color:'#64748b', marginBottom:'12px'}}>
+                  📅 {conf.start_date ? new Date(conf.start_date).toLocaleDateString() : 'Date TBD'} • 👥 {conf.participantCount || 0} Delegates
+                </div>
+
+                {/* Assigned Admins Section */}
+                <div style={{background:'#fff', borderRadius:'10px', padding:'12px', border:'1px solid #cbd5e1', marginBottom:'14px'}}>
+                  <div style={{fontSize:'11px', fontWeight:800, color:'#475569', textTransform:'uppercase', marginBottom:'6px', display:'flex', alignItems:'center', gap:'4px'}}>
+                    <ShieldCheck size={14} color="#8C1119"/> Assigned Conference Admin(s):
+                  </div>
+                  {conf.admins && conf.admins.length > 0 ? (
+                    conf.admins.map(adm => (
+                      <div key={adm.id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'4px 0', borderBottom:'1px dashed #f1f5f9'}}>
+                        <div>
+                          <strong style={{fontSize:'13px', color:'#1e293b'}}>{adm.name}</strong>
+                          <div style={{fontSize:'11px', color:'#64748b'}}>{adm.email} {adm.phone ? `• ${adm.phone}` : ''}</div>
+                        </div>
+                        <span style={{fontSize:'10px', background:'#fee2e2', color:'#8C1119', fontWeight:800, padding:'2px 6px', borderRadius:'4px'}}>
+                          Full Admin
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{color:'#d97706', fontSize:'12px', fontWeight:600, padding:'4px 0'}}>
+                      ⚠️ No Admin Assigned yet
+                    </div>
+                  )}
+
+                  <div style={{marginTop:'8px', paddingTop:'6px', borderTop:'1px solid #f1f5f9', fontSize:'12px', color:'#0284c7', fontWeight:700, display:'flex', alignItems:'center', gap:'6px'}}>
+                    <Users size={14}/> {conf.subAdmins?.length || 0} Sub-Admins in team
+                  </div>
+                </div>
+              </div>
+
+              <div style={{display:'flex', gap:'8px'}}>
+                <button style={{flex:1, padding:'8px 10px', fontSize:'12px', fontWeight:700, background:'#8C1119', color:'#fff', border:'none', borderRadius:'8px', cursor:'pointer'}} onClick={() => { setTargetConferenceId(conf.id); setEditingStaff(null); setShowAssignModal(true); }}>
+                  + Assign Admin
+                </button>
+                <button style={{flex:1, padding:'8px 10px', fontSize:'12px', fontWeight:700, background:'#f1f5f9', color:'#334155', border:'1px solid #cbd5e1', borderRadius:'8px', cursor:'pointer'}} onClick={() => onManageStaff(conf.id)}>
+                  Manage Team ➔
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Section 2: All Appointed Admins Master Table */}
+      <div className="panel" style={{background:'#fff', borderRadius:'14px', padding:'22px', border:'1px solid #e2e8f0'}}>
+        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'16px', flexWrap:'wrap', gap:'12px'}}>
+          <div>
+            <h3 style={{margin:0, fontSize:'18px', fontWeight:800, color:'#1e293b'}}>👥 All Appointed Admins & Sub-Admins Master CRM</h3>
+            <p style={{margin:'4px 0 0 0', color:'#64748b', fontSize:'13px'}}>Search, edit permissions, change roles or revoke access across all conferences.</p>
+          </div>
+          <div style={{display:'flex', gap:'10px', alignItems:'center', flexWrap:'wrap'}}>
+            <div style={{display:'flex', alignItems:'center', gap:'6px', background:'#f8fafc', padding:'6px 12px', borderRadius:'8px', border:'1px solid #cbd5e1'}}>
+              <Search size={16} color="#64748b"/>
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search admin by name, email, conf..." style={{border:'none', background:'transparent', outline:'none', fontSize:'13px', width:'220px'}}/>
+            </div>
+            <div style={{display:'flex', gap:'4px', background:'#f1f5f9', padding:'4px', borderRadius:'8px'}}>
+              {['ALL', 'ADMIN', 'SUB_ADMIN'].map(rf => (
+                <button key={rf} onClick={() => setRoleFilter(rf)} style={{padding:'4px 10px', fontSize:'11px', fontWeight:700, border:'none', borderRadius:'6px', cursor:'pointer', background: roleFilter === rf ? '#8C1119' : 'transparent', color: roleFilter === rf ? '#fff' : '#64748b'}}>
+                  {rf === 'ALL' ? 'All Roles' : rf === 'ADMIN' ? '👔 Conference Admins' : '🧑‍💼 Sub-Admins'}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="table-responsive" style={{overflowX:'auto'}}>
+          <table>
+            <thead>
+              <tr>
+                <th>Admin & Contact</th>
+                <th>Assigned Conference</th>
+                <th>Role Tier</th>
+                <th>Module Permissions</th>
+                <th>Last Active</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredStaff.map(member => (
+                <tr key={member.id}>
+                  <td>
+                    <div style={{fontWeight:700, color:'#1e293b'}}>{member.name}</div>
+                    <small style={{color:'#64748b'}}>{member.email}</small>
+                    {member.phone && <small style={{color:'#64748b', display:'block'}}>📞 {member.phone}</small>}
+                  </td>
+                  <td>
+                    <span style={{fontWeight:700, color:'#8C1119'}}>{member.conference_name}</span>
+                    <small style={{display:'block', color:'#64748b'}}>Conf ID: #{member.conference_id}</small>
+                  </td>
+                  <td>
+                    {member.staff_role === 'ADMIN' ? (
+                      <span className="pill" style={{background:'#8C1119', color:'#fff', fontWeight:700}}>
+                        👔 Conference Admin
+                      </span>
+                    ) : (
+                      <span className="pill" style={{background:'#0284c7', color:'#fff', fontWeight:700}}>
+                        🧑‍💼 Sub-Admin
+                      </span>
+                    )}
+                  </td>
+                  <td style={{maxWidth:'320px'}}>
+                    {member.staff_role === 'ADMIN' || (Array.isArray(member.permissions) && member.permissions.includes('all')) ? (
+                      <span style={{fontSize:'12px', color:'#16a34a', fontWeight:700}}>✅ Full Management Access</span>
+                    ) : (
+                      <div style={{display:'flex', flexWrap:'wrap', gap:'4px'}}>
+                        {Array.isArray(member.permissions) && member.permissions.length > 0 ? (
+                          member.permissions.map(p => {
+                            const label = MODULE_PERMISSIONS.find(m => m.key === p)?.label || p;
+                            return (
+                              <span key={p} className="pill" style={{fontSize:'10px', background:'#f1f5f9', color:'#334155', border:'1px solid #cbd5e1'}}>
+                                {label}
+                              </span>
+                            );
+                          })
+                        ) : (
+                          <span style={{color:'#94a3b8', fontSize:'12px'}}>No active permissions</span>
+                        )}
+                      </div>
+                    )}
+                  </td>
+                  <td>
+                    <small style={{color:'#64748b'}}>
+                      {member.last_login_at ? new Date(member.last_login_at).toLocaleDateString() : 'Never logged in'}
+                    </small>
+                  </td>
+                  <td>
+                    <div style={{display:'flex', gap:'8px'}}>
+                      <button className="icon" title="Edit Admin & Permissions" onClick={() => { setTargetConferenceId(member.conference_id); setEditingStaff(member); setShowAssignModal(true); }}>
+                        <Edit2 size={16}/>
+                      </button>
+                      <button className="icon" title="Revoke Admin Access" onClick={() => handleDeleteStaff(member)} style={{color:'#dc2626'}}>
+                        <Trash2 size={16}/>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {filteredStaff.length === 0 && !busy && (
+                <tr>
+                  <td colSpan={6} style={{textAlign:'center', padding:'30px', color:'#94a3b8'}}>
+                    No admins or staff members found matching your search.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Quick Assign / Edit Staff Modal */}
+      {showAssignModal && (
+        <ConferenceStaffModal
+          conferenceId={targetConferenceId}
+          staff={editingStaff}
+          conferencesList={data.conferences}
+          onClose={() => { setShowAssignModal(false); setEditingStaff(null); }}
+          onSave={async (v) => {
+            try {
+              const selectedConf = v.conferenceId || targetConferenceId;
+              if (editingStaff) {
+                await req(`/admin/conference-staff/${editingStaff.id}`, { method: 'PUT', body: JSON.stringify(v) });
+                notify('Admin / Staff member updated successfully');
+              } else {
+                await req('/admin/conference-staff', { method: 'POST', body: JSON.stringify({ ...v, conferenceId: selectedConf }) });
+                notify('Admin / Staff appointed successfully');
+              }
+              setShowAssignModal(false);
+              setEditingStaff(null);
+              loadData();
+            } catch(err) {
+              alert('Error saving staff member: ' + err.message);
+            }
+          }}
+        />
+      )}
+
+      {/* Host New Conference Modal */}
+      {showCreateConfModal && (
+        <CreateConferenceModal
+          onClose={() => setShowCreateConfModal(false)}
+          onCreated={() => { loadData(); notify('New conference created!'); }}
+          notify={notify}
+        />
+      )}
     </div>
   );
 }
@@ -573,8 +915,9 @@ function ConferenceStaffManager({ conferenceId, conference, notify, isSuperAdmin
   );
 }
 
-function ConferenceStaffModal({ conferenceId, staff, onClose, onSave }) {
+function ConferenceStaffModal({ conferenceId, staff, conferencesList, onClose, onSave }) {
   const isEdit = !!staff;
+  const [selectedConfId, setSelectedConfId] = useState(conferenceId || (conferencesList?.[0]?.id) || 1);
   const [name, setName] = useState(staff?.name || '');
   const [email, setEmail] = useState(staff?.email || '');
   const [phone, setPhone] = useState(staff?.phone || '');
@@ -611,6 +954,7 @@ function ConferenceStaffModal({ conferenceId, staff, onClose, onSave }) {
     setBusy(true);
     try {
       await onSave({
+        conferenceId: selectedConfId,
         name: name.trim(),
         email: email.trim().toLowerCase(),
         phone: phone.trim(),
@@ -632,6 +976,16 @@ function ConferenceStaffModal({ conferenceId, staff, onClose, onSave }) {
         </div>
         <form onSubmit={handleSubmit}>
           <div className="modal-body" style={{display: 'flex', flexDirection: 'column', gap: '14px', maxHeight: '70vh', overflowY: 'auto'}}>
+            {conferencesList && conferencesList.length > 0 && !isEdit && (
+              <div>
+                <label style={{fontWeight: 700, fontSize: '13px', display: 'block', marginBottom: '6px'}}>Target Conference *</label>
+                <select value={selectedConfId} onChange={e => setSelectedConfId(Number(e.target.value))} style={{width:'100%', padding:'10px', borderRadius:'8px', border:'1px solid #cbd5e1', fontWeight:600}}>
+                  {conferencesList.map(c => (
+                    <option key={c.id} value={c.id}>{c.name} (ID: #{c.id})</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px'}}>
               <Field label="Full Name *" value={name} onChange={setName} />
               <Field label="Email Address *" value={email} onChange={setEmail} />
@@ -678,9 +1032,11 @@ function ConferenceStaffModal({ conferenceId, staff, onClose, onSave }) {
                   {MODULE_PERMISSIONS.map(m => {
                     const checked = permissions.includes(m.key);
                     return (
-                      <label key={m.key} style={{display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer', background: checked ? '#e0f2fe' : '#ffffff', padding: '8px 10px', borderRadius: '6px', border: checked ? '1px solid #7dd3fc' : '1px solid #cbd5e1'}}>
+                      <label key={m.key} style={{display:'flex', alignItems:'center', gap:'8px', fontSize:'12.5px', cursor:'pointer', padding:'6px 8px', background: checked ? '#eff6ff' : '#fff', borderRadius:'6px', border: checked ? '1px solid #93c5fd' : '1px solid #e2e8f0'}}>
                         <input type="checkbox" checked={checked} onChange={() => togglePermission(m.key)} />
-                        <span>{m.label}</span>
+                        <span style={{color: checked ? '#1d4ed8' : '#334155', fontWeight: checked ? 700 : 500}}>
+                          {m.label}
+                        </span>
                       </label>
                     );
                   })}
@@ -690,9 +1046,7 @@ function ConferenceStaffModal({ conferenceId, staff, onClose, onSave }) {
           </div>
           <div className="modal-footer">
             <button type="button" onClick={onClose}>Cancel</button>
-            <button type="submit" className="primary" disabled={busy}>
-              {busy ? 'Saving...' : (isEdit ? 'Save Changes' : 'Assign to Conference')}
-            </button>
+            <button type="submit" className="primary" disabled={busy}>{busy ? 'Saving...' : 'Save Staff Member'}</button>
           </div>
         </form>
       </div>
