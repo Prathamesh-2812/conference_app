@@ -327,7 +327,13 @@ async function runMigrations(){
       "arrival_time TIME NULL",
       "departure_date DATE NULL",
       "departure_time TIME NULL",
-      "liaison_id INT NULL"
+      "liaison_id INT NULL",
+      "mmc_reg_no VARCHAR(100) NULL",
+      "iapm_membership_no VARCHAR(100) NULL",
+      "payment_mode VARCHAR(50) NULL",
+      "transaction_id VARCHAR(100) NULL",
+      "program_type VARCHAR(100) NULL",
+      "state VARCHAR(100) NULL"
     ];
     for(const colDef of partCols){
       const colName = colDef.split(' ')[0];
@@ -340,7 +346,10 @@ async function runMigrations(){
     const userCols = [
       "designation VARCHAR(100) NULL",
       "university VARCHAR(255) NULL",
-      "blood_group VARCHAR(10) NULL"
+      "blood_group VARCHAR(10) NULL",
+      "gender VARCHAR(20) NULL",
+      "date_of_birth VARCHAR(50) NULL",
+      "state VARCHAR(100) NULL"
     ];
     for(const colDef of userCols){
       const colName = colDef.split(' ')[0];
@@ -1631,6 +1640,7 @@ app.get('/api/admin/participants',auth,roles('ADMIN','SUPER_ADMIN','VOLUNTEER'),
 
   let query = `
     SELECT p.*, u.name, u.email, u.phone, u.designation, u.university, u.blood_group, u.photo, u.last_login_at,
+           u.gender, u.date_of_birth, u.state as user_state,
            l.name as liaison_name, l.phone as liaison_phone,
            h.id as hotel_id, h.name as hotel_name, r.room_number, r.room_type,
            ra.check_in, ra.check_out,
@@ -1675,8 +1685,8 @@ app.get('/api/admin/participants',auth,roles('ADMIN','SUPER_ADMIN','VOLUNTEER'),
   }
   if(q && String(q).trim()){
     const term = `%${String(q).trim()}%`;
-    query += ` AND (u.name LIKE ? OR u.email LIKE ? OR u.phone LIKE ? OR p.registration_no LIKE ? OR u.university LIKE ? OR u.designation LIKE ?)`;
-    params.push(term, term, term, term, term, term);
+    query += ` AND (u.name LIKE ? OR u.email LIKE ? OR u.phone LIKE ? OR p.registration_no LIKE ? OR u.university LIKE ? OR u.designation LIKE ? OR p.mmc_reg_no LIKE ? OR p.iapm_membership_no LIKE ? OR p.transaction_id LIKE ? OR p.state LIKE ?)`;
+    params.push(term, term, term, term, term, term, term, term, term, term);
   }
 
   query += ` ORDER BY p.id DESC`;
@@ -1697,12 +1707,12 @@ app.post('/api/admin/participants',auth,roles('ADMIN','SUPER_ADMIN'),[
   let userId;
   if(existing.length){
     userId=existing[0].id;
-    await pool.query('UPDATE users SET name=?, phone=?, designation=?, university=?, blood_group=?, photo=? WHERE id=?',
-      [req.body.name, req.body.phone||null, req.body.designation||null, req.body.university||null, req.body.bloodGroup||req.body.blood_group||null, req.body.photo||null, userId]);
+    await pool.query('UPDATE users SET name=?, phone=?, designation=?, university=?, blood_group=?, photo=?, gender=?, date_of_birth=?, state=? WHERE id=?',
+      [req.body.name, req.body.phone||null, req.body.designation||null, req.body.university||null, req.body.bloodGroup||req.body.blood_group||null, req.body.photo||null, req.body.gender||null, req.body.date_of_birth||req.body.dob||null, req.body.state||null, userId]);
   } else {
     const [uRes]=await pool.query(
-      'INSERT INTO users(name, email, password_hash, phone, role, designation, university, blood_group, photo, must_change_password) VALUES(?,?,?,?,?,?,?,?,?,1)',
-      [req.body.name, req.body.email, passwordHash, req.body.phone||null, req.body.role||'PARTICIPANT', req.body.designation||null, req.body.university||null, req.body.bloodGroup||req.body.blood_group||null, req.body.photo||null]
+      'INSERT INTO users(name, email, password_hash, phone, role, designation, university, blood_group, photo, gender, date_of_birth, state, must_change_password) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,1)',
+      [req.body.name, req.body.email, passwordHash, req.body.phone||null, req.body.role||'PARTICIPANT', req.body.designation||null, req.body.university||null, req.body.bloodGroup||req.body.blood_group||null, req.body.photo||null, req.body.gender||null, req.body.date_of_birth||req.body.dob||null, req.body.state||null]
     );
     userId=uRes.insertId;
   }
@@ -1717,22 +1727,27 @@ app.post('/api/admin/participants',auth,roles('ADMIN','SUPER_ADMIN'),[
     INSERT INTO participants(
       user_id, conference_id, registration_no, category, status, payment_status, amount,
       mode_of_travel, flight_number, arrival_date, arrival_time, departure_date, departure_time,
-      emergency_contact, liaison_id, qr_token, food_preference, kit_issued, certificate_issued
-    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      emergency_contact, liaison_id, qr_token, food_preference, kit_issued, certificate_issued,
+      mmc_reg_no, iapm_membership_no, payment_mode, transaction_id, program_type, state
+    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     ON DUPLICATE KEY UPDATE
       registration_no=VALUES(registration_no), category=VALUES(category), status=VALUES(status),
       payment_status=VALUES(payment_status), amount=VALUES(amount), mode_of_travel=VALUES(mode_of_travel),
       flight_number=VALUES(flight_number), arrival_date=VALUES(arrival_date), arrival_time=VALUES(arrival_time),
       departure_date=VALUES(departure_date), departure_time=VALUES(departure_time),
       emergency_contact=VALUES(emergency_contact), liaison_id=VALUES(liaison_id),
-      food_preference=VALUES(food_preference), kit_issued=VALUES(kit_issued), certificate_issued=VALUES(certificate_issued)
+      food_preference=VALUES(food_preference), kit_issued=VALUES(kit_issued), certificate_issued=VALUES(certificate_issued),
+      mmc_reg_no=VALUES(mmc_reg_no), iapm_membership_no=VALUES(iapm_membership_no), payment_mode=VALUES(payment_mode),
+      transaction_id=VALUES(transaction_id), program_type=VALUES(program_type), state=VALUES(state)
   `, [
     userId, conferenceId, regNo, req.body.category||'Delegate', req.body.status||'PENDING',
     req.body.payment_status||'PENDING', req.body.amount||0, req.body.mode_of_travel||null,
     req.body.flight_number||null, req.body.arrivalDate||req.body.arrival_date||null,
     req.body.arrivalTime||req.body.arrival_time||null, req.body.departureDate||req.body.departure_date||null,
     req.body.departureTime||req.body.departure_time||null, req.body.emergency_contact||null,
-    req.body.liaison_id||null, qrToken, foodPref, kitIssued, certIssued
+    req.body.liaison_id||null, qrToken, foodPref, kitIssued, certIssued,
+    req.body.mmc_reg_no||null, req.body.iapm_membership_no||null, req.body.payment_mode||null,
+    req.body.transaction_id||null, req.body.program_type||null, req.body.state||null
   ]);
 
   const createdPart = { id: pRes.insertId, userId, registrationNo: regNo, qrToken, name: req.body.name, status: req.body.status || 'PENDING' };
@@ -1744,9 +1759,9 @@ app.put('/api/admin/participants/:id',auth,roles('ADMIN','SUPER_ADMIN'),validate
   const [[p]]=await pool.query('SELECT p.*, u.id as user_id, u.name, u.email, u.phone FROM participants p JOIN users u ON u.id=p.user_id WHERE p.id=?',[req.params.id]);
   if(!p) return res.status(404).json({message:'Participant not found'});
 
-  if(req.body.name || req.body.phone || req.body.designation || req.body.university || req.body.email || req.body.bloodGroup || req.body.blood_group){
-    await pool.query('UPDATE users SET name=COALESCE(?,name), email=COALESCE(?,email), phone=COALESCE(?,phone), designation=COALESCE(?,designation), university=COALESCE(?,university), blood_group=COALESCE(?,blood_group), photo=COALESCE(?,photo) WHERE id=?',
-      [req.body.name, req.body.email, req.body.phone, req.body.designation, req.body.university, req.body.bloodGroup||req.body.blood_group, req.body.photo, p.user_id]);
+  if(req.body.name || req.body.phone || req.body.designation || req.body.university || req.body.email || req.body.bloodGroup || req.body.blood_group || req.body.gender || req.body.date_of_birth || req.body.dob || req.body.state){
+    await pool.query('UPDATE users SET name=COALESCE(?,name), email=COALESCE(?,email), phone=COALESCE(?,phone), designation=COALESCE(?,designation), university=COALESCE(?,university), blood_group=COALESCE(?,blood_group), photo=COALESCE(?,photo), gender=COALESCE(?,gender), date_of_birth=COALESCE(?,date_of_birth), state=COALESCE(?,state) WHERE id=?',
+      [req.body.name, req.body.email, req.body.phone, req.body.designation, req.body.university, req.body.bloodGroup||req.body.blood_group, req.body.photo, req.body.gender||null, req.body.date_of_birth||req.body.dob||null, req.body.state||null, p.user_id]);
   }
 
   const foodPref = req.body.food_preference !== undefined ? req.body.food_preference : req.body.foodPreference;
@@ -1761,18 +1776,27 @@ app.put('/api/admin/participants/:id',auth,roles('ADMIN','SUPER_ADMIN'),validate
       emergency_contact=COALESCE(?,emergency_contact), liaison_id=?,
       food_preference=COALESCE(?,food_preference),
       kit_issued=COALESCE(?,kit_issued),
-      certificate_issued=COALESCE(?,certificate_issued)
+      certificate_issued=COALESCE(?,certificate_issued),
+      mmc_reg_no=COALESCE(?,mmc_reg_no),
+      iapm_membership_no=COALESCE(?,iapm_membership_no),
+      payment_mode=COALESCE(?,payment_mode),
+      transaction_id=COALESCE(?,transaction_id),
+      program_type=COALESCE(?,program_type),
+      state=COALESCE(?,state)
     WHERE id=?
   `, [
     req.body.registration_no, req.body.category, req.body.status, req.body.payment_status, req.body.amount,
     req.body.mode_of_travel, req.body.flight_number, req.body.arrivalDate||req.body.arrival_date||null,
     req.body.arrivalTime||req.body.arrival_time||null, req.body.departureDate||req.body.departure_date||null,
     req.body.departureTime||req.body.departure_time||null, req.body.emergency_contact,
-    req.body.liaison_id||null, foodPref||null, kitIssued, certIssued, req.params.id
+    req.body.liaison_id||null, foodPref||null, kitIssued, certIssued,
+    req.body.mmc_reg_no||null, req.body.iapm_membership_no||null, req.body.payment_mode||null,
+    req.body.transaction_id||null, req.body.program_type||null, req.body.state||null, req.params.id
   ]);
 
   const [[updatedP]]=await pool.query(`
     SELECT p.*, u.name, u.email, u.phone, u.designation, u.university, u.blood_group, u.photo, u.last_login_at,
+           u.gender, u.date_of_birth, u.state as user_state,
            l.name as liaison_name, l.phone as liaison_phone,
            h.id as hotel_id, h.name as hotel_name, r.room_number, r.room_type,
            ra.check_in, ra.check_out,
@@ -1933,11 +1957,36 @@ app.post('/api/admin/participants/bulk-import',auth,roles('ADMIN','SUPER_ADMIN')
 
   for(let i = 0; i < participants.length; i++){
     const row = participants[i];
-    const name = getRowVal(row, 'name', 'Name', 'Full Name', 'full_name', 'Participant Name', 'Delegate Name', 'Doctor Name');
-    let phone = getRowVal(row, 'phone', 'Phone', 'Mobile Number', 'mobile', 'Phone Number', 'Contact', 'WhatsApp');
-    if(phone) phone = String(phone).replace(/[^0-9]/g, '');
-    let email = getRowVal(row, 'email', 'Email', 'Email Address', 'Email ID', 'Mail');
-    const regNoInput = getRowVal(row, 'registration_no', 'RegistrationNo', 'Reg No', 'Registration Number', 'Registration No', 'Reg. No', 'Delegate ID');
+    
+    // 1. Name Parsing (Full Name or First Name + Last Name)
+    const fullName = getRowVal(row, 'name', 'Name', 'Full Name', 'full_name', 'Full Nam', 'Participant Name', 'Delegate Name', 'Doctor Name', 'Delegate');
+    const firstName = getRowVal(row, 'first_name', 'First Name', 'FirstName', 'First Nam');
+    const lastName = getRowVal(row, 'last_name', 'Last Name', 'LastName', 'Last Nam');
+    let name = fullName;
+    if(!name && (firstName || lastName)){
+      name = [firstName, lastName].filter(Boolean).join(' ');
+    }
+
+    // 2. Phone / Mobile Parsing (Handles scientific notation like 9.85E+09)
+    let phone = getRowVal(row, 'phone', 'Phone', 'Mobile Number', 'mobile', 'Mobile', 'Phone Number', 'Contact', 'WhatsApp', 'Mobile No', 'Cell Phone', 'Cell');
+    if(phone){
+      let pStr = String(phone).trim();
+      if(/^[0-9.]+[eE][+-]?[0-9]+$/.test(pStr)){
+        phone = String(Math.round(Number(pStr)));
+      } else {
+        phone = pStr.replace(/[^0-9]/g, '');
+      }
+      if(phone.length === 12 && phone.startsWith('91')){
+        phone = phone.slice(2);
+      }
+    }
+
+    // 3. Email Parsing
+    let email = getRowVal(row, 'email', 'Email', 'Email Address', 'Email ID', 'Mail', 'E-mail');
+    if(email) email = String(email).trim().toLowerCase();
+
+    // 4. Registration Number Parsing (MAPCON2..., REG-453, or numeric ID)
+    let regNoInput = getRowVal(row, 'registration_no', 'RegistrationNo', 'Reg No', 'Registration Number', 'Registration No', 'Reg. No', 'Delegate ID', 'Registration ID', 'Registrat', 'Registratic', 'Registration', 'Reg_No', 'Delegate No');
     
     if(!email && phone) email = `${phone}@conference.local`;
     if(!name && !phone && !email && !regNoInput){
@@ -1976,9 +2025,12 @@ app.post('/api/admin/participants/bulk-import',auth,roles('ADMIN','SUPER_ADMIN')
         }
       }
 
-      const designation = getRowVal(row, 'designation', 'Designation', 'Title', 'Post');
-      const university = getRowVal(row, 'university', 'University', 'Institution', 'College', 'Organization', 'Hospital');
+      const gender = getRowVal(row, 'gender', 'Gender', 'Sex');
+      const dateOfBirth = parseSafeDate(getRowVal(row, 'date_of_birth', 'Date of Birth', 'Date of B', 'DOB', 'Birth Date')) || getRowVal(row, 'Date of B');
+      const designation = getRowVal(row, 'designation', 'Designation', 'Title', 'Post', 'Designat');
+      const university = getRowVal(row, 'university', 'University', 'Institution', 'Institutio', 'College', 'Organization', 'Hospital', 'Workplace', 'Workplac');
       const bloodGroup = getRowVal(row, 'blood_group', 'BloodGroup', 'Blood Group', 'Blood');
+      const state = getRowVal(row, 'state', 'State', 'State Name');
 
       if(uid){
         await pool.query(`
@@ -1988,9 +2040,12 @@ app.post('/api/admin/participants/bulk-import',auth,roles('ADMIN','SUPER_ADMIN')
             email = COALESCE(?, email),
             designation = COALESCE(?, designation),
             university = COALESCE(?, university),
-            blood_group = COALESCE(?, blood_group)
+            blood_group = COALESCE(?, blood_group),
+            gender = COALESCE(?, gender),
+            date_of_birth = COALESCE(?, date_of_birth),
+            state = COALESCE(?, state)
           WHERE id = ?
-        `, [finalName, phone||null, email||null, designation, university, bloodGroup, uid]);
+        `, [finalName, phone||null, email||null, designation, university, bloodGroup, gender, dateOfBirth, state, uid]);
       } else {
         const userPass = phone || 'Demo@123';
         const userHash = await bcrypt.hash(userPass, 10);
@@ -1998,8 +2053,8 @@ app.post('/api/admin/participants/bulk-import',auth,roles('ADMIN','SUPER_ADMIN')
         
         try {
           const [uRes] = await pool.query(
-            'INSERT INTO users(name,email,password_hash,phone,role,designation,university,blood_group,must_change_password) VALUES(?,?,?,?,?,?,?,?,1)',
-            [finalName, safeEmail, userHash, phone||null, 'PARTICIPANT', designation, university, bloodGroup]
+            'INSERT INTO users(name,email,password_hash,phone,role,designation,university,blood_group,gender,date_of_birth,state,must_change_password) VALUES(?,?,?,?,?,?,?,?,?,?,?,1)',
+            [finalName, safeEmail, userHash, phone||null, 'PARTICIPANT', designation, university, bloodGroup, gender, dateOfBirth, state]
           );
           uid = uRes.insertId;
         } catch(uErr) {
@@ -2015,8 +2070,18 @@ app.post('/api/admin/participants/bulk-import',auth,roles('ADMIN','SUPER_ADMIN')
 
       const regNo = regNoInput || `MAPCON-${Date.now().toString().slice(-4)}${Math.floor(Math.random()*1000)}`;
       const qrToken = `QR-${uid}-${Date.now().toString(36)}-${Math.floor(Math.random()*1000)}`;
-      const category = getRowVal(row, 'category', 'Category', 'Delegate Category', 'Type') || 'Delegate';
-      const foodPref = getRowVal(row, 'food_preference', 'FoodPreference', 'Food Preference', 'Meal Preference', 'Diet', 'Food') || 'VEG';
+      const category = getRowVal(row, 'category', 'Category', 'Delegate Category', 'Type', 'Attending', 'Attending Type', 'Registrat Category') || 'Delegate';
+      
+      // Food Preference Normalization
+      const rawFood = getRowVal(row, 'food_preference', 'FoodPreference', 'Food Preference', 'Food Pref', 'Meal Preference', 'Diet', 'Food');
+      let foodPref = 'VEG';
+      if(rawFood){
+        const uFood = String(rawFood).toUpperCase();
+        if(uFood.includes('NON')) foodPref = 'NON_VEG';
+        else if(uFood.includes('JAIN')) foodPref = 'JAIN';
+        else if(uFood.includes('VEG')) foodPref = 'VEG';
+        else foodPref = rawFood;
+      }
       
       const rawKit = getRowVal(row, 'kit_issued', 'Kit Issued', 'Kit');
       const kitIssued = rawKit === 'Yes' || rawKit === '1' || rawKit === 'true' || row.kit_issued === true ? 1 : 0;
@@ -2031,6 +2096,29 @@ app.post('/api/admin/participants/bulk-import',auth,roles('ADMIN','SUPER_ADMIN')
       const departureDate = parseSafeDate(getRowVal(row, 'departure_date', 'DepartureDate', 'Departure Date', 'Date of Departure'));
       const departureTime = parseSafeTime(getRowVal(row, 'departure_time', 'DepartureTime', 'Departure Time', 'Time of Departure'));
       const emergencyContact = getRowVal(row, 'emergency_contact', 'EmergencyContact', 'Emergency Contact', 'Emergency Phone');
+
+      // Medical council, IAPM, payment & transaction details
+      let mmcReg = getRowVal(row, 'mmc_reg_no', 'MMC Reg', 'MMC Reg No', 'MMC Registration', 'State Med', 'State Medical Council Reg No', 'State Med Reg', 'Medical Council Reg No');
+      if(mmcReg && /^[0-9.]+[eE][+-]?[0-9]+$/.test(String(mmcReg).trim())){
+        mmcReg = String(Math.round(Number(mmcReg)));
+      }
+      const iapmNo = getRowVal(row, 'iapm_membership_no', 'IAPM Member', 'IAPM Mer', 'IAPM Membership No', 'Membership No', 'Membership Number');
+      const paymentMode = getRowVal(row, 'payment_mode', 'Payment Mode', 'Payment', 'Payment M', 'Payment Gateway', 'Payment Method');
+      const transactionId = getRowVal(row, 'transaction_id', 'Transaction ID', 'Transacti', 'Transactio', 'Txn ID', 'Transaction No', 'Ref No');
+      const programType = getRowVal(row, 'program_type', 'Program', 'Program Type', 'Preferred Program', 'Preferred', 'Program 1');
+      
+      const rawAmount = getRowVal(row, 'amount', 'Amount', 'Fee', 'Total Amount', 'Registration Fee');
+      let amountVal = 0;
+      if(rawAmount && !isNaN(Number(rawAmount))) amountVal = Number(rawAmount);
+
+      const rawPayStatus = getRowVal(row, 'payment_status', 'Payment Status', 'Payment S', 'Payment');
+      let paymentStatus = 'PAID';
+      if(rawPayStatus){
+        const uPay = String(rawPayStatus).toUpperCase();
+        if(uPay.includes('SUCC') || uPay.includes('PAID')) paymentStatus = 'PAID';
+        else if(uPay.includes('PEND')) paymentStatus = 'PENDING';
+        else if(uPay.includes('FAIL') || uPay.includes('REFU')) paymentStatus = 'REFUNDED';
+      }
 
       // Liaison Mapping
       const liaisonName = getRowVal(row, 'liaison_name', 'LiaisonName', 'Liaison Officer', 'Liaison Faculty', 'Liaison');
@@ -2067,14 +2155,28 @@ app.post('/api/admin/participants/bulk-import',auth,roles('ADMIN','SUPER_ADMIN')
             departure_date = COALESCE(?, departure_date),
             departure_time = COALESCE(?, departure_time),
             emergency_contact = COALESCE(?, emergency_contact),
-            liaison_id = COALESCE(?, liaison_id)
+            liaison_id = COALESCE(?, liaison_id),
+            mmc_reg_no = COALESCE(?, mmc_reg_no),
+            iapm_membership_no = COALESCE(?, iapm_membership_no),
+            payment_mode = COALESCE(?, payment_mode),
+            transaction_id = COALESCE(?, transaction_id),
+            program_type = COALESCE(?, program_type),
+            amount = COALESCE(?, amount),
+            payment_status = COALESCE(?, payment_status),
+            state = COALESCE(?, state)
           WHERE id = ?
-        `, [category, foodPref, kitIssued, certIssued, modeOfTravel, flightNumber, arrivalDate, arrivalTime, departureDate, departureTime, emergencyContact, liaisonId, participantId]);
+        `, [
+          category, foodPref, kitIssued, certIssued, modeOfTravel, flightNumber, arrivalDate, arrivalTime, departureDate, departureTime, emergencyContact, liaisonId,
+          mmcReg||null, iapmNo||null, paymentMode||null, transactionId||null, programType||null, amountVal||null, paymentStatus, state||null, participantId
+        ]);
         updated++;
       } else {
         const [pRes] = await pool.query(`
-          INSERT INTO participants(user_id, conference_id, registration_no, category, food_preference, kit_issued, certificate_issued, status, payment_status, mode_of_travel, flight_number, arrival_date, arrival_time, departure_date, departure_time, emergency_contact, liaison_id, qr_token)
-          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+          INSERT INTO participants(
+            user_id, conference_id, registration_no, category, food_preference, kit_issued, certificate_issued, status, payment_status, amount,
+            mode_of_travel, flight_number, arrival_date, arrival_time, departure_date, departure_time, emergency_contact, liaison_id, qr_token,
+            mmc_reg_no, iapm_membership_no, payment_mode, transaction_id, program_type, state
+          ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
           ON DUPLICATE KEY UPDATE
             category = COALESCE(VALUES(category), category),
             food_preference = COALESCE(VALUES(food_preference), food_preference),
@@ -2085,8 +2187,20 @@ app.post('/api/admin/participants/bulk-import',auth,roles('ADMIN','SUPER_ADMIN')
             departure_date = COALESCE(VALUES(departure_date), departure_date),
             departure_time = COALESCE(VALUES(departure_time), departure_time),
             emergency_contact = COALESCE(VALUES(emergency_contact), emergency_contact),
-            liaison_id = COALESCE(VALUES(liaison_id), liaison_id)
-        `, [uid, conferenceId, regNo, category, foodPref, kitIssued, certIssued, 'APPROVED', 'PAID', modeOfTravel, flightNumber, arrivalDate, arrivalTime, departureDate, departureTime, emergencyContact, liaisonId, qrToken]);
+            liaison_id = COALESCE(VALUES(liaison_id), liaison_id),
+            mmc_reg_no = COALESCE(VALUES(mmc_reg_no), mmc_reg_no),
+            iapm_membership_no = COALESCE(VALUES(iapm_membership_no), iapm_membership_no),
+            payment_mode = COALESCE(VALUES(payment_mode), payment_mode),
+            transaction_id = COALESCE(VALUES(transaction_id), transaction_id),
+            program_type = COALESCE(VALUES(program_type), program_type),
+            amount = COALESCE(VALUES(amount), amount),
+            payment_status = COALESCE(VALUES(payment_status), payment_status),
+            state = COALESCE(VALUES(state), state)
+        `, [
+          uid, conferenceId, regNo, category, foodPref, kitIssued, certIssued, 'APPROVED', paymentStatus, amountVal,
+          modeOfTravel, flightNumber, arrivalDate, arrivalTime, departureDate, departureTime, emergencyContact, liaisonId, qrToken,
+          mmcReg||null, iapmNo||null, paymentMode||null, transactionId||null, programType||null, state||null
+        ]);
         participantId = pRes.insertId || existingParticipant?.id;
         created++;
       }

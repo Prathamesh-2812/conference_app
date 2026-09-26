@@ -1566,9 +1566,12 @@ function Participants({tab, notify, selectedConferenceId}){
               <button className="pill small" style={{cursor:'pointer',marginTop:'4px',background:'#8C1119',color:'#fff',border:0}} onClick={()=>setQrModal(x)}>📱 View QR ID</button>
             </td>
             <td>
-              <b>{x.name}</b><br/>
+              <b>{x.name}</b> {x.gender && <small style={{color:'#64748b',fontWeight:600}}>({x.gender})</small>}<br/>
               <small>{x.email}</small><br/>
               <small>{x.phone}</small>
+              {x.mmc_reg_no && <div style={{fontSize:'11px',color:'#0369a1',fontWeight:600,marginTop:'2px'}}>MMC: {x.mmc_reg_no}</div>}
+              {x.iapm_membership_no && <div style={{fontSize:'11px',color:'#7c3aed',fontWeight:600}}>IAPM: {x.iapm_membership_no}</div>}
+              {x.state && <div style={{fontSize:'11px',color:'#475569'}}>📍 {x.state}</div>}
             </td>
             <td>
               {x.university||'-'}<br/>
@@ -1580,6 +1583,7 @@ function Participants({tab, notify, selectedConferenceId}){
               <span className="pill small" style={{marginTop:'4px',background:(x.food_preference==='NON_VEG'?'#fef2f2':'#ecfdf5'),color:(x.food_preference==='NON_VEG'?'#991b1b':'#065f46'),border:(x.food_preference==='NON_VEG'?'1px solid #fecaca':'1px solid #a7f3d0')}}>
                 {x.food_preference === 'NON_VEG' ? '🍗 Non-Veg' : x.food_preference === 'JAIN' ? '🍃 Jain' : '🥦 Veg'}
               </span>
+              {x.program_type && <div style={{fontSize:'10.5px',color:'#64748b',marginTop:'3px'}}>Prog: {x.program_type}</div>}
             </td>
             <td>
               <div style={{display:'flex',flexDirection:'column',gap:'4px'}}>
@@ -1600,9 +1604,15 @@ function Participants({tab, notify, selectedConferenceId}){
               </div>
             </td>
             <td>
-              <span className={`pill ${x.status}`}>{x.status}</span><br/>
+              <span className={`pill ${x.status}`}>{x.status}</span>
+              <div style={{marginTop:'4px',fontSize:'11.5px'}}>
+                <span style={{color:x.payment_status==='PAID'?'#16a34a':'#d97706',fontWeight:700}}>{x.payment_status}</span>
+                {x.amount > 0 && <span style={{marginLeft:'4px',fontWeight:600,color:'#334155'}}>(₹{Number(x.amount).toLocaleString('en-IN')})</span>}
+                {x.payment_mode && <div style={{color:'#64748b',fontSize:'10.5px'}}>via {x.payment_mode}</div>}
+                {x.transaction_id && <div style={{color:'#94a3b8',fontSize:'10px',fontFamily:'monospace'}}>Txn: {x.transaction_id}</div>}
+              </div>
               {x.hotel_name ? (
-                <div style={{marginTop:'4px'}}>
+                <div style={{marginTop:'6px'}}>
                   <small style={{color:'#8C1119',fontWeight:700}}>🏨 {x.hotel_name}</small><br/>
                   <small>Room: {x.room_number || 'TBD'}</small>
                 </div>
@@ -1759,58 +1769,58 @@ function BulkImportModal({conferenceId, onClose, onImportSuccess}){
   const downloadTemplate = () => {
     const templateData = [
       {
-        'Full Name': 'Dr. Rajesh Sharma',
-        'Mobile Number': '9876543210',
-        'Email Address': 'rajesh.sharma@example.com',
-        'Category': 'VIP Delegate',
-        'Designation': 'Professor & Head',
-        'University': 'AIIMS Delhi',
-        'Registration Number': 'MAPCON-2026-001',
-        'Food Preference': 'VEG',
-        'Hotel Name': 'Hotel Sayaji',
-        'Hotel Address': 'Kawala Naka, Kolhapur',
+        'ID': '1114',
+        'Registration No': 'MAPCON2026-001',
+        'Full Name': 'Dr. Meera Ramchandran',
+        'Gender': 'Female',
+        'Date of Birth': '1982-05-14',
+        'Mobile': '9850123456',
+        'Email': 'meeraram@example.com',
+        'Attending': 'IAPM Member',
+        'IAPM Membership No': 'LM-3298',
+        'MMC Reg No': '2008/04/1234',
+        'Designation': 'Associate Professor',
+        'Food Preference': 'Veg',
+        'Institution': 'MGM Medical College, Navi Mumbai',
+        'Category': 'Early Bird',
+        'Payment Mode': 'easebuzz',
+        'Transaction ID': 'TXN1790173740772',
+        'Program': 'Both',
+        'Payment Status': 'Success',
+        'Amount': '13570',
+        'State': 'Maharashtra',
+        'Hotel Name': 'Hotel Sayaji, Kolhapur',
         'Room Number': '501',
         'Room Type': 'Executive Suite',
         'Check In Date': '2026-09-25',
-        'Check Out Date': '2026-09-28',
-        'Travel Mode': 'Flight',
-        'Flight/Train No': 'AI-852',
-        'Arrival Date': '2026-09-25',
-        'Arrival Time': '10:30 AM',
-        'Departure Date': '2026-09-28',
-        'Departure Time': '06:00 PM',
-        'Pickup Point': 'Kolhapur Airport',
-        'Drop Point': 'Hotel Sayaji',
-        'Driver Name': 'Rajesh Patil',
-        'Driver Phone': '9876543210',
-        'Vehicle Number': 'MH12AB1234'
+        'Check Out Date': '2026-09-28'
       },
       {
-        'Full Name': 'Dr. Sunita Deshmukh',
-        'Mobile Number': '9876543211',
-        'Email Address': 'sunita.d@example.com',
-        'Category': 'Speaker',
-        'Designation': 'Dean Academics',
-        'University': 'Mumbai University',
-        'Registration Number': 'MAPCON-2026-002',
-        'Food Preference': 'NON-VEG',
-        'Hotel Name': 'Hotel Sayaji',
-        'Hotel Address': 'Kawala Naka, Kolhapur',
+        'ID': '1113',
+        'Registration No': 'REG-452',
+        'Full Name': 'Ashish Bhujade',
+        'Gender': 'Male',
+        'Date of Birth': '1989-11-20',
+        'Mobile': '9881234567',
+        'Email': 'ashish.b@example.com',
+        'Attending': 'Delegate',
+        'IAPM Membership No': 'NA',
+        'MMC Reg No': '2015/09/5678',
+        'Designation': 'Consultant Pathologist',
+        'Food Preference': 'Non-Veg',
+        'Institution': 'Veritas Diagnostics, Pune',
+        'Category': 'Delegate',
+        'Payment Mode': 'HDFC',
+        'Transaction ID': 'TXN1790398285',
+        'Program': 'Conference',
+        'Payment Status': 'Success',
+        'Amount': '3500',
+        'State': 'Maharashtra',
+        'Hotel Name': 'Hotel Sayaji, Kolhapur',
         'Room Number': '302',
         'Room Type': 'Deluxe Double',
         'Check In Date': '2026-09-25',
-        'Check Out Date': '2026-09-28',
-        'Travel Mode': 'Train',
-        'Flight/Train No': 'Koyna Express (11029)',
-        'Arrival Date': '2026-09-25',
-        'Arrival Time': '02:15 PM',
-        'Departure Date': '2026-09-28',
-        'Departure Time': '08:00 AM',
-        'Pickup Point': 'Kolhapur Railway Station',
-        'Drop Point': 'Hotel Sayaji',
-        'Driver Name': 'Amit Jadhav',
-        'Driver Phone': '9876543211',
-        'Vehicle Number': 'MH12CD5678'
+        'Check Out Date': '2026-09-28'
       }
     ];
 
@@ -2099,25 +2109,33 @@ function ParticipantModal({value, liaisons=[], onSave, onClose, notify}){
           <div className="formgrid">
             <Field label="Full Name" value={v.name} onChange={x=>set('name',x)}/>
             <Field label="Email" value={v.email} onChange={x=>set('email',x)}/>
-            {!v.id && <Field type="password" label="Password (Default: Demo@123)" value={v.password} onChange={x=>set('password',x)}/>}
+            {!v.id && <Field type="password" label="Password (Default: Mobile / Demo@123)" value={v.password} onChange={x=>set('password',x)}/>}
             <Field label="Mobile" value={v.phone} onChange={x=>set('phone',x)}/>
+            <SelectField label="Gender" value={v.gender||''} onChange={x=>set('gender',x)} options={['','Female','Male','Other']}/>
+            <Field type="date" label="Date of Birth" value={v.date_of_birth||v.dob} onChange={x=>set('date_of_birth',x)}/>
+            <Field label="State" value={v.state||v.user_state} onChange={x=>set('state',x)}/>
             <Field label="Designation" value={v.designation} onChange={x=>set('designation',x)}/>
-            <Field label="Organization / University" value={v.university} onChange={x=>set('university',x)}/>
+            <Field label="Organization / Institution" value={v.university} onChange={x=>set('university',x)}/>
             <Field label="Blood Group" value={v.blood_group||v.bloodGroup} onChange={x=>set('bloodGroup',x)}/>
           </div>
         </div>
 
         <div className="form-section">
-          <h4>Registration, Food & Conference Kit</h4>
+          <h4>Registration, Medical Council & Payment</h4>
           <div className="formgrid">
             <Field label="Registration No" value={v.registration_no} onChange={x=>set('registration_no',x)}/>
-            <SelectField label="Category" value={v.category} onChange={x=>set('category',x)} options={['Delegate','Speaker','VC','VIP','Faculty','Student','Volunteer','Organiser']}/>
+            <Field label="MMC / State Medical Reg No" value={v.mmc_reg_no} onChange={x=>set('mmc_reg_no',x)}/>
+            <Field label="IAPM Membership No" value={v.iapm_membership_no} onChange={x=>set('iapm_membership_no',x)}/>
+            <SelectField label="Category / Attending" value={v.category} onChange={x=>set('category',x)} options={['Delegate','IAPM Member','Non IAPM Member','Speaker','VC','VIP','Faculty','Student','Early Bird','Volunteer','Organiser']}/>
             <SelectField label="Food Preference" value={v.food_preference||'VEG'} onChange={x=>set('food_preference',x)} options={[{value:'VEG',label:'🥦 Vegetarian'},{value:'NON_VEG',label:'🍗 Non-Vegetarian'},{value:'JAIN',label:'🍃 Jain'}]}/>
             <SelectField label="Conference Kit Status" value={v.kit_issued ? '1' : '0'} onChange={x=>set('kit_issued', x==='1'?1:0)} options={[{value:'1',label:'✅ Kit Distributed / Issued'},{value:'0',label:'⏳ Kit Pending'}]}/>
             <SelectField label="Certificate Status" value={v.certificate_issued ? '1' : '0'} onChange={x=>set('certificate_issued', x==='1'?1:0)} options={[{value:'1',label:'📜 Certificate Issued'},{value:'0',label:'⏳ Certificate Pending'}]}/>
-            <SelectField label="Status" value={v.status} onChange={x=>set('status',x)} options={['PENDING','APPROVED','CHECKED_IN','CANCELLED']}/>
-            <SelectField label="Payment Status" value={v.payment_status} onChange={x=>set('payment_status',x)} options={['PENDING','PAID','REFUNDED']}/>
+            <SelectField label="Registration Status" value={v.status} onChange={x=>set('status',x)} options={['PENDING','APPROVED','CHECKED_IN','CANCELLED']}/>
+            <SelectField label="Payment Status" value={v.payment_status} onChange={x=>set('payment_status',x)} options={['PAID','PENDING','REFUNDED']}/>
             <Field label="Amount Paid (₹)" value={v.amount} onChange={x=>set('amount',x)}/>
+            <Field label="Payment Mode (e.g. easebuzz, HDFC)" value={v.payment_mode} onChange={x=>set('payment_mode',x)}/>
+            <Field label="Transaction ID" value={v.transaction_id} onChange={x=>set('transaction_id',x)}/>
+            <Field label="Program (e.g. Both, Conference)" value={v.program_type} onChange={x=>set('program_type',x)}/>
           </div>
         </div>
 
