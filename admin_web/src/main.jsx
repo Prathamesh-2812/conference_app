@@ -1509,76 +1509,77 @@ function Participants({tab, notify, selectedConferenceId}){
       <table>
         <thead>
           <tr>
-            <th>Registration No</th>
-            <th>Participant Details</th>
-            <th>University & Role</th>
-            <th>Category & Food</th>
-            <th>Certificate</th>
-            <th>Status & Accommodation</th>
-            <th>Liaison</th>
-            <th style={{textAlign:'center'}}>Actions</th>
+            <th style={{width:'11%',whiteSpace:'nowrap'}}>Registration No</th>
+            <th style={{width:'26%'}}>Participant Details</th>
+            <th style={{width:'18%'}}>University & Role</th>
+            <th style={{width:'13%'}}>Category & Food</th>
+            <th style={{width:'11%',whiteSpace:'nowrap'}}>Certificate</th>
+            <th style={{width:'15%'}}>Status & Payment</th>
+            <th style={{width:'6%',textAlign:'center',whiteSpace:'nowrap'}}>Actions</th>
           </tr>
         </thead>
         <tbody>
           {filtered.map(x=><tr key={x.id}>
-            <td>
+            <td style={{whiteSpace:'nowrap'}}>
               <strong style={{fontSize:'13px',color:'#8C1119'}}>{x.registration_no||'-'}</strong>
             </td>
             <td>
               <b>{x.name}</b> {x.gender && <small style={{color:'#64748b',fontWeight:600}}>({x.gender})</small>}<br/>
-              <small>{x.email}</small><br/>
-              <small>{x.phone}</small>
+              <small style={{color:'#475569'}}>{x.email}</small><br/>
+              <small style={{color:'#475569'}}>{x.phone}</small>
               {x.mmc_reg_no && <div style={{fontSize:'11px',color:'#0369a1',fontWeight:600,marginTop:'2px'}}>MMC: {x.mmc_reg_no}</div>}
               {x.iapm_membership_no && <div style={{fontSize:'11px',color:'#7c3aed',fontWeight:600}}>IAPM: {x.iapm_membership_no}</div>}
               {x.state && <div style={{fontSize:'11px',color:'#475569'}}>📍 {x.state}</div>}
             </td>
             <td>
-              {x.university||'-'}<br/>
+              <span style={{fontWeight:600,color:'#1e293b'}}>{x.university||'-'}</span><br/>
               <small style={{color:'#64748b'}}>{x.designation||'-'}</small>
               {x.blood_group && <small style={{display:'block',color:'#dc2626',fontWeight:700}}>🩸 {x.blood_group}</small>}
             </td>
             <td>
-              <span className="pill">{x.category||'Delegate'}</span><br/>
-              <span className="pill small" style={{marginTop:'4px',background:(x.food_preference==='NON_VEG'?'#fef2f2':'#ecfdf5'),color:(x.food_preference==='NON_VEG'?'#991b1b':'#065f46'),border:(x.food_preference==='NON_VEG'?'1px solid #fecaca':'1px solid #a7f3d0')}}>
+              <span className="pill" style={{padding:'2px 8px',fontSize:'11px'}}>{x.category||'Delegate'}</span><br/>
+              <span className="pill small" style={{marginTop:'4px',padding:'2px 8px',fontSize:'10.5px',background:(x.food_preference==='NON_VEG'?'#fef2f2':'#ecfdf5'),color:(x.food_preference==='NON_VEG'?'#991b1b':'#065f46'),border:(x.food_preference==='NON_VEG'?'1px solid #fecaca':'1px solid #a7f3d0')}}>
                 {x.food_preference === 'NON_VEG' ? '🍗 Non-Veg' : x.food_preference === 'JAIN' ? '🍃 Jain' : '🥦 Veg'}
               </span>
-              {x.program_type && <div style={{fontSize:'10.5px',color:'#64748b',marginTop:'3px'}}>Prog: {x.program_type}</div>}
+              {x.program_type && <div style={{fontSize:'10.5px',color:'#64748b',marginTop:'2px'}}>Prog: {x.program_type}</div>}
             </td>
-            <td>
+            <td style={{whiteSpace:'nowrap'}}>
               <button
                 onClick={()=>toggleCert(x.id)}
-                style={{cursor:'pointer',padding:'4px 10px',borderRadius:'12px',fontSize:'11.5px',fontWeight:700,border:(x.certificate_issued||x.has_certificate>0)?'1px solid #c084fc':'1px solid #cbd5e1',background:(x.certificate_issued||x.has_certificate>0)?'#faf5ff':'#f8fafc',color:(x.certificate_issued||x.has_certificate>0)?'#7e22ce':'#64748b',display:'inline-flex',alignItems:'center',gap:'4px'}}
+                style={{cursor:'pointer',padding:'3px 8px',borderRadius:'12px',fontSize:'11px',fontWeight:700,border:(x.certificate_issued||x.has_certificate>0)?'1px solid #c084fc':'1px solid #cbd5e1',background:(x.certificate_issued||x.has_certificate>0)?'#faf5ff':'#f8fafc',color:(x.certificate_issued||x.has_certificate>0)?'#7e22ce':'#64748b',display:'inline-flex',alignItems:'center',gap:'4px'}}
                 title="Click to toggle Certificate status"
               >
                 {(x.certificate_issued || x.has_certificate > 0) ? '📜 Cert Issued' : '⏳ Cert Pending'}
               </button>
             </td>
             <td>
-              <span className={`pill ${x.status}`}>{x.status}</span>
-              <div style={{marginTop:'4px',fontSize:'11.5px'}}>
+              <span className={`pill ${x.status}`} style={{padding:'2px 8px',fontSize:'11px'}}>{x.status}</span>
+              <div style={{marginTop:'3px',fontSize:'11px'}}>
                 <span style={{color:x.payment_status==='PAID'?'#16a34a':'#d97706',fontWeight:700}}>{x.payment_status}</span>
                 {x.amount > 0 && <span style={{marginLeft:'4px',fontWeight:600,color:'#334155'}}>(₹{Number(x.amount).toLocaleString('en-IN')})</span>}
-                {x.payment_mode && <div style={{color:'#64748b',fontSize:'10.5px'}}>via {x.payment_mode}</div>}
-                {x.transaction_id && <div style={{color:'#94a3b8',fontSize:'10px',fontFamily:'monospace'}}>Txn: {x.transaction_id}</div>}
+                {x.payment_mode && <div style={{color:'#64748b',fontSize:'10px'}}>via {x.payment_mode}</div>}
+                {x.transaction_id && <div style={{color:'#94a3b8',fontSize:'9.5px',fontFamily:'monospace'}}>Txn: {x.transaction_id}</div>}
               </div>
               {x.hotel_name ? (
-                <div style={{marginTop:'6px'}}>
+                <div style={{marginTop:'4px',fontSize:'11px'}}>
                   <small style={{color:'#8C1119',fontWeight:700}}>🏨 {x.hotel_name}</small><br/>
-                  <small>Room: {x.room_number || 'TBD'}</small>
+                  <small style={{color:'#64748b'}}>Room: {x.room_number || 'TBD'}</small>
                 </div>
-              ) : (
-                <small style={{color:'#94a3b8',display:'block',marginTop:'4px'}}>No hotel assigned</small>
-              )}
+              ) : null}
+              {x.liaison_name ? (
+                <div style={{marginTop:'3px',fontSize:'10.5px',color:'#475569'}}>
+                  👮 <b>{x.liaison_name}</b> ({x.liaison_phone})
+                </div>
+              ) : null}
             </td>
-            <td>{x.liaison_name?<><small><b>{x.liaison_name}</b></small><br/><small>{x.liaison_phone}</small></>:'-'}</td>
-            <td style={{textAlign:'center'}}>
-              <div className="rowactions" style={{justifyContent:'center',display:'flex',gap:'6px'}}>
-                <button className="icon" onClick={()=>setEdit(x)} title="Edit"><Settings size={16}/></button>
-                <button className="icon" onClick={()=>remove(x.id)} title="Delete"><LogOut size={16}/></button>
+            <td style={{textAlign:'center',whiteSpace:'nowrap'}}>
+              <div className="rowactions" style={{justifyContent:'center',display:'flex',gap:'4px'}}>
+                <button className="icon" onClick={()=>setEdit(x)} title="Edit" style={{padding:'4px'}}><Settings size={15}/></button>
+                <button className="icon" onClick={()=>remove(x.id)} title="Delete" style={{padding:'4px'}}><LogOut size={15}/></button>
               </div>
             </td>
           </tr>)}
-          {!filtered.length && !busy && <tr><td colSpan="8" style={{textAlign:'center',padding:'30px',color:'#888'}}>No participants found matching current filters.</td></tr>}
+          {!filtered.length && !busy && <tr><td colSpan="7" style={{textAlign:'center',padding:'30px',color:'#888'}}>No participants found matching current filters.</td></tr>}
         </tbody>
       </table>
     </div>
