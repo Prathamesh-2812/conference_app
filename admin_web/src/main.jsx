@@ -99,18 +99,20 @@ function App(){
 
   const loadConferencesList = () => {
     req('/admin/my-conferences').then(res => {
-      const userConfs = (res && res.conferences) ? res.conferences : [];
+      const payload = (res && res.data) ? res.data : res;
+      const userConfs = (payload && payload.conferences) ? payload.conferences : (Array.isArray(payload) ? payload : []);
       setConferencesList(userConfs);
-      setCurrentUser(res);
+      setCurrentUser(payload);
       if(userConfs.length && !userConfs.find(c => c.id === selectedConferenceId)){
         setSelectedConferenceId(userConfs[0].id);
       }
     }).catch(e => {
       console.warn('my-conferences error, falling back:', e);
       req('/conferences').then(list => {
-        setConferencesList(list);
-        if(list.length && !list.find(c => c.id === selectedConferenceId)){
-          setSelectedConferenceId(list[0].id);
+        const confs = (list && list.data) ? list.data : (Array.isArray(list) ? list : []);
+        setConferencesList(confs);
+        if(confs.length && !confs.find(c => c.id === selectedConferenceId)){
+          setSelectedConferenceId(confs[0].id);
         }
       }).catch(err => console.warn(err));
     });
@@ -181,12 +183,15 @@ function App(){
 
   const visibleMenu = useMemo(() => {
     if (!currentUser) return fullMenu;
-    if (currentUser.isSuperAdmin) return fullMenu;
-    if (currentUser.isConferenceAdmin) {
+    const isSuper = currentUser.isSuperAdmin || currentUser.role === 'SUPER_ADMIN';
+    if (isSuper) return fullMenu;
+    const isConfAdmin = currentUser.isConferenceAdmin || currentUser.role === 'ADMIN' || currentUser.role === 'EVENT_MANAGER';
+    if (isConfAdmin) {
       return fullMenu.filter(m => m.key !== 'settings');
     }
     // Sub-Admin: filter strictly by permissions
     const perms = Array.isArray(currentUser.permissions) ? currentUser.permissions : [];
+    if (perms.length === 0 && !currentUser.isSubAdmin) return fullMenu;
     return fullMenu.filter(m => perms.includes('all') || perms.includes(m.key));
   }, [currentUser]);
 
