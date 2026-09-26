@@ -6629,7 +6629,7 @@ class VenueDirectionsScreen extends StatelessWidget {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
                 children: [
-                  // 1. Campus Hero Card
+                  // 1. Venue Hero Card
                   Card(
                     elevation: 0,
                     clipBehavior: Clip.antiAlias,
@@ -6643,14 +6643,14 @@ class VenueDirectionsScreen extends StatelessWidget {
                         Stack(
                           children: [
                             Image.network(
-                              'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=1200',
-                              height: 180,
+                              'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1200',
+                              height: 190,
                               width: double.infinity,
                               fit: BoxFit.cover,
                               errorBuilder: (_, __, ___) => Container(
-                                height: 180,
+                                height: 190,
                                 color: conference.primaryColor.withOpacity(0.15),
-                                child: Icon(Icons.account_balance, size: 60, color: conference.primaryColor),
+                                child: Icon(Icons.location_city, size: 60, color: conference.primaryColor),
                               ),
                             ),
                             Positioned(
@@ -6669,7 +6669,7 @@ class VenueDirectionsScreen extends StatelessWidget {
                                     Icon(Icons.verified, color: gold, size: 13),
                                     SizedBox(width: 4),
                                     Text(
-                                      'Official Host Campus',
+                                      'Official Conference Venue',
                                       style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                                     ),
                                   ],
@@ -6713,10 +6713,13 @@ class VenueDirectionsScreen extends StatelessWidget {
                                       ),
                                       icon: const Icon(Icons.directions, size: 18),
                                       label: const Text('Open in Google Maps', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                                      onPressed: () => launchUrl(
-                                        Uri.parse(conference.mapUrl),
-                                        mode: LaunchMode.externalApplication,
-                                      ),
+                                      onPressed: () {
+                                        final url = conference.mapUrl.trim().isNotEmpty ? conference.mapUrl.trim() : defaultMapUrl;
+                                        launchUrl(
+                                          Uri.parse(url),
+                                          mode: LaunchMode.externalApplication,
+                                        );
+                                      },
                                     ),
                                   ),
                                   const SizedBox(width: 10),
@@ -6739,304 +6742,49 @@ class VenueDirectionsScreen extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 20),
 
-                  // 2. Travel & How to Reach (Directions)
-                  const Text(
-                    'HOW TO REACH THE VENUE',
-                    style: TextStyle(letterSpacing: 1.2, color: muted, fontWeight: FontWeight.w900, fontSize: 12.5),
-                  ),
-                  const SizedBox(height: 10),
-
-                  _buildTravelCard(
-                    icon: Icons.flight_takeoff,
-                    title: 'By Air (Airport)',
-                    primary: 'Kolhapur Airport (KLH) • 9 km | Pune Airport (PNQ) • 230 km',
-                    details: 'Prepaid taxis, Ola & Uber are available outside the arrival gate. Direct university delegate pickup available upon prior request.',
-                    accentColor: const Color(0xFF2563EB),
-                  ),
-                  _buildTravelCard(
-                    icon: Icons.train,
-                    title: 'By Railway (CSMT Terminus / Pune Jn)',
-                    primary: 'Kolhapur CSMT Railway Station • 4.5 km',
-                    details: 'Frequent express and superfast trains connect from Mumbai, Pune, Bangalore & Delhi. Direct 10-min auto/taxi ride to Kasaba Bawada campus.',
-                    accentColor: const Color(0xFFD97706),
-                  ),
-                  _buildTravelCard(
-                    icon: Icons.directions_bus,
-                    title: 'By Road & Bus (NH-48)',
-                    primary: 'Central Bus Stand (CBS) • 4 km | NH-48 Highway',
-                    details: 'State transport & private luxury AC sleeper buses run 24x7. Smooth 4-lane highway connectivity directly to the university campus gates.',
-                    accentColor: const Color(0xFF059669),
-                  ),
-                  const SizedBox(height: 18),
-
-                  // 3. Entry & Parking Information
-                  const Text(
-                    'CAMPUS ENTRY & PARKING',
-                    style: TextStyle(letterSpacing: 1.2, color: muted, fontWeight: FontWeight.w900, fontSize: 12.5),
-                  ),
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEFF6FF),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFBFDBFE)),
+                  if (conference.directions.trim().isNotEmpty) ...[
+                    const SizedBox(height: 20),
+                    const Text(
+                      'VENUE DIRECTIONS',
+                      style: TextStyle(letterSpacing: 1.2, color: muted, fontWeight: FontWeight.w900, fontSize: 12.5),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.local_parking, color: Color(0xFF1D4ED8), size: 20),
-                            const SizedBox(width: 8),
-                            const Text(
-                              'Parking Assistance',
-                              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Color(0xFF1E3A8A)),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          conference.parkingInfo,
-                          style: const TextStyle(fontSize: 13, color: Color(0xFF1E40AF), height: 1.4),
-                        ),
-                        const Divider(height: 20, color: Color(0xFFBFDBFE)),
-                        Row(
-                          children: [
-                            const Icon(Icons.alt_route, color: Color(0xFF1D4ED8), size: 20),
-                            const SizedBox(width: 8),
-                            const Text(
-                              'Entrance Directions',
-                              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Color(0xFF1E3A8A)),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          conference.directions,
-                          style: const TextStyle(fontSize: 13, color: Color(0xFF1E40AF), height: 1.4),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-
-                  // 4. Conference Halls Inside Campus
-                  const Text(
-                    'KEY CAMPUS HALLS & LOCATIONS',
-                    style: TextStyle(letterSpacing: 1.2, color: muted, fontWeight: FontWeight.w900, fontSize: 12.5),
-                  ),
-                  const SizedBox(height: 10),
-                  Card(
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      side: BorderSide(color: Colors.grey.shade200),
-                    ),
-                    child: const Column(
-                      children: [
-                        _HallTile(
-                          icon: Icons.account_balance,
-                          title: 'Main Convocation Auditorium',
-                          location: 'Ground Floor, Central Block',
-                          desc: 'Inaugural ceremony, Keynote sessions & Valedictory meet',
-                        ),
-                        Divider(height: 1),
-                        _HallTile(
-                          icon: Icons.meeting_room,
-                          title: 'Senate Hall & Council Chambers',
-                          location: '1st Floor, Administrative Wing',
-                          desc: 'Vice Chancellors\' Panel Discussions & Closed-door meetings',
-                        ),
-                        Divider(height: 1),
-                        _HallTile(
-                          icon: Icons.restaurant,
-                          title: 'Conference Banquet & Dining Hall',
-                          location: 'North Lawn & Dining Pavilion',
-                          desc: 'Breakfast, Delegate Lunch, High-Tea & Networking Dinners',
-                        ),
-                        Divider(height: 1),
-                        _HallTile(
-                          icon: Icons.badge,
-                          title: 'Central Registration & Help Desk',
-                          location: 'Main Auditorium Foyer',
-                          desc: 'Delegate ID badges, Kit distribution & Spot Assistance',
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-
-                  // 5. Emergency Desk
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.grey.shade200),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: Colors.red.shade50,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(Icons.emergency, color: Colors.red.shade700, size: 24),
-                        ),
-                        const SizedBox(width: 14),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFBFDBFE)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
                             children: [
-                              Text(
-                                'Venue Emergency Control Desk',
-                                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: slate),
-                              ),
-                              SizedBox(height: 2),
-                              Text(
-                                '24x7 Security & Medical on Campus',
-                                style: TextStyle(fontSize: 12, color: muted),
+                              const Icon(Icons.alt_route, color: Color(0xFF1D4ED8), size: 20),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Directions & How to Reach',
+                                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Color(0xFF1E3A8A)),
                               ),
                             ],
                           ),
-                        ),
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red.shade700,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          const SizedBox(height: 6),
+                          Text(
+                            conference.directions,
+                            style: const TextStyle(fontSize: 13.5, color: Color(0xFF1E40AF), height: 1.45),
                           ),
-                          onPressed: () => launchUrl(Uri.parse('tel:1800123456')),
-                          child: const Text('Call 24x7', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTravelCard({
-    required IconData icon,
-    required String title,
-    required String primary,
-    required String details,
-    required Color accentColor,
-  }) {
-    return Card(
-      elevation: 0,
-      margin: const EdgeInsets.only(bottom: 10),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Colors.grey.shade200, width: 1),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: accentColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: accentColor, size: 22),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5, color: slate),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    primary,
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5, color: accentColor),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    details,
-                    style: const TextStyle(fontSize: 12.5, color: muted, height: 1.35),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _HallTile extends StatelessWidget {
-  final IconData icon;
-  final String title, location, desc;
-
-  const _HallTile({
-    required this.icon,
-    required this.title,
-    required this.location,
-    required this.desc,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: maroon.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: maroon, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: slate),
-                ),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    const Icon(Icons.location_pin, size: 12, color: maroon),
-                    const SizedBox(width: 3),
-                    Text(
-                      location,
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: maroon),
+                        ],
+                      ),
                     ),
                   ],
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  desc,
-                  style: const TextStyle(fontSize: 12, color: muted),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
