@@ -4133,9 +4133,6 @@ function Gallery({tab, notify}){
         <div style={{height:'190px',background:'#eee',overflow:'hidden',position:'relative'}}>
           <img src={resolveMediaUrl(x.url)} alt={x.caption||'Photo'} style={{width:'100%',height:'100%',objectFit:'cover'}} onError={(e)=>{e.target.src='https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800'}}/>
           <span className="pill" style={{position:'absolute',top:'10px',left:'10px',background:'rgba(0,0,0,0.7)',color:'#fff',backdropFilter:'blur(4px)',fontSize:'11px'}}>{x.album}</span>
-          <span className="pill" style={{position:'absolute',top:'10px',right:'10px',background:'rgba(16,185,129,0.85)',color:'#fff',fontSize:'10px',fontWeight:'bold'}}>
-            👤 {x.indexed_faces || 1} AI Faces
-          </span>
         </div>
         <div style={{padding:'14px',display:'flex',flexDirection:'column',flex:1,gap:'8px'}}>
           <p style={{margin:0,fontSize:'14px',fontWeight:'600',color:'#1e293b',lineHeight:'1.4'}}>{x.caption||'Conference moment'}</p>
