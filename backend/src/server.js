@@ -240,6 +240,25 @@ async function runMigrations(){
     }
     const feedbackCols = [
       "responses JSON NULL",
+      "delegate_name VARCHAR(255) NULL",
+      "mmc_number VARCHAR(100) NULL",
+      "topic_clear_relevant TINYINT NULL",
+      "content_academic_depth TINYINT NULL",
+      "speaker_clarity TINYINT NULL",
+      "slides_clear_understandable TINYINT NULL",
+      "relevance_clinical_practice TINYINT NULL",
+      "content_up_to_date TINYINT NULL",
+      "session_within_time TINYINT NULL",
+      "discussion_time_provided TINYINT NULL",
+      "questions_addressed_satisfactorily TINYINT NULL",
+      "pre_conf_info_timely TINYINT NULL",
+      "digital_communication_access TINYINT NULL",
+      "registration_smooth_efficient TINYINT NULL",
+      "sessions_on_time TINYINT NULL",
+      "venue_comfortable_organized TINYINT NULL",
+      "audiovisual_facilities_satisfactory TINYINT NULL",
+      "food_beverage_satisfactory TINYINT NULL",
+      "committee_support_helpful TINYINT NULL",
       "choice_of_speakers VARCHAR(50) NULL",
       "thorough_exploration VARCHAR(50) NULL",
       "presentation_quality VARCHAR(50) NULL",
@@ -2796,46 +2815,90 @@ app.get('/api/me/certificate',auth,asyncRoute(async(req,res)=>{
 }));
 
 function processFeedbackPayload(b) {
-  const choiceOfSpeakers = b.choiceOfSpeakers || b.choice_of_speakers || 'Good';
-  const thoroughExploration = b.thoroughExploration || b.thorough_exploration || 'Good';
-  const presentationQuality = b.presentationQuality || b.quality_of_presentation || b.presentation_quality || 'Good';
-  const topicUsefulness = b.topicUsefulness || b.usefulness_of_topic || b.topic_usefulness || 'Good';
-  const suggestions = (b.suggestions || b.comment || b.feedback || '').toString().trim();
-  const programmeEvaluation = b.programmeEvaluation || b.evaluation_of_programme || b.programme_evaluation || 'Good';
-  const adequateDiscussionTime = b.adequateDiscussionTime || b.adequate_discussion_time || 'Yes';
-  const topicsCoveredSpecialty = b.topicsCoveredSpecialty || b.topics_covered_specialty || 'Yes';
-  const understandingImprovement = Math.min(5, Math.max(1, parseInt(b.understandingImprovement || b.understanding_improvement || 5, 10)));
-  const arrangementsRating = Math.min(5, Math.max(1, parseInt(b.arrangementsRating || b.arrangements_rating || 5, 10)));
-  const registrationRating = Math.min(5, Math.max(1, parseInt(b.registrationRating || b.registration_rating || 5, 10)));
-  const overallConductRating = Math.min(5, Math.max(1, parseInt(b.overallConductRating || b.overall_conduct_rating || b.rating || 5, 10)));
-  const audiovisualsRating = Math.min(5, Math.max(1, parseInt(b.audiovisualsRating || b.audiovisuals_rating || 5, 10)));
-  const foodArrangementsRating = Math.min(5, Math.max(1, parseInt(b.foodArrangementsRating || b.food_arrangements_rating || 5, 10)));
+  const delegateName = (b.delegateName || b.delegate_name || b.name || '').toString().trim();
+  const mmcNumber = (b.mmcNumber || b.mmc_number || b.mmc_reg_no || '').toString().trim();
 
-  const avgRating = Math.round(
-    (understandingImprovement + arrangementsRating + registrationRating + overallConductRating + audiovisualsRating + foodArrangementsRating) / 6
-  );
-  const rating = parseInt(b.rating || overallConductRating || avgRating || 5, 10);
-  const contentRating = parseInt(b.contentRating || (topicUsefulness === 'Excellent' ? 5 : (topicUsefulness === 'Good' ? 4 : 3)), 10);
-  const speakerRating = parseInt(b.speakerRating || (choiceOfSpeakers === 'Excellent' ? 5 : (choiceOfSpeakers === 'Good' ? 4 : 3)), 10);
+  // 17 Evaluation Questions (Scale 1 to 4: 1=Poor, 2=Fair, 3=Good, 4=Excellent)
+  const topicClearRelevant = Math.min(4, Math.max(1, parseInt(b.topicClearRelevant || b.topic_clear_relevant || b.q1 || 4, 10)));
+  const contentAcademicDepth = Math.min(4, Math.max(1, parseInt(b.contentAcademicDepth || b.content_academic_depth || b.q2 || 4, 10)));
+  const speakerClarity = Math.min(4, Math.max(1, parseInt(b.speakerClarity || b.speaker_clarity || b.q3 || 4, 10)));
+  const slidesClearUnderstandable = Math.min(4, Math.max(1, parseInt(b.slidesClearUnderstandable || b.slides_clear_understandable || b.q4 || 4, 10)));
+  const relevanceClinicalPractice = Math.min(4, Math.max(1, parseInt(b.relevanceClinicalPractice || b.relevance_clinical_practice || b.q5 || 4, 10)));
+  const contentUpToDate = Math.min(4, Math.max(1, parseInt(b.contentUpToDate || b.content_up_to_date || b.q6 || 4, 10)));
+  const sessionWithinTime = Math.min(4, Math.max(1, parseInt(b.sessionWithinTime || b.session_within_time || b.q7 || 4, 10)));
+  const discussionTimeProvided = Math.min(4, Math.max(1, parseInt(b.discussionTimeProvided || b.discussion_time_provided || b.q8 || 4, 10)));
+  const questionsAddressedSatisfactorily = Math.min(4, Math.max(1, parseInt(b.questionsAddressedSatisfactorily || b.questions_addressed_satisfactorily || b.q9 || 4, 10)));
+  const preConfInfoTimely = Math.min(4, Math.max(1, parseInt(b.preConfInfoTimely || b.pre_conf_info_timely || b.q10 || 4, 10)));
+  const digitalCommunicationAccess = Math.min(4, Math.max(1, parseInt(b.digitalCommunicationAccess || b.digital_communication_access || b.q11 || 4, 10)));
+  const registrationSmoothEfficient = Math.min(4, Math.max(1, parseInt(b.registrationSmoothEfficient || b.registration_smooth_efficient || b.q12 || 4, 10)));
+  const sessionsOnTime = Math.min(4, Math.max(1, parseInt(b.sessionsOnTime || b.sessions_on_time || b.q13 || 4, 10)));
+  const venueComfortableOrganized = Math.min(4, Math.max(1, parseInt(b.venueComfortableOrganized || b.venue_comfortable_organized || b.q14 || 4, 10)));
+  const audiovisualFacilitiesSatisfactory = Math.min(4, Math.max(1, parseInt(b.audiovisualFacilitiesSatisfactory || b.audiovisual_facilities_satisfactory || b.q15 || 4, 10)));
+  const foodBeverageSatisfactory = Math.min(4, Math.max(1, parseInt(b.foodBeverageSatisfactory || b.food_beverage_satisfactory || b.q16 || 4, 10)));
+  const committeeSupportHelpful = Math.min(4, Math.max(1, parseInt(b.committeeSupportHelpful || b.committee_support_helpful || b.q17 || 4, 10)));
+
+  const suggestions = (b.suggestions || b.comment || b.feedback || '').toString().trim();
+
+  // Legacy mappings for backward compatibility
+  const choiceOfSpeakers = speakerClarity >= 4 ? 'Excellent' : (speakerClarity === 3 ? 'Good' : (speakerClarity === 2 ? 'Fair' : 'Poor'));
+  const thoroughExploration = contentAcademicDepth >= 4 ? 'Excellent' : (contentAcademicDepth === 3 ? 'Good' : (contentAcademicDepth === 2 ? 'Fair' : 'Poor'));
+  const presentationQuality = slidesClearUnderstandable >= 4 ? 'Excellent' : (slidesClearUnderstandable === 3 ? 'Good' : (slidesClearUnderstandable === 2 ? 'Fair' : 'Poor'));
+  const topicUsefulness = relevanceClinicalPractice >= 4 ? 'Excellent' : (relevanceClinicalPractice === 3 ? 'Good' : (relevanceClinicalPractice === 2 ? 'Fair' : 'Poor'));
+  const programmeEvaluation = topicClearRelevant >= 4 ? 'Excellent' : (topicClearRelevant === 3 ? 'Good' : (topicClearRelevant === 2 ? 'Fair' : 'Poor'));
+  const adequateDiscussionTime = discussionTimeProvided >= 3 ? 'Yes' : 'No';
+  const topicsCoveredSpecialty = relevanceClinicalPractice >= 3 ? 'Yes' : 'No';
+
+  const sumRatings = topicClearRelevant + contentAcademicDepth + speakerClarity + slidesClearUnderstandable +
+    relevanceClinicalPractice + contentUpToDate + sessionWithinTime + discussionTimeProvided +
+    questionsAddressedSatisfactorily + preConfInfoTimely + digitalCommunicationAccess +
+    registrationSmoothEfficient + sessionsOnTime + venueComfortableOrganized +
+    audiovisualFacilitiesSatisfactory + foodBeverageSatisfactory + committeeSupportHelpful;
+  const avgRating = Math.round(sumRatings / 17);
+  const rating = avgRating;
 
   const responses = {
-    choice_of_speakers: choiceOfSpeakers,
-    thorough_exploration: thoroughExploration,
-    presentation_quality: presentationQuality,
-    usefulness_of_topic: topicUsefulness,
-    suggestions: suggestions,
-    programme_evaluation: programmeEvaluation,
-    adequate_discussion_time: adequateDiscussionTime,
-    topics_covered_specialty: topicsCoveredSpecialty,
-    understanding_improvement: understandingImprovement,
-    arrangements_rating: arrangementsRating,
-    registration_rating: registrationRating,
-    overall_conduct_rating: overallConductRating,
-    audiovisuals_rating: audiovisualsRating,
-    food_arrangements_rating: foodArrangementsRating
+    delegate_name: delegateName,
+    mmc_number: mmcNumber,
+    topic_clear_relevant: topicClearRelevant,
+    content_academic_depth: contentAcademicDepth,
+    speaker_clarity: speakerClarity,
+    slides_clear_understandable: slidesClearUnderstandable,
+    relevance_clinical_practice: relevanceClinicalPractice,
+    content_up_to_date: contentUpToDate,
+    session_within_time: sessionWithinTime,
+    discussion_time_provided: discussionTimeProvided,
+    questions_addressed_satisfactorily: questionsAddressedSatisfactorily,
+    pre_conf_info_timely: preConfInfoTimely,
+    digital_communication_access: digitalCommunicationAccess,
+    registration_smooth_efficient: registrationSmoothEfficient,
+    sessions_on_time: sessionsOnTime,
+    venue_comfortable_organized: venueComfortableOrganized,
+    audiovisual_facilities_satisfactory: audiovisualFacilitiesSatisfactory,
+    food_beverage_satisfactory: foodBeverageSatisfactory,
+    committee_support_helpful: committeeSupportHelpful,
+    suggestions: suggestions
   };
 
   return {
+    delegateName,
+    mmcNumber,
+    topicClearRelevant,
+    contentAcademicDepth,
+    speakerClarity,
+    slidesClearUnderstandable,
+    relevanceClinicalPractice,
+    contentUpToDate,
+    sessionWithinTime,
+    discussionTimeProvided,
+    questionsAddressedSatisfactorily,
+    preConfInfoTimely,
+    digitalCommunicationAccess,
+    registrationSmoothEfficient,
+    sessionsOnTime,
+    venueComfortableOrganized,
+    audiovisualFacilitiesSatisfactory,
+    foodBeverageSatisfactory,
+    committeeSupportHelpful,
     choiceOfSpeakers,
     thoroughExploration,
     presentationQuality,
@@ -2844,22 +2907,22 @@ function processFeedbackPayload(b) {
     programmeEvaluation,
     adequateDiscussionTime,
     topicsCoveredSpecialty,
-    understandingImprovement,
-    arrangementsRating,
-    registrationRating,
-    overallConductRating,
-    audiovisualsRating,
-    foodArrangementsRating,
+    understandingImprovement: contentAcademicDepth,
+    arrangementsRating: venueComfortableOrganized,
+    registrationRating: registrationSmoothEfficient,
+    overallConductRating: rating,
+    audiovisualsRating: audiovisualFacilitiesSatisfactory,
+    foodArrangementsRating: foodBeverageSatisfactory,
     rating,
-    contentRating,
-    speakerRating,
+    contentRating: topicClearRelevant,
+    speakerRating: speakerClarity,
     comment: suggestions,
     responsesJson: JSON.stringify(responses)
   };
 }
 
 app.post(['/api/me/feedback', '/api/me/feedback-and-certificate'],auth,asyncRoute(async(req,res)=>{
-  const [[p]]=await pool.query('SELECT p.id, p.registration_no, p.category, u.name, u.email FROM participants p JOIN users u ON u.id=p.user_id WHERE u.id=? LIMIT 1',[req.user.id]);
+  const [[p]]=await pool.query('SELECT p.id, p.registration_no, p.mmc_reg_no, p.category, u.name, u.email FROM participants p JOIN users u ON u.id=p.user_id WHERE u.id=? LIMIT 1',[req.user.id]);
   if(!p) return res.status(400).json({success:false,message:'Participant profile not found'});
 
   const fb = processFeedbackPayload(req.body);
@@ -2867,14 +2930,26 @@ app.post(['/api/me/feedback', '/api/me/feedback-and-certificate'],auth,asyncRout
   await pool.query(`
     INSERT INTO feedback(
       participant_id, session_id, rating, content_rating, speaker_rating, comment,
+      delegate_name, mmc_number,
+      topic_clear_relevant, content_academic_depth, speaker_clarity, slides_clear_understandable,
+      relevance_clinical_practice, content_up_to_date, session_within_time, discussion_time_provided,
+      questions_addressed_satisfactorily, pre_conf_info_timely, digital_communication_access,
+      registration_smooth_efficient, sessions_on_time, venue_comfortable_organized,
+      audiovisual_facilities_satisfactory, food_beverage_satisfactory, committee_support_helpful,
       choice_of_speakers, thorough_exploration, presentation_quality, topic_usefulness,
       suggestions, programme_evaluation, adequate_discussion_time, topics_covered_specialty,
       understanding_improvement, arrangements_rating, registration_rating, overall_conduct_rating,
       audiovisuals_rating, food_arrangements_rating, responses
     )
-    VALUES(?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES(?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     p.id, fb.rating, fb.contentRating, fb.speakerRating, fb.comment,
+    fb.delegateName || p.name, fb.mmcNumber || p.mmc_reg_no,
+    fb.topicClearRelevant, fb.contentAcademicDepth, fb.speakerClarity, fb.slidesClearUnderstandable,
+    fb.relevanceClinicalPractice, fb.contentUpToDate, fb.sessionWithinTime, fb.discussionTimeProvided,
+    fb.questionsAddressedSatisfactorily, fb.preConfInfoTimely, fb.digitalCommunicationAccess,
+    fb.registrationSmoothEfficient, fb.sessionsOnTime, fb.venueComfortableOrganized,
+    fb.audiovisualFacilitiesSatisfactory, fb.foodBeverageSatisfactory, fb.committeeSupportHelpful,
     fb.choiceOfSpeakers, fb.thoroughExploration, fb.presentationQuality, fb.topicUsefulness,
     fb.suggestions, fb.programmeEvaluation, fb.adequateDiscussionTime, fb.topicsCoveredSpecialty,
     fb.understandingImprovement, fb.arrangementsRating, fb.registrationRating, fb.overallConductRating,
