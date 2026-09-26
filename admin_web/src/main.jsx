@@ -183,17 +183,18 @@ function App(){
   },[logged, selectedConferenceId]);
 
   const visibleMenu = useMemo(() => {
-    if (!currentUser) return fullMenu;
-    const isSuper = currentUser.isSuperAdmin || currentUser.role === 'SUPER_ADMIN';
-    if (isSuper) return fullMenu;
-    const isConfAdmin = currentUser.isConferenceAdmin || currentUser.role === 'ADMIN' || currentUser.role === 'EVENT_MANAGER';
+    if (!currentUser) return fullMenu.filter(m => m.key !== 'global_crm');
+    const isSuper = Boolean(currentUser.isSuperAdmin || currentUser.role === 'SUPER_ADMIN');
+    if (isSuper) {
+      return fullMenu;
+    }
+    const isConfAdmin = Boolean(currentUser.isConferenceAdmin || currentUser.role === 'ADMIN' || currentUser.role === 'EVENT_MANAGER');
     if (isConfAdmin) {
-      return fullMenu.filter(m => m.key !== 'settings');
+      return fullMenu.filter(m => m.key !== 'settings' && m.key !== 'global_crm');
     }
     // Sub-Admin: filter strictly by permissions
     const perms = Array.isArray(currentUser.permissions) ? currentUser.permissions : [];
-    if (perms.length === 0 && !currentUser.isSubAdmin) return fullMenu;
-    return fullMenu.filter(m => perms.includes('all') || perms.includes(m.key));
+    return fullMenu.filter(m => m.key !== 'settings' && m.key !== 'global_crm' && (perms.includes('all') || perms.includes(m.key)));
   }, [currentUser]);
 
   const notify=msg=>{setToast(msg);setTimeout(()=>setToast(''),2800)};
@@ -892,6 +893,7 @@ function ConferenceStaffManager({ conferenceId, conference, notify, isSuperAdmin
         <ConferenceStaffModal
           conferenceId={conferenceId}
           staff={editingStaff}
+          isSuperAdmin={isSuperAdmin}
           onClose={() => { setShowModal(false); setEditingStaff(null); }}
           onSave={async (v) => {
             try {
@@ -915,14 +917,14 @@ function ConferenceStaffManager({ conferenceId, conference, notify, isSuperAdmin
   );
 }
 
-function ConferenceStaffModal({ conferenceId, staff, conferencesList, onClose, onSave }) {
+function ConferenceStaffModal({ conferenceId, staff, conferencesList, isSuperAdmin, onClose, onSave }) {
   const isEdit = !!staff;
   const [selectedConfId, setSelectedConfId] = useState(conferenceId || (conferencesList?.[0]?.id) || 1);
   const [name, setName] = useState(staff?.name || '');
   const [email, setEmail] = useState(staff?.email || '');
   const [phone, setPhone] = useState(staff?.phone || '');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState(staff?.staff_role || (staff?.role === 'SUB_ADMIN' ? 'SUB_ADMIN' : 'ADMIN'));
+  const [role, setRole] = useState(staff?.staff_role || (isSuperAdmin ? 'ADMIN' : 'SUB_ADMIN'));
   
   let initialPerms = [];
   if (Array.isArray(staff?.permissions)) {
@@ -959,8 +961,8 @@ function ConferenceStaffModal({ conferenceId, staff, conferencesList, onClose, o
         email: email.trim().toLowerCase(),
         phone: phone.trim(),
         password: password.trim() || undefined,
-        role,
-        permissions: role === 'ADMIN' ? ['all'] : permissions
+        role: isSuperAdmin ? role : 'SUB_ADMIN',
+        permissions: (isSuperAdmin && role === 'ADMIN') ? ['all'] : permissions
       });
     } finally {
       setBusy(false);
@@ -971,12 +973,12 @@ function ConferenceStaffModal({ conferenceId, staff, conferencesList, onClose, o
     <div className="modal-overlay">
       <div className="modal" style={{maxWidth: '680px'}}>
         <div className="modal-header" style={{background: '#8C1119', color: '#fff'}}>
-          <h3>{isEdit ? '✏️ Edit Conference Staff & Permissions' : '➕ Add Staff / Sub-Admin'}</h3>
+          <h3>{isEdit ? '✏️ Edit Conference Staff & Permissions' : (isSuperAdmin ? '➕ Appoint Admin / Sub-Admin' : '➕ Add Conference Sub-Admin')}</h3>
           <button className="close" onClick={onClose} style={{color: '#fff'}}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="modal-body" style={{display: 'flex', flexDirection: 'column', gap: '14px', maxHeight: '70vh', overflowY: 'auto'}}>
-            {conferencesList && conferencesList.length > 0 && !isEdit && (
+            {conferencesList && conferencesList.length > 0 && !isEdit && isSuperAdmin && (
               <div>
                 <label style={{fontWeight: 700, fontSize: '13px', display: 'block', marginBottom: '6px'}}>Target Conference *</label>
                 <select value={selectedConfId} onChange={e => setSelectedConfId(Number(e.target.value))} style={{width:'100%', padding:'10px', borderRadius:'8px', border:'1px solid #cbd5e1', fontWeight:600}}>
@@ -995,27 +997,34 @@ function ConferenceStaffModal({ conferenceId, staff, conferencesList, onClose, o
               <Field type="password" label={isEdit ? "New Password (leave blank to keep current)" : "Password *"} value={password} onChange={setPassword} />
             </div>
 
-            <div>
-              <label style={{fontWeight: 700, fontSize: '13px', display: 'block', marginBottom: '6px'}}>Assigned Role in this Conference</label>
-              <div style={{display: 'flex', gap: '14px'}}>
-                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '10px 14px', border: role==='ADMIN'?'2px solid #8C1119':'1px solid #cbd5e1', borderRadius: '8px', background: role==='ADMIN'?'#fff5f5':'#fff'}}>
-                  <input type="radio" name="staffRole" value="ADMIN" checked={role === 'ADMIN'} onChange={() => setRole('ADMIN')} />
-                  <div>
-                    <strong style={{color: '#8C1119', display: 'block'}}>👔 Conference Admin</strong>
-                    <small style={{color: '#64748b'}}>Full control of this conference + can add Sub-Admins</small>
-                  </div>
-                </label>
-                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '10px 14px', border: role==='SUB_ADMIN'?'2px solid #0284c7':'1px solid #cbd5e1', borderRadius: '8px', background: role==='SUB_ADMIN'?'#f0f9ff':'#fff'}}>
-                  <input type="radio" name="staffRole" value="SUB_ADMIN" checked={role === 'SUB_ADMIN'} onChange={() => setRole('SUB_ADMIN')} />
-                  <div>
-                    <strong style={{color: '#0284c7', display: 'block'}}>🧑‍💼 Sub-Admin</strong>
-                    <small style={{color: '#64748b'}}>Granted specific module permissions below</small>
-                  </div>
-                </label>
+            {isSuperAdmin ? (
+              <div>
+                <label style={{fontWeight: 700, fontSize: '13px', display: 'block', marginBottom: '6px'}}>Assigned Role in this Conference</label>
+                <div style={{display: 'flex', gap: '14px'}}>
+                  <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '10px 14px', border: role==='ADMIN'?'2px solid #8C1119':'1px solid #cbd5e1', borderRadius: '8px', background: role==='ADMIN'?'#fff5f5':'#fff'}}>
+                    <input type="radio" name="staffRole" value="ADMIN" checked={role === 'ADMIN'} onChange={() => setRole('ADMIN')} />
+                    <div>
+                      <strong style={{color: '#8C1119', display: 'block'}}>👔 Conference Admin</strong>
+                      <small style={{color: '#64748b'}}>Full control of this conference + can add Sub-Admins</small>
+                    </div>
+                  </label>
+                  <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '10px 14px', border: role==='SUB_ADMIN'?'2px solid #0284c7':'1px solid #cbd5e1', borderRadius: '8px', background: role==='SUB_ADMIN'?'#f0f9ff':'#fff'}}>
+                    <input type="radio" name="staffRole" value="SUB_ADMIN" checked={role === 'SUB_ADMIN'} onChange={() => setRole('SUB_ADMIN')} />
+                    <div>
+                      <strong style={{color: '#0284c7', display: 'block'}}>🧑‍💼 Sub-Admin</strong>
+                      <small style={{color: '#64748b'}}>Granted specific module permissions below</small>
+                    </div>
+                  </label>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div style={{padding:'10px 14px', background:'#f0f9ff', borderRadius:'8px', border:'1px solid #bae6fd'}}>
+                <strong style={{color:'#0284c7', fontSize:'13px', display:'block'}}>🧑‍💼 Appointing Sub-Admin</strong>
+                <small style={{color:'#64748b'}}>Select the specific modules this Sub-Admin is authorized to manage for this conference.</small>
+              </div>
+            )}
 
-            {role === 'SUB_ADMIN' && (
+            {(!isSuperAdmin || role === 'SUB_ADMIN') && (
               <div style={{marginTop: '8px', padding: '14px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0'}}>
                 <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}>
                   <strong style={{fontSize: '13px', color: '#1e293b'}}>Allowed Module Permissions:</strong>
