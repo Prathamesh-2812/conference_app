@@ -1311,7 +1311,7 @@ function FormShell({icon:Icon,title,description,children,onSave,onReset,preview}
 function BrandPreview({branding}){return <div className="brandpreview" style={{background:branding.backgroundColor||'#FCFAF5',borderColor:branding.primaryColor||'#8C1119'}}>{branding.bannerUrl&&<img src={branding.bannerUrl.startsWith('/uploads')?API.replace('/api','')+branding.bannerUrl:branding.bannerUrl} alt="Conference banner"/>}<div><span style={{color:branding.accentColor}}>Live Preview</span><strong style={{color:branding.primaryColor}}>Mobile conference branding</strong><small style={{color:branding.secondaryColor}}>Logo, banner, and colors are API driven.</small></div></div>}
 
 function Participants({tab, notify, selectedConferenceId}){
-  const[d,setD]=useState([]),[q,setQ]=useState(''),[statusFilter,setStatusFilter]=useState('ALL'),[catFilter,setCatFilter]=useState('ALL'),[appFilter,setAppFilter]=useState('ALL'),[hotelFilter,setHotelFilter]=useState('ALL'),[payFilter,setPayFilter]=useState('ALL'),[kitFilter,setKitFilter]=useState('ALL'),[certFilter,setCertFilter]=useState('ALL'),[foodFilter,setFoodFilter]=useState('ALL'),[busy,setBusy]=useState(false),[edit,setEdit]=useState(null),[importModal,setImportModal]=useState(false),[qrModal,setQrModal]=useState(null),[liaisons,setLiaisons]=useState([]),[whatsappModal,setWhatsappModal]=useState(false);
+  const[d,setD]=useState([]),[q,setQ]=useState(''),[statusFilter,setStatusFilter]=useState('ALL'),[catFilter,setCatFilter]=useState('ALL'),[appFilter,setAppFilter]=useState('ALL'),[hotelFilter,setHotelFilter]=useState('ALL'),[payFilter,setPayFilter]=useState('ALL'),[certFilter,setCertFilter]=useState('ALL'),[foodFilter,setFoodFilter]=useState('ALL'),[busy,setBusy]=useState(false),[edit,setEdit]=useState(null),[importModal,setImportModal]=useState(false),[liaisons,setLiaisons]=useState([]);
   
   const load=async()=>{
     setBusy(true);
@@ -1333,16 +1333,6 @@ function Participants({tab, notify, selectedConferenceId}){
     if(tab==='Import Participants') setImportModal(true);
   },[tab]);
 
-  const toggleKit = async (id) => {
-    try {
-      const res = await req(`/admin/participants/${id}/toggle-kit`, { method: 'PUT' });
-      notify(res.message || 'Kit status updated');
-      setD(prev => prev.map(p => p.id === id ? { ...p, kit_issued: res.data?.kit_issued } : p));
-    } catch(err) {
-      alert(err.message);
-    }
-  };
-
   const toggleCert = async (id) => {
     try {
       const res = await req(`/admin/participants/${id}/toggle-certificate`, { method: 'PUT' });
@@ -1360,28 +1350,15 @@ function Participants({tab, notify, selectedConferenceId}){
     const matchesApp=appFilter==='ALL'||(appFilter==='NEVER_OPENED' && !x.last_login_at)||(appFilter==='LOGGED_IN' && !!x.last_login_at);
     const matchesHotel=hotelFilter==='ALL'||(hotelFilter==='NO_HOTEL'?!x.hotel_name:x.hotel_name===hotelFilter);
     const matchesPay=payFilter==='ALL'||x.payment_status===payFilter;
-    const matchesKit=kitFilter==='ALL'||(kitFilter==='KIT_ISSUED'?x.kit_issued:!x.kit_issued);
     const matchesCert=certFilter==='ALL'||(certFilter==='CERT_ISSUED'?(x.certificate_issued||x.has_certificate>0):(!x.certificate_issued&&!x.has_certificate));
     const matchesFood=foodFilter==='ALL'||(x.food_preference||'VEG')===foodFilter;
-    return matchesQ && matchesStatus && matchesCat && matchesApp && matchesHotel && matchesPay && matchesKit && matchesCert && matchesFood;
+    return matchesQ && matchesStatus && matchesCat && matchesApp && matchesHotel && matchesPay && matchesCert && matchesFood;
   });
 
   const categories=['ALL',...Array.from(new Set(d.map(x=>x.category).filter(Boolean)))];
   const statuses=['ALL','PENDING','APPROVED','CHECKED_IN','CANCELLED'];
   const hotels=['ALL',...Array.from(new Set(d.map(x=>x.hotel_name).filter(Boolean))),'NO_HOTEL'];
   const payStatuses=['ALL','PAID','PENDING'];
-
-  const sendWhatsAppToSingle = (x) => {
-    let phone = (x.phone || '').replace(/[^0-9]/g, '');
-    if (phone.length === 10) phone = '91' + phone;
-    if (!phone) {
-      alert(`No phone number available for ${x.name}`);
-      return;
-    }
-    const appUrl = window.location.origin.replace(':5173', ':3000');
-    const msg = `Namaste Dr./Prof. ${x.name}! 🙏\n\nWelcome to *MAPCON 2026* (Annual State Conference at Hotel Sayaji, Kolhapur).\n\n📌 *Your Delegate Registration Details:*\n• *Registration No:* ${x.registration_no || 'MAPCON-2026-DEL'}\n• *Category:* ${x.category || 'Delegate'}\n• *Hotel Assigned:* ${x.hotel_name || 'Hotel Sayaji'} (Room: ${x.room_number || 'TBD'})\n• *Login Email:* ${x.email}\n• *Default Password:* Demo@123\n\n📲 *Access Conference App & Live Schedule:*\n${appUrl}\n\nKindly login to the app to access your QR Gate Pass, Scientific Session Schedule, Meal Coupons, and Verified Certificate.\n\nFor any query, contact our Secretarial Desk.\n_MAPCON 2026 Organizing Committee_`;
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
-  };
 
   const save=async(v)=>{
     const method=v.id?'PUT':'POST';
@@ -1401,7 +1378,7 @@ function Participants({tab, notify, selectedConferenceId}){
 
   const exportCSV=()=>{
     if(!filtered.length){alert('No participants to export');return}
-    const headers=['ID','Registration No','Name','Email','Phone','Designation','University','Category','Food Preference','Kit Issued','Certificate Issued','Status','App Status','Payment Status','Hotel Assigned','Room No','Room Type','Check In','Check Out','Mode of Travel','Flight No','Arrival Date','Arrival Time','Departure Date','Departure Time','Liaison Officer','Liaison Phone'];
+    const headers=['ID','Registration No','Name','Email','Phone','Designation','University','Category','Food Preference','Certificate Issued','Status','App Status','Payment Status','Hotel Assigned','Room No','Room Type','Check In','Check Out','Mode of Travel','Flight No','Arrival Date','Arrival Time','Departure Date','Departure Time','Liaison Officer','Liaison Phone'];
     const rows=filtered.map(x=>[
       x.id,
       `"${x.registration_no||''}"`,
@@ -1412,7 +1389,6 @@ function Participants({tab, notify, selectedConferenceId}){
       `"${x.university||''}"`,
       `"${x.category||''}"`,
       `"${x.food_preference||'VEG'}"`,
-      `"${x.kit_issued?'Issued':'Pending'}"`,
       `"${x.certificate_issued||x.has_certificate>0?'Issued':'Pending'}"`,
       `"${x.status||''}"`,
       `"${x.last_login_at?'Active (Logged In)':'Never Opened App'}"`,
@@ -1440,7 +1416,6 @@ function Participants({tab, notify, selectedConferenceId}){
     document.body.removeChild(link);
   };
 
-  const kitsCount = d.filter(x => x.kit_issued).length;
   const certsCount = d.filter(x => x.certificate_issued || x.has_certificate > 0).length;
   const hotelCount = d.filter(x => x.hotel_name).length;
   const vegCount = d.filter(x => (x.food_preference||'VEG') === 'VEG').length;
@@ -1450,10 +1425,9 @@ function Participants({tab, notify, selectedConferenceId}){
     <div className="pagehead">
       <div>
         <h3>Participants Directory & Desk Operations</h3>
-        <p>Manage delegate registrations, conference kit distribution, certificates, accommodation, and real-time mapping.</p>
+        <p>Manage delegate registrations, certificates, accommodation, and real-time mapping.</p>
       </div>
-      <div className="actions">
-        <button className="secondary" style={{borderColor:'#16a34a',color:'#16a34a',fontWeight:600}} onClick={()=>setWhatsappModal(true)}>📲 WhatsApp Delegates</button>
+      <div className="actions" style={{display:'flex', gap:'8px', flexWrap:'wrap'}}>
         <button className="secondary" onClick={exportCSV}>📥 Export CSV</button>
         <button className="secondary" onClick={()=>setImportModal(true)}>📂 Import Excel / CSV</button>
         <button className="primary" onClick={()=>setEdit({})}>+ Add Participant</button>
@@ -1461,16 +1435,11 @@ function Participants({tab, notify, selectedConferenceId}){
     </div>
 
     {/* Metric Overview Cards */}
-    <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:'12px', marginBottom:'16px'}}>
+    <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))', gap:'12px', marginBottom:'16px'}}>
       <div style={{background:'#fff', padding:'14px 16px', borderRadius:'12px', border:'1px solid #e2e8f0', boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
         <small style={{color:'#64748b', fontWeight:700, fontSize:'11.5px', textTransform:'uppercase', letterSpacing:'0.5px'}}>Total Registered</small>
         <div style={{fontSize:'22px', fontWeight:800, color:'#8C1119', marginTop:'2px'}}>{d.length}</div>
         <small style={{color:'#059669', fontSize:'11.5px', fontWeight:600}}>All categories</small>
-      </div>
-      <div style={{background:'#fff', padding:'14px 16px', borderRadius:'12px', border:'1px solid #e2e8f0', boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
-        <small style={{color:'#64748b', fontWeight:700, fontSize:'11.5px', textTransform:'uppercase', letterSpacing:'0.5px'}}>🎁 Conference Kits</small>
-        <div style={{fontSize:'22px', fontWeight:800, color:'#0284c7', marginTop:'2px'}}>{kitsCount} <span style={{fontSize:'13px', color:'#64748b', fontWeight:500}}>/ {d.length}</span></div>
-        <small style={{color:'#0284c7', fontSize:'11.5px', fontWeight:600}}>{d.length ? Math.round((kitsCount/d.length)*100) : 0}% Distributed</small>
       </div>
       <div style={{background:'#fff', padding:'14px 16px', borderRadius:'12px', border:'1px solid #e2e8f0', boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
         <small style={{color:'#64748b', fontWeight:700, fontSize:'11.5px', textTransform:'uppercase', letterSpacing:'0.5px'}}>📜 Certificates</small>
@@ -1489,23 +1458,14 @@ function Participants({tab, notify, selectedConferenceId}){
       </div>
     </div>
     
-    {/* Advanced Multi-Filter Toolbar */}
-    <div className="toolbar" style={{display:'flex',gap:'8px',flexWrap:'wrap',alignItems:'center',background:'#f8fafc',padding:'14px',borderRadius:'12px',border:'1px solid #e2e8f0',marginBottom:'16px'}}>
-      <div className="search" style={{flex:1,minWidth:'220px'}}><Search size={18}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search name, email, phone, reg no, college, hotel..."/></div>
+    {/* Multi-Filter Toolbar */}
+    <div className="toolbar" style={{display:'flex',gap:'10px',flexWrap:'wrap',alignItems:'center',background:'#f8fafc',padding:'14px',borderRadius:'12px',border:'1px solid #e2e8f0',marginBottom:'16px'}}>
+      <div className="search" style={{flex:1,minWidth:'240px'}}><Search size={18}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search name, email, phone, reg no, college, hotel..."/></div>
       
       <div style={{display:'flex',gap:'4px',alignItems:'center'}}>
         <small style={{fontWeight:700,color:'#475569'}}>Category:</small>
         <select value={catFilter} onChange={e=>setCatFilter(e.target.value)} style={{padding:'6px 8px',borderRadius:'6px',border:'1px solid #cbd5e1',fontSize:'12.5px'}}>
           {categories.map(c=><option key={c} value={c}>{c}</option>)}
-        </select>
-      </div>
-
-      <div style={{display:'flex',gap:'4px',alignItems:'center'}}>
-        <small style={{fontWeight:700,color:'#475569'}}>Kit:</small>
-        <select value={kitFilter} onChange={e=>setKitFilter(e.target.value)} style={{padding:'6px 8px',borderRadius:'6px',border:'1px solid #cbd5e1',fontSize:'12.5px',color:kitFilter==='KIT_ISSUED'?'#0284c7':kitFilter==='KIT_PENDING'?'#d97706':'#333'}}>
-          <option value="ALL">All Kit Status</option>
-          <option value="KIT_ISSUED">✅ Kit Issued</option>
-          <option value="KIT_PENDING">⏳ Kit Pending</option>
         </select>
       </div>
 
@@ -1542,28 +1502,27 @@ function Participants({tab, notify, selectedConferenceId}){
         </select>
       </div>
 
-      <button onClick={load} disabled={busy} style={{padding:'6px 12px',fontSize:'12.5px'}}>{busy?'Refreshing...':'Refresh'}</button>
+      <button onClick={load} disabled={busy} style={{padding:'6px 14px',fontSize:'12.5px'}}>{busy?'Refreshing...':'Refresh'}</button>
     </div>
 
     <div className="tablewrap">
       <table>
         <thead>
           <tr>
-            <th>Reg No & Pass</th>
+            <th>Registration No</th>
             <th>Participant Details</th>
             <th>University & Role</th>
             <th>Category & Food</th>
-            <th>Kit & Certificate</th>
+            <th>Certificate</th>
             <th>Status & Accommodation</th>
             <th>Liaison</th>
-            <th>Actions</th>
+            <th style={{textAlign:'center'}}>Actions</th>
           </tr>
         </thead>
         <tbody>
           {filtered.map(x=><tr key={x.id}>
             <td>
-              <strong>{x.registration_no||'-'}</strong><br/>
-              <button className="pill small" style={{cursor:'pointer',marginTop:'4px',background:'#8C1119',color:'#fff',border:0}} onClick={()=>setQrModal(x)}>📱 View QR ID</button>
+              <strong style={{fontSize:'13px',color:'#8C1119'}}>{x.registration_no||'-'}</strong>
             </td>
             <td>
               <b>{x.name}</b> {x.gender && <small style={{color:'#64748b',fontWeight:600}}>({x.gender})</small>}<br/>
@@ -1586,22 +1545,13 @@ function Participants({tab, notify, selectedConferenceId}){
               {x.program_type && <div style={{fontSize:'10.5px',color:'#64748b',marginTop:'3px'}}>Prog: {x.program_type}</div>}
             </td>
             <td>
-              <div style={{display:'flex',flexDirection:'column',gap:'4px'}}>
-                <button
-                  onClick={()=>toggleKit(x.id)}
-                  style={{cursor:'pointer',padding:'3px 8px',borderRadius:'12px',fontSize:'11.5px',fontWeight:700,border:x.kit_issued?'1px solid #38bdf8':'1px solid #cbd5e1',background:x.kit_issued?'#f0f9ff':'#f8fafc',color:x.kit_issued?'#0369a1':'#64748b',textAlign:'left'}}
-                  title="Click to toggle Kit status"
-                >
-                  {x.kit_issued ? '✅ Kit Issued' : '⏳ Kit Pending'}
-                </button>
-                <button
-                  onClick={()=>toggleCert(x.id)}
-                  style={{cursor:'pointer',padding:'3px 8px',borderRadius:'12px',fontSize:'11.5px',fontWeight:700,border:(x.certificate_issued||x.has_certificate>0)?'1px solid #c084fc':'1px solid #cbd5e1',background:(x.certificate_issued||x.has_certificate>0)?'#faf5ff':'#f8fafc',color:(x.certificate_issued||x.has_certificate>0)?'#7e22ce':'#64748b',textAlign:'left'}}
-                  title="Click to toggle Certificate status"
-                >
-                  {(x.certificate_issued || x.has_certificate > 0) ? '📜 Cert Issued' : '⏳ Cert Pending'}
-                </button>
-              </div>
+              <button
+                onClick={()=>toggleCert(x.id)}
+                style={{cursor:'pointer',padding:'4px 10px',borderRadius:'12px',fontSize:'11.5px',fontWeight:700,border:(x.certificate_issued||x.has_certificate>0)?'1px solid #c084fc':'1px solid #cbd5e1',background:(x.certificate_issued||x.has_certificate>0)?'#faf5ff':'#f8fafc',color:(x.certificate_issued||x.has_certificate>0)?'#7e22ce':'#64748b',display:'inline-flex',alignItems:'center',gap:'4px'}}
+                title="Click to toggle Certificate status"
+              >
+                {(x.certificate_issued || x.has_certificate > 0) ? '📜 Cert Issued' : '⏳ Cert Pending'}
+              </button>
             </td>
             <td>
               <span className={`pill ${x.status}`}>{x.status}</span>
@@ -1621,15 +1571,10 @@ function Participants({tab, notify, selectedConferenceId}){
               )}
             </td>
             <td>{x.liaison_name?<><small><b>{x.liaison_name}</b></small><br/><small>{x.liaison_phone}</small></>:'-'}</td>
-            <td>
-              <div style={{display:'flex',flexDirection:'column',gap:'4px'}}>
-                <button className="pill small" style={{cursor:'pointer',background:'#16a34a',color:'#fff',display:'inline-flex',alignItems:'center',justifyContent:'center',gap:'4px'}} onClick={()=>sendWhatsAppToSingle(x)} title="Send WhatsApp Login Reminder">
-                  📲 WhatsApp
-                </button>
-                <div className="rowactions" style={{justifyContent:'center'}}>
-                  <button className="icon" onClick={()=>setEdit(x)} title="Edit"><Settings size={16}/></button>
-                  <button className="icon" onClick={()=>remove(x.id)} title="Delete"><LogOut size={16}/></button>
-                </div>
+            <td style={{textAlign:'center'}}>
+              <div className="rowactions" style={{justifyContent:'center',display:'flex',gap:'6px'}}>
+                <button className="icon" onClick={()=>setEdit(x)} title="Edit"><Settings size={16}/></button>
+                <button className="icon" onClick={()=>remove(x.id)} title="Delete"><LogOut size={16}/></button>
               </div>
             </td>
           </tr>)}
@@ -1640,8 +1585,6 @@ function Participants({tab, notify, selectedConferenceId}){
 
     {edit && <ParticipantModal value={edit} liaisons={liaisons} onSave={save} onClose={()=>setEdit(null)} notify={notify}/>}
     {importModal && <BulkImportModal conferenceId={selectedConferenceId || 1} onClose={()=>setImportModal(false)} onImportSuccess={()=>{setImportModal(false);load();notify('Participants imported successfully!')}}/>}
-    {whatsappModal && <WhatsAppBroadcasterModal participants={d} onClose={()=>setWhatsappModal(false)} notify={notify}/>}
-    {qrModal && <QrModal value={qrModal} onClose={()=>setQrModal(null)}/>}
   </div>
 }
 
@@ -2128,7 +2071,6 @@ function ParticipantModal({value, liaisons=[], onSave, onClose, notify}){
             <Field label="IAPM Membership No" value={v.iapm_membership_no} onChange={x=>set('iapm_membership_no',x)}/>
             <SelectField label="Category / Attending" value={v.category} onChange={x=>set('category',x)} options={['Delegate','IAPM Member','Non IAPM Member','Speaker','VC','VIP','Faculty','Student','Early Bird','Volunteer','Organiser']}/>
             <SelectField label="Food Preference" value={v.food_preference||'VEG'} onChange={x=>set('food_preference',x)} options={[{value:'VEG',label:'🥦 Vegetarian'},{value:'NON_VEG',label:'🍗 Non-Vegetarian'},{value:'JAIN',label:'🍃 Jain'}]}/>
-            <SelectField label="Conference Kit Status" value={v.kit_issued ? '1' : '0'} onChange={x=>set('kit_issued', x==='1'?1:0)} options={[{value:'1',label:'✅ Kit Distributed / Issued'},{value:'0',label:'⏳ Kit Pending'}]}/>
             <SelectField label="Certificate Status" value={v.certificate_issued ? '1' : '0'} onChange={x=>set('certificate_issued', x==='1'?1:0)} options={[{value:'1',label:'📜 Certificate Issued'},{value:'0',label:'⏳ Certificate Pending'}]}/>
             <SelectField label="Registration Status" value={v.status} onChange={x=>set('status',x)} options={['PENDING','APPROVED','CHECKED_IN','CANCELLED']}/>
             <SelectField label="Payment Status" value={v.payment_status} onChange={x=>set('payment_status',x)} options={['PAID','PENDING','REFUNDED']}/>
