@@ -1246,6 +1246,33 @@ app.delete('/api/admin/conference-staff/:id', auth, roles('ADMIN', 'SUPER_ADMIN'
   ok(res, { success: true }, 'Staff member removed from conference');
 }));
 
+app.post('/api/admin/clean-demo-data', auth, roles('ADMIN','SUPER_ADMIN'), asyncRoute(async(req, res) => {
+  const confId = Number(req.body.conferenceId) || 1;
+  const connection = await pool.getConnection();
+  try {
+    await connection.query('SET FOREIGN_KEY_CHECKS = 0');
+    await connection.query('DELETE FROM room_allocations');
+    await connection.query('DELETE FROM transport_assignments WHERE participant_id IN (SELECT id FROM participants WHERE conference_id = ?)', [confId]);
+    await connection.query('DELETE FROM certificates WHERE participant_id IN (SELECT id FROM participants WHERE conference_id = ?)', [confId]);
+    await connection.query('DELETE FROM attendance WHERE participant_id IN (SELECT id FROM participants WHERE conference_id = ?)', [confId]);
+    await connection.query('DELETE FROM meal_scans WHERE participant_id IN (SELECT id FROM participants WHERE conference_id = ?)', [confId]);
+    await connection.query('DELETE FROM feedback WHERE participant_id IN (SELECT id FROM participants WHERE conference_id = ?)', [confId]);
+    await connection.query('DELETE FROM participants WHERE conference_id = ?', [confId]);
+    await connection.query(`
+      DELETE FROM users 
+      WHERE role = 'PARTICIPANT' 
+        AND id NOT IN (SELECT user_id FROM conference_staff WHERE user_id IS NOT NULL)
+    `);
+    await connection.query('DELETE FROM rooms');
+    await connection.query('DELETE FROM hotels');
+    await connection.query('SET FOREIGN_KEY_CHECKS = 1');
+    io.emit('participant_status_updated', { conferenceId: confId });
+    ok(res, { success: true }, 'Demo participants, hotels, and rooms cleaned successfully');
+  } finally {
+    connection.release();
+  }
+}));
+
 app.post('/api/admin/conferences', auth, roles('ADMIN','SUPER_ADMIN'), [
   body('name').notEmpty()
 ], validate, asyncRoute(async(req, res) => {

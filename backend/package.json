@@ -6,6 +6,7 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "seed": "node src/seed.js",
+    "clean-data": "node src/clean_demo_data.js",
     "test:verify": "node test_verification.mjs",
     "test:feedback": "node test_feedback_verification.mjs"
   },
