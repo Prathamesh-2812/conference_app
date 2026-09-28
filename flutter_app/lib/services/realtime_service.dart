@@ -144,6 +144,7 @@ class RealtimeSyncService {
       });
 
       _socket?.on('conference_updated', (_) => triggerSync());
+      _socket?.on('sliders_updated', (_) => triggerSync());
       
       _socket?.on('sessions_updated', (data) {
         if (data is Map && data['title'] != null) {

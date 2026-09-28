@@ -1464,22 +1464,31 @@ class _MainMediaSliderState extends State<MainMediaSlider> {
   Future<void> _fetchSliders() async {
     try {
       final res = await ApiService.get('/sliders');
-      if (res is List && res.isNotEmpty) {
-        if (mounted) {
-          setState(() {
-            _slides = res;
-            _loading = false;
-          });
-          _startAutoPlay(res.length);
+      List<dynamic> fetched = [];
+      if (res is Map && res['data'] is List) {
+        fetched = res['data'] as List<dynamic>;
+      } else if (res is List) {
+        fetched = res;
+      }
+
+      final activeList = fetched.where((item) {
+        if (item is Map) {
+          final act = item['active'];
+          return act == null || act == 1 || act == true || act == '1';
         }
-      } else {
-        if (mounted) {
-          setState(() {
+        return false;
+      }).toList();
+
+      if (mounted) {
+        setState(() {
+          if (activeList.isNotEmpty) {
+            _slides = activeList;
+          } else {
             _slides = _defaultShowcaseSlides;
-            _loading = false;
-          });
-          _startAutoPlay(_defaultShowcaseSlides.length);
-        }
+          }
+          _loading = false;
+        });
+        _startAutoPlay(_slides.length);
       }
     } catch (_) {
       if (mounted) {
@@ -1637,7 +1646,7 @@ class _MainMediaSliderState extends State<MainMediaSlider> {
                       ),
                     ),
 
-                    if (title.isNotEmpty)
+                    if (title.isNotEmpty && title.trim().toLowerCase() != 'banner' && title.trim().toLowerCase() != 'main screen slide')
                       Positioned(
                         bottom: 0,
                         left: 0,

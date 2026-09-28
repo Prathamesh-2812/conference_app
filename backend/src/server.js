@@ -1489,6 +1489,7 @@ app.post('/api/admin/sliders', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncRoute(a
 
   const [[newSlide]] = await pool.query('SELECT * FROM main_sliders WHERE id = ?', [r.insertId]);
   io.emit('sliders_updated', { conferenceId });
+  io.emit('conference_updated', { id: conferenceId });
   created(res, newSlide, 'Slider banner created');
 }));
 
@@ -1506,6 +1507,7 @@ app.put('/api/admin/sliders/:id', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncRout
 
   const [[slide]] = await pool.query('SELECT * FROM main_sliders WHERE id = ?', [req.params.id]);
   io.emit('sliders_updated', { conferenceId: slide?.conference_id });
+  io.emit('conference_updated', { id: slide?.conference_id });
   ok(res, slide, 'Slider slide updated');
 }));
 
@@ -1513,6 +1515,7 @@ app.delete('/api/admin/sliders/:id', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncR
   const [[slide]] = await pool.query('SELECT conference_id FROM main_sliders WHERE id = ?', [req.params.id]);
   await pool.query('DELETE FROM main_sliders WHERE id = ?', [req.params.id]);
   io.emit('sliders_updated', { conferenceId: slide?.conference_id });
+  io.emit('conference_updated', { id: slide?.conference_id });
   ok(res, null, 'Slider deleted');
 }));
 
@@ -2990,69 +2993,6 @@ app.post(['/api/me/feedback', '/api/me/feedback-and-certificate'],auth,asyncRout
     certificate: freshCert,
     hasFeedback: true
   }, 'Feedback recorded and certificate generated successfully!');
-}));
-
-app.get('/api/sliders',asyncRoute(async(req,res)=>{
-  const conferenceId = req.query.conferenceId || 1;
-  const [rows] = await pool.query('SELECT * FROM main_sliders WHERE conference_id=? AND active=1 ORDER BY display_order ASC, id ASC',[conferenceId]);
-  res.json(rows);
-}));
-
-app.get('/api/admin/sliders',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
-  const conferenceId = req.query.conferenceId || 1;
-  const [rows] = await pool.query('SELECT * FROM main_sliders WHERE conference_id=? ORDER BY display_order ASC, id ASC',[conferenceId]);
-  res.json(rows);
-}));
-
-app.post('/api/admin/sliders',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
-  const conferenceId = req.body.conferenceId || 1;
-  let mediaUrl = req.body.media_url || req.body.mediaUrl;
-  if(req.body.file){
-    mediaUrl = await saveDataUrlUpload('sliders', req.body.file);
-  }
-  if(!mediaUrl){
-    return res.status(400).json({message: 'Media file or URL is required'});
-  }
-
-  const title = req.body.title || null;
-  const mediaType = req.body.media_type || req.body.mediaType || 'IMAGE';
-  const thumbnailUrl = req.body.thumbnail_url || req.body.thumbnailUrl || null;
-  const displayOrder = req.body.display_order || req.body.displayOrder || 0;
-  const active = req.body.active !== undefined ? (req.body.active ? 1 : 0) : 1;
-
-  const [r] = await pool.query(
-    'INSERT INTO main_sliders(conference_id, title, media_type, media_url, thumbnail_url, display_order, active) VALUES(?,?,?,?,?,?,?)',
-    [conferenceId, title, mediaType, mediaUrl, thumbnailUrl, displayOrder, active]
-  );
-  io.emit('sliders_updated', { action: 'create', id: r.insertId });
-  created(res, { id: r.insertId, conference_id: conferenceId, title, media_type: mediaType, media_url: mediaUrl, active }, 'Slider item added');
-}));
-
-app.put('/api/admin/sliders/:id',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
-  let mediaUrl = req.body.media_url || req.body.mediaUrl;
-  if(req.body.file){
-    mediaUrl = await saveDataUrlUpload('sliders', req.body.file);
-  }
-
-  await pool.query(`
-    UPDATE main_sliders SET
-      title=COALESCE(?,title),
-      media_type=COALESCE(?,media_type),
-      media_url=COALESCE(?,media_url),
-      thumbnail_url=COALESCE(?,thumbnail_url),
-      display_order=COALESCE(?,display_order),
-      active=COALESCE(?,active)
-    WHERE id=?
-  `, [req.body.title, req.body.media_type||req.body.mediaType, mediaUrl, req.body.thumbnail_url||req.body.thumbnailUrl, req.body.display_order||req.body.displayOrder, req.body.active!==undefined?(req.body.active?1:0):null, req.params.id]);
-
-  io.emit('sliders_updated', { action: 'update', id: req.params.id });
-  ok(res, null, 'Slider item updated');
-}));
-
-app.delete('/api/admin/sliders/:id',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
-  await pool.query('DELETE FROM main_sliders WHERE id=?',[req.params.id]);
-  io.emit('sliders_updated', { action: 'delete', id: req.params.id });
-  ok(res, null, 'Slider item deleted');
 }));
 
 app.get('/api/sponsors',asyncRoute(async(req,res)=>{
