@@ -3037,9 +3037,10 @@ class _VirtualStageScreenState extends State<VirtualStageScreen> {
     final isLive2 = _streamSettings == null ? true : (_streamSettings?['is_live_2'] == 1 || _streamSettings?['is_live_2'] == true || _streamSettings?['is_live_2'] == '1');
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFFFCFAF5),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: maroon,
+        foregroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
@@ -3048,8 +3049,8 @@ class _VirtualStageScreenState extends State<VirtualStageScreen> {
         title: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Zoom Live Stages', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 17)),
-            Text('Direct Conference Stream Links', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+            Text('Zoom Live Stages', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 17.5)),
+            Text('Direct Conference Stream Links', style: TextStyle(color: Color(0xFFE2E8F0), fontSize: 12)),
           ],
         ),
         actions: [
@@ -3063,28 +3064,29 @@ class _VirtualStageScreenState extends State<VirtualStageScreen> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF2563EB)))
+          ? const Center(child: CircularProgressIndicator(color: maroon))
           : RefreshIndicator(
+              color: maroon,
               onRefresh: _loadData,
               child: ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
                 children: [
                   // Information banner
                   Container(
-                    padding: const EdgeInsets.all(14),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFF334155)),
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFCBD5E1)),
                     ),
                     child: const Row(
                       children: [
-                        Icon(Icons.info_outline_rounded, color: Color(0xFF60A5FA), size: 20),
+                        Icon(Icons.info_outline_rounded, color: Color(0xFF475569), size: 18),
                         SizedBox(width: 10),
                         Expanded(
                           child: Text(
                             'Tap on any hall link below to join live sessions directly on Zoom.',
-                            style: TextStyle(color: Color(0xFFE2E8F0), fontSize: 12.5, fontWeight: FontWeight.w500),
+                            style: TextStyle(color: Color(0xFF334155), fontSize: 12.5, fontWeight: FontWeight.w500),
                           ),
                         ),
                       ],
@@ -3104,10 +3106,8 @@ class _VirtualStageScreenState extends State<VirtualStageScreen> {
                         passcode: (streamsList[i]['passcode'] ?? '').toString().trim(),
                         zoomUrl: (streamsList[i]['zoom_link'] ?? '').toString().trim(),
                         isLive: streamsList[i]['is_live'] == 1 || streamsList[i]['is_live'] == true || streamsList[i]['is_live'] == '1',
-                        primaryColor: primaryColors[i % primaryColors.length],
-                        accentColor: accentColors[i % accentColors.length],
                       ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 16),
                     ],
                   ] else ...[
                     // Fallback STREAM CARD 1 (HALL A)
@@ -3119,11 +3119,9 @@ class _VirtualStageScreenState extends State<VirtualStageScreen> {
                       passcode: passcode1,
                       zoomUrl: zoom1,
                       isLive: isLive1,
-                      primaryColor: primaryColors[0],
-                      accentColor: accentColors[0],
                     ),
 
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 16),
 
                     // Fallback STREAM CARD 2 (HALL B)
                     _buildZoomCard(
@@ -3134,37 +3132,42 @@ class _VirtualStageScreenState extends State<VirtualStageScreen> {
                       passcode: passcode2,
                       zoomUrl: zoom2,
                       isLive: isLive2,
-                      primaryColor: primaryColors[1],
-                      accentColor: accentColors[1],
                     ),
 
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
                   ],
 
                   // Guidelines Box
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B).withOpacity(0.8),
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFF334155)),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.03),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: const [
                         Row(
                           children: [
-                            Icon(Icons.tips_and_updates_rounded, color: Color(0xFFFBBF24), size: 18),
+                            Icon(Icons.tips_and_updates_rounded, color: gold, size: 18),
                             SizedBox(width: 8),
-                            Text('Delegate Guidelines:', style: TextStyle(fontWeight: FontWeight.w800, color: Colors.white, fontSize: 13.5)),
+                            Text('Delegate Guidelines:', style: TextStyle(fontWeight: FontWeight.w800, color: slate, fontSize: 13.5)),
                           ],
                         ),
-                        SizedBox(height: 8),
-                        Text('• Keep your microphone muted during presentations.', style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+                        SizedBox(height: 10),
+                        Text('• Keep your microphone muted during presentations.', style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B), height: 1.4)),
                         SizedBox(height: 4),
-                        Text('• Post your queries in the Zoom Q&A box for the speaker.', style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+                        Text('• Post your queries in the Zoom Q&A box for the speaker.', style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B), height: 1.4)),
                         SizedBox(height: 4),
-                        Text('• You can copy Meeting ID & Passcode if joining manually from the Zoom app.', style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+                        Text('• You can copy Meeting ID & Passcode if joining manually from the Zoom app.', style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B), height: 1.4)),
                       ],
                     ),
                   ),
@@ -3183,30 +3186,21 @@ class _VirtualStageScreenState extends State<VirtualStageScreen> {
     required String passcode,
     required String zoomUrl,
     required bool isLive,
-    required Color primaryColor,
-    required Color accentColor,
   }) {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            const Color(0xFF1E293B),
-            primaryColor.withOpacity(0.12),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isLive ? primaryColor : const Color(0xFF334155),
-          width: isLive ? 2.0 : 1.2,
+          color: isLive ? maroon.withOpacity(0.4) : const Color(0xFFE2E8F0),
+          width: 1.2,
         ),
         boxShadow: [
           BoxShadow(
-            color: primaryColor.withOpacity(isLive ? 0.25 : 0.08),
-            blurRadius: 18,
-            offset: const Offset(0, 6),
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -3220,22 +3214,22 @@ class _VirtualStageScreenState extends State<VirtualStageScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: primaryColor.withOpacity(0.25),
+                  color: maroon.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: primaryColor.withOpacity(0.8)),
+                  border: Border.all(color: maroon.withOpacity(0.2)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.videocam_rounded, color: accentColor, size: 15),
-                    const SizedBox(width: 6),
+                    const Icon(Icons.videocam_rounded, color: maroon, size: 15),
+                    const SizedBox(width: 5),
                     Text(
                       hallLabel,
-                      style: TextStyle(
-                        color: accentColor,
+                      style: const TextStyle(
+                        color: maroon,
                         fontSize: 11.5,
                         fontWeight: FontWeight.w900,
-                        letterSpacing: 0.8,
+                        letterSpacing: 0.6,
                       ),
                     ),
                   ],
@@ -3245,9 +3239,9 @@ class _VirtualStageScreenState extends State<VirtualStageScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3.5),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFDC2626).withOpacity(0.2),
+                    color: const Color(0xFFFEF2F2),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFDC2626)),
+                    border: Border.all(color: const Color(0xFFFCA5A5)),
                   ),
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
@@ -3256,7 +3250,7 @@ class _VirtualStageScreenState extends State<VirtualStageScreen> {
                       SizedBox(width: 4),
                       Text(
                         'LIVE STREAM',
-                        style: TextStyle(color: Color(0xFFEF4444), fontSize: 10.5, fontWeight: FontWeight.w900),
+                        style: TextStyle(color: Color(0xFFDC2626), fontSize: 10.5, fontWeight: FontWeight.w900),
                       ),
                     ],
                   ),
@@ -3265,12 +3259,13 @@ class _VirtualStageScreenState extends State<VirtualStageScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.08),
+                    color: const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
                   ),
                   child: const Text(
                     'ONLINE',
-                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: Color(0xFF64748B), fontSize: 10, fontWeight: FontWeight.bold),
                   ),
                 ),
             ],
@@ -3280,13 +3275,13 @@ class _VirtualStageScreenState extends State<VirtualStageScreen> {
           // Title & instructions
           Text(
             title,
-            style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w900),
+            style: const TextStyle(color: slate, fontSize: 16.5, fontWeight: FontWeight.w900),
           ),
           if (instructions.isNotEmpty) ...[
             const SizedBox(height: 5),
             Text(
               instructions,
-              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12.5, height: 1.35),
+              style: const TextStyle(color: Color(0xFF64748B), fontSize: 12.5, height: 1.35),
             ),
           ],
           const SizedBox(height: 14),
@@ -3295,30 +3290,30 @@ class _VirtualStageScreenState extends State<VirtualStageScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A).withOpacity(0.7),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF334155)),
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
             child: Column(
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Meeting ID:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.w600)),
+                    const Text('Meeting ID:', style: TextStyle(color: Color(0xFF64748B), fontSize: 12, fontWeight: FontWeight.w600)),
                     Text(
                       meetingId,
-                      style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 13, fontWeight: FontWeight.w900, fontFamily: 'monospace'),
+                      style: const TextStyle(color: slate, fontSize: 13.5, fontWeight: FontWeight.w900, fontFamily: 'monospace'),
                     ),
                   ],
                 ),
-                const Divider(height: 14, color: Color(0xFF334155)),
+                const Divider(height: 14, color: Color(0xFFE2E8F0)),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Passcode:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.w600)),
+                    const Text('Passcode:', style: TextStyle(color: Color(0xFF64748B), fontSize: 12, fontWeight: FontWeight.w600)),
                     Text(
                       passcode,
-                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900, fontFamily: 'monospace'),
+                      style: const TextStyle(color: maroon, fontSize: 13.5, fontWeight: FontWeight.w900, fontFamily: 'monospace'),
                     ),
                   ],
                 ),
@@ -3334,13 +3329,13 @@ class _VirtualStageScreenState extends State<VirtualStageScreen> {
                 flex: 3,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryColor,
+                    backgroundColor: maroon,
                     foregroundColor: Colors.white,
-                    minimumSize: const Size.fromHeight(46),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    minimumSize: const Size.fromHeight(44),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     elevation: 0,
                   ),
-                  icon: const Icon(Icons.video_camera_front_rounded, size: 20),
+                  icon: const Icon(Icons.video_camera_front_rounded, size: 19),
                   label: Text(
                     'Join $hallLabel on Zoom',
                     style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13.5),
@@ -3354,16 +3349,16 @@ class _VirtualStageScreenState extends State<VirtualStageScreen> {
                   final text = '$title\nZoom: $zoomUrl\nMeeting ID: $meetingId\nPasscode: $passcode';
                   _copyToClipboard(text, '$hallLabel Details');
                 },
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
                 child: Container(
-                  height: 46,
-                  width: 46,
+                  height: 44,
+                  width: 44,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF334155).withOpacity(0.7),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF475569)),
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFCBD5E1)),
                   ),
-                  child: const Icon(Icons.copy_rounded, color: Color(0xFFE2E8F0), size: 18),
+                  child: const Icon(Icons.copy_rounded, color: Color(0xFF475569), size: 18),
                 ),
               ),
             ],
