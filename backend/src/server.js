@@ -977,6 +977,7 @@ app.get('/api/me/profile', auth, asyncRoute(async(req, res) => {
   const [[u]] = await pool.query(`
     SELECT u.id, u.name, u.email, u.phone, u.role, u.designation, u.university, u.blood_group, u.photo, u.last_login_at,
            p.id as participant_id, p.registration_no, p.category, p.status as participant_status,
+           p.mmc_reg_no, p.iapm_membership_no, p.state, p.kit_issued, p.certificate_issued, p.program_type, p.payment_mode, p.transaction_id,
            p.food_preference, p.emergency_contact, p.mode_of_travel, p.flight_number,
            p.arrival_date, p.arrival_time, p.departure_date, p.departure_time,
            h.name as hotel_name, r.room_number, r.room_type,
@@ -2675,87 +2676,6 @@ app.post('/api/uploads',auth,asyncRoute(async(req,res)=>{
   created(res, { url }, 'File uploaded successfully');
 }));
 
-app.get('/api/me/profile',auth,asyncRoute(async(req,res)=>{
-  const [[u]]=await pool.query(`
-    SELECT u.id,u.name,u.email,u.phone,u.role,u.designation,u.university,u.blood_group,u.photo,
-           p.registration_no,p.category,p.mode_of_travel,p.flight_number,p.arrival_date,p.arrival_time,p.departure_date,p.departure_time,p.emergency_contact,
-           h.name hotel_name,r.room_number,r.room_type,l.name liaison_name,l.phone liaison_phone 
-    FROM users u 
-    LEFT JOIN participants p ON p.user_id=u.id 
-    LEFT JOIN room_allocations ra ON ra.participant_id=p.id 
-    LEFT JOIN rooms r ON r.id=ra.room_id 
-    LEFT JOIN hotels h ON h.id=r.hotel_id 
-    LEFT JOIN liaison_faculty l ON l.id=p.liaison_id 
-    WHERE u.id=?
-  `,[req.user.id]);
-  if(!u)return res.status(404).json({message:'Profile not found'});
-  res.json(u);
-}));
-
-app.put('/api/me/profile',auth,asyncRoute(async(req,res)=>{
-  const userId = req.user.id;
-  const name = req.body.name !== undefined ? (req.body.name ? String(req.body.name).trim() : null) : undefined;
-  const phone = req.body.phone !== undefined ? (req.body.phone ? String(req.body.phone).trim() : null) : undefined;
-  const designation = req.body.designation !== undefined ? (req.body.designation ? String(req.body.designation).trim() : null) : undefined;
-  const university = req.body.university !== undefined ? (req.body.university ? String(req.body.university).trim() : null) : undefined;
-  const photo = req.body.photo !== undefined ? (req.body.photo ? String(req.body.photo).trim() : null) : (req.body.avatarUrl !== undefined ? (req.body.avatarUrl ? String(req.body.avatarUrl).trim() : null) : undefined);
-  const bloodGroup = (req.body.blood_group !== undefined ? req.body.blood_group : req.body.bloodGroup) !== undefined 
-    ? ((req.body.blood_group || req.body.bloodGroup) ? String(req.body.blood_group || req.body.bloodGroup).trim() : null) 
-    : undefined;
-
-  const userUpdates = [];
-  const userParams = [];
-  if (name !== undefined) { userUpdates.push('name = ?'); userParams.push(name); }
-  if (phone !== undefined) { userUpdates.push('phone = ?'); userParams.push(phone); }
-  if (designation !== undefined) { userUpdates.push('designation = ?'); userParams.push(designation); }
-  if (university !== undefined) { userUpdates.push('university = ?'); userParams.push(university); }
-  if (bloodGroup !== undefined) { userUpdates.push('blood_group = ?'); userParams.push(bloodGroup); }
-  if (photo !== undefined) { userUpdates.push('photo = ?'); userParams.push(photo); }
-
-  if (userUpdates.length > 0) {
-    userParams.push(userId);
-    await pool.query(`UPDATE users SET ${userUpdates.join(', ')} WHERE id = ?`, userParams);
-  }
-
-  const emergencyContact = req.body.emergency_contact !== undefined ? (req.body.emergency_contact ? String(req.body.emergency_contact).trim() : null) : (req.body.emergencyContact !== undefined ? (req.body.emergencyContact ? String(req.body.emergencyContact).trim() : null) : undefined);
-  const modeOfTravel = (req.body.mode_of_travel !== undefined ? req.body.mode_of_travel : req.body.modeOfTravel) !== undefined ? ((req.body.mode_of_travel || req.body.modeOfTravel) ? String(req.body.mode_of_travel || req.body.modeOfTravel).trim() : null) : undefined;
-  const flightNumber = (req.body.flight_number !== undefined ? req.body.flight_number : req.body.flightNumber) !== undefined ? ((req.body.flight_number || req.body.flightNumber) ? String(req.body.flight_number || req.body.flightNumber).trim() : null) : undefined;
-  const arrivalDate = (req.body.arrival_date !== undefined ? req.body.arrival_date : req.body.arrivalDate) !== undefined ? (req.body.arrival_date || req.body.arrivalDate || null) : undefined;
-  const arrivalTime = (req.body.arrival_time !== undefined ? req.body.arrival_time : req.body.arrivalTime) !== undefined ? (req.body.arrival_time || req.body.arrivalTime || null) : undefined;
-  const departureDate = (req.body.departure_date !== undefined ? req.body.departure_date : req.body.departureDate) !== undefined ? (req.body.departure_date || req.body.departureDate || null) : undefined;
-  const departureTime = (req.body.departure_time !== undefined ? req.body.departure_time : req.body.departureTime) !== undefined ? (req.body.departure_time || req.body.departureTime || null) : undefined;
-
-  const partUpdates = [];
-  const partParams = [];
-  if (emergencyContact !== undefined) { partUpdates.push('emergency_contact = ?'); partParams.push(emergencyContact); }
-  if (modeOfTravel !== undefined) { partUpdates.push('mode_of_travel = ?'); partParams.push(modeOfTravel); }
-  if (flightNumber !== undefined) { partUpdates.push('flight_number = ?'); partParams.push(flightNumber); }
-  if (arrivalDate !== undefined) { partUpdates.push('arrival_date = ?'); partParams.push(arrivalDate); }
-  if (arrivalTime !== undefined) { partUpdates.push('arrival_time = ?'); partParams.push(arrivalTime); }
-  if (departureDate !== undefined) { partUpdates.push('departure_date = ?'); partParams.push(departureDate); }
-  if (departureTime !== undefined) { partUpdates.push('departure_time = ?'); partParams.push(departureTime); }
-
-  if (partUpdates.length > 0) {
-    partParams.push(userId);
-    await pool.query(`UPDATE participants SET ${partUpdates.join(', ')} WHERE user_id = ?`, partParams);
-  }
-
-  const [[u]] = await pool.query(`
-    SELECT u.id,u.name,u.email,u.phone,u.role,u.designation,u.university,u.blood_group,u.photo,
-           p.registration_no,p.category,p.mode_of_travel,p.flight_number,p.arrival_date,p.arrival_time,p.departure_date,p.departure_time,p.emergency_contact,
-           h.name hotel_name,r.room_number,r.room_type,l.name liaison_name,l.phone liaison_phone 
-    FROM users u 
-    LEFT JOIN participants p ON p.user_id=u.id 
-    LEFT JOIN room_allocations ra ON ra.participant_id=p.id 
-    LEFT JOIN rooms r ON r.id=ra.room_id 
-    LEFT JOIN hotels h ON h.id=r.hotel_id 
-    LEFT JOIN liaison_faculty l ON l.id=p.liaison_id 
-    WHERE u.id=?
-  `, [userId]);
-
-  io.emit('participant_status_updated', { userId, participant: u });
-  ok(res, u, 'Profile updated successfully');
-}));
 app.post('/api/me/photo',auth,asyncRoute(async(req,res)=>{
   let photoUrl = req.body.photo || req.body.photoUrl;
   if(req.body.file){

@@ -6826,36 +6826,63 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       const SizedBox(height: 18),
-                      InfoSection(
-                        title: 'BASIC INFORMATION',
-                        items: {
-                          'Role': x['role'],
-                          'Mobile No': x['phone'],
-                          'University': x['university'],
-                          'Designation': x['designation'],
-                          'Blood Group': x['blood_group'],
-                          'Emergency Contact': x['emergency_contact'],
-                          'Registration No': x['registration_no'],
-                        },
-                      ),
-                      InfoSection(
-                        title: 'ACCOMMODATION',
-                        items: {
-                          'Hotel': x['hotel_name'],
-                          'Room': x['room_number'],
-                          'Liaison': x['liaison_name'],
-                          'Liaison Phone': x['liaison_phone'],
-                        },
-                      ),
-                      InfoSection(
-                        title: 'TRAVEL DETAILS',
-                        items: {
-                          'Mode of Travel': x['mode_of_travel'],
-                          'Flight/Train No': x['flight_number'],
-                          'Arrival Date': formatSessionDate(x['arrival_date']),
-                          'Arrival Time': formatSingleTime(x['arrival_time']),
-                          'Departure Date': formatSessionDate(x['departure_date']),
-                          'Departure Time': formatSingleTime(x['departure_time']),
+                      Builder(
+                        builder: (context) {
+                          final conference = ConferenceScope.of(context);
+                          final bool enableAccommodation = conference.settings['enableAccommodation'] == true || conference.settings['enable_accommodation'] == true;
+                          final bool enableTransport = conference.settings['enableTransport'] == true || conference.settings['enable_transport'] == true;
+
+                          final basicItems = <String, dynamic>{
+                            'Delegate Name': x['name'],
+                            'Registration No': x['registration_no'],
+                            'Category': x['category'] ?? x['role'],
+                            'MMC Reg. No': x['mmc_reg_no'],
+                            'Mobile No': x['phone'],
+                            'Email ID': x['email'],
+                            'IAPM Membership No': x['iapm_membership_no'],
+                            'State': x['state'],
+                            'Institution / College': x['university'] ?? x['designation'],
+                            'Food Preference': x['food_preference'],
+                            'Blood Group': x['blood_group'],
+                            'Emergency Contact': x['emergency_contact'],
+                          };
+
+                          final accommodationItems = <String, dynamic>{
+                            'Hotel': x['hotel_name'],
+                            'Room': x['room_number'],
+                            'Room Type': x['room_type'],
+                            'Liaison': x['liaison_name'],
+                            'Liaison Phone': x['liaison_phone'],
+                          };
+
+                          final travelItems = <String, dynamic>{
+                            'Mode of Travel': x['mode_of_travel'],
+                            'Flight/Train No': x['flight_number'],
+                            'Arrival Date': formatSessionDate(x['arrival_date']),
+                            'Arrival Time': formatSingleTime(x['arrival_time']),
+                            'Departure Date': formatSessionDate(x['departure_date']),
+                            'Departure Time': formatSingleTime(x['departure_time']),
+                          };
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              InfoSection(
+                                title: 'DELEGATE REGISTRATION DETAILS',
+                                items: basicItems,
+                              ),
+                              if (enableAccommodation)
+                                InfoSection(
+                                  title: 'ACCOMMODATION',
+                                  items: accommodationItems,
+                                ),
+                              if (enableTransport)
+                                InfoSection(
+                                  title: 'TRAVEL & LOGISTICS DETAILS',
+                                  items: travelItems,
+                                ),
+                            ],
+                          );
                         },
                       ),
                       const SizedBox(height: 14),
@@ -6904,6 +6931,17 @@ class InfoSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final validEntries = items.entries.where((entry) {
+      if (entry.value == null) return false;
+      final s = entry.value.toString().trim();
+      if (s.isEmpty || s == '—' || s == '-' || s.toLowerCase() == 'null' || s.toLowerCase() == 'undefined') {
+        return false;
+      }
+      return true;
+    }).toList();
+
+    if (validEntries.isEmpty) return const SizedBox.shrink();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -6924,14 +6962,14 @@ class InfoSection extends StatelessWidget {
             side: BorderSide(color: Colors.grey.shade200),
           ),
           child: Column(
-            children: items.entries.map((entry) {
+            children: validEntries.map((entry) {
               return ListTile(
                 dense: true,
                 title: Text(entry.key, style: const TextStyle(fontSize: 13, color: muted, fontWeight: FontWeight.w600)),
                 trailing: SizedBox(
                   width: 190,
                   child: Text(
-                    '${entry.value ?? '—'}',
+                    '${entry.value}',
                     textAlign: TextAlign.right,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontWeight: FontWeight.w800, color: slate, fontSize: 13.5),
