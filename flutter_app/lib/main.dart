@@ -1509,7 +1509,7 @@ class _MainMediaSliderState extends State<MainMediaSlider> {
     return Column(
       children: [
         SizedBox(
-          height: 195,
+          height: 200,
           child: PageView.builder(
             controller: _pageController,
             onPageChanged: (idx) => setState(() => _currentIndex = idx),
@@ -1533,7 +1533,7 @@ class _MainMediaSliderState extends State<MainMediaSlider> {
                 badgeText = 'UNIVERSITY HIGHLIGHT';
                 badgeIcon = Icons.school;
               } else {
-                badgeText = 'CONFERENCE BANNER';
+                badgeText = '';
                 badgeIcon = Icons.event;
               }
 
@@ -1545,12 +1545,13 @@ class _MainMediaSliderState extends State<MainMediaSlider> {
                 margin: const EdgeInsets.symmetric(horizontal: 4),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(18),
-                  color: const Color(0xFF0F172A),
+                  color: Colors.white,
+                  border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.12),
+                      color: Colors.black.withOpacity(0.07),
                       blurRadius: 10,
-                      offset: const Offset(0, 4),
+                      offset: const Offset(0, 3),
                     ),
                   ],
                 ),
@@ -1600,51 +1601,53 @@ class _MainMediaSliderState extends State<MainMediaSlider> {
                     ] else ...[
                       Image.network(
                         fullUrl,
-                        fit: BoxFit.cover,
+                        fit: BoxFit.contain,
+                        alignment: Alignment.center,
                         errorBuilder: (context, error, stackTrace) => Container(
-                          color: const Color(0xFF1E293B),
+                          color: const Color(0xFFF8FAFC),
                           child: const Center(
-                            child: Icon(Icons.image_outlined, color: Colors.white54, size: 40),
+                            child: Icon(Icons.image_outlined, color: Color(0xFF94A3B8), size: 40),
                           ),
                         ),
                       ),
                     ],
 
-                    Positioned(
-                      top: 10,
-                      left: 10,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
-                        decoration: BoxDecoration(
-                          color: mediaType == 'VIDEO' ? const Color(0xFFDC2626) : maroon.withOpacity(0.92),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.white.withOpacity(0.3), width: 0.8),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.3),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(badgeIcon, color: gold, size: 12),
-                            const SizedBox(width: 5),
-                            Text(
-                              badgeText,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.6,
+                    if (badgeText.isNotEmpty)
+                      Positioned(
+                        top: 10,
+                        left: 10,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
+                          decoration: BoxDecoration(
+                            color: mediaType == 'VIDEO' ? const Color(0xFFDC2626) : maroon.withOpacity(0.92),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.white.withOpacity(0.3), width: 0.8),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.3),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(badgeIcon, color: gold, size: 12),
+                              const SizedBox(width: 5),
+                              Text(
+                                badgeText,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.6,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
 
                     if (title.isNotEmpty && title.trim().toLowerCase() != 'banner' && title.trim().toLowerCase() != 'main screen slide')
                       Positioned(
