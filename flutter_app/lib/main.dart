@@ -95,15 +95,146 @@ String formatTimeRange(dynamic startTime, dynamic endTime) {
 }
 
 String resolveSpeakerPhoto(dynamic rawPhoto) {
-  if (rawPhoto == null || rawPhoto.toString().isEmpty) {
-    return 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500';
+  if (rawPhoto == null) return '';
+  final str = rawPhoto.toString().trim();
+  if (str.isEmpty || str == 'null' || str.contains('photo-1534528741775-53994a69daeb')) {
+    return '';
   }
-  final str = rawPhoto.toString();
-  if (str.startsWith('http://') || str.startsWith('https://')) {
+  if (str.startsWith('http://') || str.startsWith('https://') || str.startsWith('data:image')) {
     return str;
   }
   final base = apiBaseUrl.replaceAll(RegExp(r'/api/?$'), '');
   return '$base${str.startsWith('/') ? '' : '/'}$str';
+}
+
+bool isFemaleGender(String? name, [String? designation, String? gender]) {
+  final g = (gender ?? '').trim().toLowerCase();
+  if (g == 'female' || g == 'f' || g == 'woman' || g == 'lady') return true;
+  if (g == 'male' || g == 'm' || g == 'man') return false;
+
+  final combined = '${name ?? ''} ${designation ?? ''}'.toLowerCase();
+  
+  // Female honorifics & titles
+  final femaleTitleRegex = RegExp(r'\b(mrs|ms|smt|miss|dr\s*\(\s*mrs\s*\)|dr\s*\(\s*ms\s*\)|dr\s*mrs|dr\s*ms|sister|madam|shrimati|smt\.)\b', caseSensitive: false);
+  if (femaleTitleRegex.hasMatch(combined)) return true;
+
+  // Male honorifics & titles
+  final maleTitleRegex = RegExp(r'\b(mr|shri|shree|master|sir|dr\s*mr)\b', caseSensitive: false);
+  if (maleTitleRegex.hasMatch(combined)) return false;
+
+  // Check first / clean name tokens
+  final cleanName = (name ?? '').replaceAll(RegExp(r'^(dr|prof|dr\.|prof\.|mr|mrs|ms|smt)\.?\s*', caseSensitive: false), '').trim().toLowerCase();
+  final tokens = cleanName.split(RegExp(r'\s+'));
+  final firstName = tokens.isNotEmpty ? tokens.first : '';
+
+  const femaleNames = {
+    'priya', 'anita', 'sunita', 'sneha', 'pooja', 'puja', 'neha', 'deepa', 'deepika', 'shweta', 'swati', 'swetha',
+    'rashmi', 'vandana', 'archana', 'meena', 'kavita', 'anjali', 'jyoti', 'rekha', 'smita', 'seema',
+    'tanvi', 'sonal', 'ritu', 'pallavi', 'prerna', 'namrata', 'payal', 'monika', 'mona', 'roshni',
+    'sheetal', 'shilpa', 'richa', 'divya', 'shruti', 'radhika', 'madhuri', 'leena', 'geeta', 'gita',
+    'rani', 'rupa', 'rupali', 'vidya', 'alka', 'usha', 'sarita', 'sandhya', 'chitra', 'maya',
+    'manju', 'preeti', 'priti', 'nandini', 'amrita', 'aditi', 'arpita', 'bhavna', 'poonam', 'ananya',
+    'aarti', 'arti', 'aishwarya', 'meenakshi', 'sudha', 'sujata', 'sadhana', 'supriya', 'sangeeta', 'savita',
+    'saroj', 'pramila', 'renuka', 'urvashi', 'kiran', 'komal', 'kalpana', 'lata', 'jaya', 'hansa',
+    'daksha', 'chetna', 'bina', 'beena', 'asha', 'anuradha', 'alpa', 'alpana', 'akanksha', 'snehal',
+    'vaishali', 'ashwini', 'prachi', 'sayali', 'tejaswini', 'manisha', 'shubhangi', 'yogita', 'rohini',
+    'pranjal', 'pranali', 'mrunal', 'ketaki', 'devyani', 'trupti', 'pratiksha', 'gauri', 'kasturi',
+    'tanuja', 'anupama', 'aparna', 'ruchira', 'fatima', 'ayesha', 'mary', 'sarah', 'lisa', 'emily', 'anna', 'maria'
+  };
+
+  return femaleNames.contains(firstName);
+}
+
+Widget buildGenderAvatarFallback({
+  required bool isFemale,
+  required double width,
+  required double height,
+  double borderRadius = 20,
+  bool isCircle = false,
+}) {
+  final primaryColor = isFemale ? const Color(0xFFBE123C) : const Color(0xFF8C1119);
+  final icon = isFemale ? Icons.face_3_rounded : Icons.face_6_rounded;
+
+  return Container(
+    width: width,
+    height: height,
+    decoration: BoxDecoration(
+      shape: isCircle ? BoxShape.circle : BoxShape.rectangle,
+      borderRadius: isCircle ? null : BorderRadius.circular(borderRadius),
+      gradient: LinearGradient(
+        colors: isFemale
+            ? [const Color(0xFFFFF1F2), const Color(0xFFFCE7F3)]
+            : [const Color(0xFFF8FAFC), const Color(0xFFE2E8F0)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+    ),
+    child: Center(
+      child: Icon(
+        icon,
+        size: width * 0.58,
+        color: primaryColor,
+      ),
+    ),
+  );
+}
+
+Widget buildSpeakerAvatarWidget({
+  dynamic rawPhoto,
+  String? name,
+  String? designation,
+  String? gender,
+  double width = 82,
+  double height = 82,
+  double borderRadius = 20,
+  bool isCircle = false,
+}) {
+  final photoUrl = resolveSpeakerPhoto(rawPhoto);
+  final isFemale = isFemaleGender(name, designation, gender);
+
+  if (photoUrl.isEmpty) {
+    return buildGenderAvatarFallback(
+      isFemale: isFemale,
+      width: width,
+      height: height,
+      borderRadius: borderRadius,
+      isCircle: isCircle,
+    );
+  }
+
+  return ClipRRect(
+    borderRadius: isCircle ? BorderRadius.circular(width / 2) : BorderRadius.circular(borderRadius),
+    child: Image.network(
+      photoUrl,
+      width: width,
+      height: height,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        return buildGenderAvatarFallback(
+          isFemale: isFemale,
+          width: width,
+          height: height,
+          borderRadius: borderRadius,
+          isCircle: isCircle,
+        );
+      },
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return Container(
+          width: width,
+          height: height,
+          color: const Color(0xFFF1F5F9),
+          child: const Center(
+            child: SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2, color: maroon),
+            ),
+          ),
+        );
+      },
+    ),
+  );
 }
 
 String resolveMediaUrl(dynamic rawUrl, [String defaultFallback = '']) {
@@ -3628,10 +3759,26 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             const SizedBox(height: 10),
             Row(
               children: [
-                CircleAvatar(
-                  radius: 26,
-                  backgroundImage: NetworkImage(photoUrl),
-                  backgroundColor: maroon.withOpacity(0.1),
+                Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: maroon, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: maroon.withOpacity(0.15),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: buildSpeakerAvatarWidget(
+                    rawPhoto: session['speaker_photo'],
+                    name: speakerName,
+                    designation: category,
+                    width: 52,
+                    height: 52,
+                    isCircle: true,
+                  ),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -3998,16 +4145,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                                   shape: BoxShape.circle,
                                                   border: Border.all(color: maroon.withOpacity(0.3), width: 1.5),
                                                 ),
-                                                child: ClipOval(
-                                                  child: Image.network(
-                                                    photoUrl,
-                                                    fit: BoxFit.cover,
-                                                    errorBuilder: (_, __, ___) => Container(
-                                                      color: maroon.withOpacity(0.1),
-                                                      child: const Icon(Icons.person, size: 22, color: maroon),
-                                                    ),
-                                                  ),
-                                                ),
+                                                child: buildSpeakerAvatarWidget(
+                                                   rawPhoto: x['speaker_photo'],
+                                                   name: speakerName,
+                                                   designation: category,
+                                                   width: 38,
+                                                   height: 38,
+                                                   isCircle: true,
+                                                 ),
                                               ),
                                               const SizedBox(width: 10),
                                               Expanded(
@@ -4370,26 +4515,14 @@ class _SpeakersScreenState extends State<SpeakersScreen> {
                                                 ],
                                               ),
                                               padding: const EdgeInsets.all(2.5),
-                                              child: ClipRRect(
-                                                borderRadius: BorderRadius.circular(20),
-                                                child: Image.network(
-                                                  photoUrl,
-                                                  fit: BoxFit.cover,
-                                                  errorBuilder: (_, __, ___) => Container(
-                                                    color: const Color(0xFFF1F5F9),
-                                                    child: Center(
-                                                      child: Text(
-                                                        name.isNotEmpty ? name[0].toUpperCase() : 'S',
-                                                        style: TextStyle(
-                                                          fontSize: 32,
-                                                          fontWeight: FontWeight.w900,
-                                                          color: primary,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
+                                                child: buildSpeakerAvatarWidget(
+                                                  rawPhoto: s['photo'],
+                                                  name: name,
+                                                  designation: designation,
+                                                  width: 77,
+                                                  height: 77,
+                                                  borderRadius: 20,
                                                 ),
-                                              ),
                                             ),
                                             // Verified Icon Badge
                                             Positioned(
@@ -6732,13 +6865,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   ),
                                 ],
                               ),
-                              child: CircleAvatar(
-                                radius: 52,
-                                backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
-                                backgroundColor: maroon.withOpacity(0.08),
-                                child: photoUrl.isEmpty
-                                    ? const Icon(Icons.person, size: 56, color: maroon)
-                                    : null,
+                              child: buildSpeakerAvatarWidget(
+                                rawPhoto: x['photo'],
+                                name: x['name'],
+                                designation: x['designation'],
+                                gender: x['gender'],
+                                width: 104,
+                                height: 104,
+                                isCircle: true,
                               ),
                             ),
                             if (_isUpdatingPhoto)

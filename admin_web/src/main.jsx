@@ -33,11 +33,122 @@ async function req(path,opt={}){
 }
 
 function toInputDate(value){return value?String(value).slice(0,10):''}
-function resolveMediaUrl(url){
-  if(!url) return 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500';
-  if(url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) return url;
+export function resolveMediaUrl(url){
+  if(!url || typeof url !== 'string') return '';
+  const trimmed = url.trim();
+  if(!trimmed || trimmed === 'null' || trimmed.includes('photo-1534528741775-53994a69daeb')) return '';
+  if(trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:')) return trimmed;
   const baseUrl = API.replace(/\/api\/?$/, '');
-  return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
+  return `${baseUrl}${trimmed.startsWith('/') ? '' : '/'}${trimmed}`;
+}
+
+export function isFemaleGender(name = '', designation = '', gender = '') {
+  const g = (gender || '').trim().toLowerCase();
+  if (['female', 'f', 'woman', 'lady'].includes(g)) return true;
+  if (['male', 'm', 'man'].includes(g)) return false;
+
+  const combined = `${name || ''} ${designation || ''}`.toLowerCase();
+  if (/\b(mrs|ms|smt|miss|dr\s*\(\s*mrs\s*\)|dr\s*\(\s*ms\s*\)|dr\s*mrs|dr\s*ms|sister|madam|shrimati|smt\.)\b/i.test(combined)) {
+    return true;
+  }
+  if (/\b(mr|shri|shree|master|sir|dr\s*mr)\b/i.test(combined)) {
+    return false;
+  }
+
+  const cleanName = (name || '').replace(/^(dr|prof|dr\.|prof\.|mr|mrs|ms|smt)\.?\s*/i, '').trim().toLowerCase();
+  const firstName = cleanName.split(/\s+/)[0] || '';
+
+  const femaleNames = new Set([
+    'priya', 'anita', 'sunita', 'sneha', 'pooja', 'puja', 'neha', 'deepa', 'deepika', 'shweta', 'swati', 'swetha',
+    'rashmi', 'vandana', 'archana', 'meena', 'kavita', 'anjali', 'jyoti', 'rekha', 'smita', 'seema',
+    'tanvi', 'sonal', 'ritu', 'pallavi', 'prerna', 'namrata', 'payal', 'monika', 'mona', 'roshni',
+    'sheetal', 'shilpa', 'richa', 'divya', 'shruti', 'radhika', 'madhuri', 'leena', 'geeta', 'gita',
+    'rani', 'rupa', 'rupali', 'vidya', 'alka', 'usha', 'sarita', 'sandhya', 'chitra', 'maya',
+    'manju', 'preeti', 'priti', 'nandini', 'amrita', 'aditi', 'arpita', 'bhavna', 'poonam', 'ananya',
+    'aarti', 'arti', 'aishwarya', 'meenakshi', 'sudha', 'sujata', 'sadhana', 'supriya', 'sangeeta', 'savita',
+    'saroj', 'pramila', 'renuka', 'urvashi', 'kiran', 'komal', 'kalpana', 'lata', 'jaya', 'hansa',
+    'daksha', 'chetna', 'bina', 'beena', 'asha', 'anuradha', 'alpa', 'alpana', 'akanksha', 'snehal',
+    'vaishali', 'ashwini', 'prachi', 'sayali', 'tejaswini', 'manisha', 'shubhangi', 'yogita', 'rohini',
+    'pranjal', 'pranali', 'mrunal', 'ketaki', 'devyani', 'trupti', 'pratiksha', 'gauri', 'kasturi',
+    'tanuja', 'anupama', 'aparna', 'ruchira', 'fatima', 'ayesha', 'mary', 'sarah', 'lisa', 'emily', 'anna', 'maria'
+  ]);
+
+  return femaleNames.has(firstName);
+}
+
+export function DoctorAvatar({ isFemale, size = 90 }) {
+  if (isFemale) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" style={{width:`${size}px`,height:`${size}px`,borderRadius:'22px', border:'2.5px solid #be123c', background:'linear-gradient(135deg, #fff1f2 0%, #fce7f3 100%)', boxShadow:'0 4px 12px rgba(190,18,60,0.12)'}}>
+        <circle cx="50" cy="50" r="46" fill="#fdf2f8" />
+        <path d="M28 46 C26 60 28 76 32 82 C35 82 38 76 38 68" fill="#4a044e" />
+        <path d="M72 46 C74 60 72 76 68 82 C65 82 62 76 62 68" fill="#4a044e" />
+        <path d="M22 96 C22 75 35 68 50 68 C65 68 78 75 78 96 Z" fill="#ffffff" stroke="#cbd5e1" strokeWidth="1.5" />
+        <path d="M42 68 L50 82 L58 68 Z" fill="#ec4899" />
+        <path d="M44 68 L50 78 L56 68 Z" fill="#f472b6" />
+        <path d="M35 68 L48 88 L43 96 L24 96 Z" fill="#f8fafc" />
+        <path d="M65 68 L52 88 L57 96 L76 96 Z" fill="#f8fafc" />
+        <path d="M41 72 C41 84 59 84 59 72" stroke="#8C1119" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+        <path d="M53 82 L53 88" stroke="#8C1119" strokeWidth="2.5" strokeLinecap="round" />
+        <circle cx="53" cy="90" r="3" fill="#d97706" />
+        <path d="M43 54 H57 V68 H43 Z" fill="#fbcfe8" />
+        <ellipse cx="50" cy="44" rx="15" ry="18" fill="#fbcfe8" />
+        <path d="M33 42 C33 26 40 22 50 22 C60 22 67 26 67 42 C65 34 59 30 50 30 C41 30 35 34 33 42 Z" fill="#4a044e" />
+        <path d="M34 38 C38 42 46 44 50 44 C42 42 36 36 34 38 Z" fill="#4a044e" />
+        <path d="M34 32 C32 30 31 38 34 46" stroke="#4a044e" strokeWidth="3" strokeLinecap="round" />
+        <path d="M66 32 C68 30 69 38 66 46" stroke="#4a044e" strokeWidth="3" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" style={{width:`${size}px`,height:`${size}px`,borderRadius:'22px', border:'2.5px solid #8C1119', background:'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)', boxShadow:'0 4px 12px rgba(140,17,25,0.12)'}}>
+      <circle cx="50" cy="50" r="46" fill="#f8fafc" />
+      <path d="M22 96 C22 75 35 68 50 68 C65 68 78 75 78 96 Z" fill="#ffffff" stroke="#cbd5e1" strokeWidth="1.5" />
+      <path d="M44 68 L50 78 L56 68 Z" fill="#0284c7" />
+      <path d="M48 74 L52 74 L51 86 L49 86 Z" fill="#8C1119" />
+      <path d="M34 68 L46 88 L40 96 L24 96 Z" fill="#f1f5f9" />
+      <path d="M66 68 L54 88 L60 96 L76 96 Z" fill="#f1f5f9" />
+      <path d="M39 72 C39 84 61 84 61 72" stroke="#334155" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+      <path d="M55 82 L55 88" stroke="#334155" strokeWidth="2.5" strokeLinecap="round" />
+      <circle cx="55" cy="90" r="3" fill="#d97706" />
+      <path d="M43 54 H57 V68 H43 Z" fill="#fed7aa" />
+      <ellipse cx="50" cy="44" rx="15" ry="17" fill="#fed7aa" />
+      <path d="M34 40 C34 26 42 22 50 22 C58 22 66 26 66 40 C63 32 58 28 50 28 C42 28 37 32 34 40 Z" fill="#1e293b" />
+      <path d="M34 32 C36 28 42 24 50 24 C56 24 64 27 66 32" stroke="#1e293b" strokeWidth="2" strokeLinecap="round" fill="none" />
+    </svg>
+  );
+}
+
+export function SpeakerAvatar({ photo, name, designation, size = 90, radius = 22, style = {} }) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const resolved = resolveMediaUrl(photo);
+  const isFemale = isFemaleGender(name, designation);
+
+  useEffect(() => {
+    setImgFailed(false);
+  }, [photo]);
+
+  if (!resolved || imgFailed) {
+    return <DoctorAvatar isFemale={isFemale} size={size} />;
+  }
+
+  return (
+    <img 
+      src={resolved} 
+      alt={name || 'Speaker'} 
+      style={{
+        width: `${size}px`, 
+        height: `${size}px`, 
+        borderRadius: `${radius}px`, 
+        border: `2.5px solid ${isFemale ? '#be123c' : '#8C1119'}`, 
+        objectFit: 'cover', 
+        display: 'block',
+        boxShadow: '0 4px 12px rgba(140,17,25,0.12)',
+        ...style
+      }}
+      onError={() => setImgFailed(true)}
+    />
+  );
 }
 function normalizeConference(data){
   return {...emptyConference,...data,startDate:toInputDate(data?.startDate),endDate:toInputDate(data?.endDate),registrationStartDate:toInputDate(data?.registrationStartDate),registrationEndDate:toInputDate(data?.registrationEndDate),venue:{...emptyVenue,...data?.venue},branding:{...emptyBranding,...data?.branding},settings:{...emptySettings,...data?.settings}};
@@ -2373,13 +2484,8 @@ function Speakers({tab, notify}){
             ⭐ KEYNOTE SPEAKER
           </div>}
           <div style={{padding:'20px', display:'flex', flexDirection:'column', alignItems:'center', flex:1}}>
-            <div className="speaker-avatar-wrap" style={{position:'relative', width:'90px', height:'90px', marginBottom:'14px'}}>
-              <img 
-                src={resolveMediaUrl(x.photo)} 
-                alt={x.name} 
-                style={{width:'90px', height:'90px', borderRadius:'22px', border:'2.5px solid #8C1119', objectFit:'cover', boxShadow:'0 4px 12px rgba(140,17,25,0.12)'}}
-                onError={(e)=>{e.target.src='https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500'}}
-              />
+            <div className="speaker-avatar-wrap" style={{position:'relative', width:'90px', height:'90px', marginBottom:'14px', display:'flex', justifyContent:'center'}}>
+              <SpeakerAvatar photo={x.photo} name={x.name} designation={x.designation} size={90} radius={22} />
               <div style={{position:'absolute', bottom:'-4px', right:'-4px', background:'#d97706', color:'#fff', borderRadius:'50%', width:'22px', height:'22px', display:'grid', placeItems:'center', fontSize:'11px', border:'2px solid #fff', boxShadow:'0 2px 4px rgba(0,0,0,0.15)'}}>
                 🎙️
               </div>
@@ -2426,7 +2532,22 @@ function SpeakerModal({value,onSave,onClose,notify}){
     };
     reader.readAsDataURL(file);
   };
-  return <div className="modal-overlay"><div className="modal"><div className="modal-header"><h3>{v.id?'Edit Speaker':'Add Speaker'}</h3></div><div className="modal-body"><div className="formgrid"><Field label="Name" value={v.name} onChange={x=>set('name',x)}/><Field label="Designation" value={v.designation} onChange={x=>set('designation',x)}/><Field label="Organization" value={v.organization} onChange={x=>set('organization',x)}/><Field label="Email" value={v.email} onChange={x=>set('email',x)}/><Field label="Phone" value={v.phone} onChange={x=>set('phone',x)}/><label className="field uploadfield"><span>Photo</span><div><input value={v.photo||''} onChange={e=>set('photo',e.target.value)}/><label className="uploadBtn"><Upload size={16}/>Upload<input type="file" onChange={e=>upload(e.target.files?.[0])}/></label></div></label><Field textarea label="Biography" value={v.bio} onChange={x=>set('bio',x)}/></div></div><div className="modal-footer"><button onClick={onClose}>Cancel</button><button className="primary" disabled={busy} onClick={async()=>{setBusy(true);try{await onSave(v)}finally{setBusy(false)}}}>Save</button></div></div></div>
+  return <div className="modal-overlay"><div className="modal"><div className="modal-header"><h3>{v.id?'Edit Speaker':'Add Speaker'}</h3></div><div className="modal-body"><div className="formgrid">
+    <div style={{gridColumn:'1/-1',display:'flex',alignItems:'center',gap:'16px',background:'#f8fafc',padding:'12px 16px',borderRadius:'12px',border:'1px solid #e2e8f0',marginBottom:'8px'}}>
+      <SpeakerAvatar photo={v.photo} name={v.name} designation={v.designation} size={64} radius={16}/>
+      <div>
+        <div style={{fontWeight:800,fontSize:'15px',color:'#0f172a'}}>{v.name || 'Speaker Name Preview'}</div>
+        <div style={{fontSize:'12px',color:'#64748b'}}>{v.designation || 'Speaker Designation'} • {isFemaleGender(v.name, v.designation) ? '👩 Female Avatar' : '👨 Male Avatar'} (Auto fallback if no photo)</div>
+      </div>
+    </div>
+    <Field label="Name" value={v.name} onChange={x=>set('name',x)}/>
+    <Field label="Designation" value={v.designation} onChange={x=>set('designation',x)}/>
+    <Field label="Organization" value={v.organization} onChange={x=>set('organization',x)}/>
+    <Field label="Email" value={v.email} onChange={x=>set('email',x)}/>
+    <Field label="Phone" value={v.phone} onChange={x=>set('phone',x)}/>
+    <label className="field uploadfield"><span>Photo</span><div><input value={v.photo||''} onChange={e=>set('photo',e.target.value)} placeholder="Image URL or upload"/><label className="uploadBtn"><Upload size={16}/>Upload<input type="file" onChange={e=>upload(e.target.files?.[0])}/></label></div></label>
+    <Field textarea label="Biography" value={v.bio} onChange={x=>set('bio',x)}/>
+  </div></div><div className="modal-footer"><button onClick={onClose}>Cancel</button><button className="primary" disabled={busy} onClick={async()=>{setBusy(true);try{await onSave(v)}finally{setBusy(false)}}}>Save</button></div></div></div>
 }
 
 function Schedule({tab, notify}){
