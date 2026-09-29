@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -7492,142 +7492,69 @@ class CertificateScreen extends StatefulWidget {
 }
 
 class _CertificateScreenState extends State<CertificateScreen> {
-  // Map of 17 question ratings (Key: 'q1'..'q17', Value: 1=Poor, 2=Fair, 3=Good, 4=Excellent)
-  final Map<String, int> _ratings = {};
-  
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _mmcController = TextEditingController();
-  final TextEditingController _suggestionsController = TextEditingController();
-
-  bool _isSubmitting = false;
   bool _isLoading = true;
-  Map<String, dynamic>? _certData;
+  String _feedbackUrl = 'https://dypesconf.io/feedback';
+  String _buttonText = 'Fill Feedback Form';
+  String _description = 'Please submit the official conference feedback form to evaluate sessions and receive your conference credentials.';
+  Map<String, dynamic>? _participant;
 
   @override
   void initState() {
     super.initState();
-    _loadInitialData();
+    _loadFeedbackLink();
   }
 
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _mmcController.dispose();
-    _suggestionsController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadInitialData() async {
+  Future<void> _loadFeedbackLink() async {
     try {
-      final res = await ApiService.get('/me/certificate');
+      final res = await ApiService.get('/conference/feedback-link');
       if (res is Map && mounted) {
         setState(() {
-          _certData = Map<String, dynamic>.from(res);
-          final p = _certData?['participant'];
-          if (p is Map) {
-            _nameController.text = p['name'] ?? p['participant_name'] ?? '';
-            _mmcController.text = p['mmc_reg_no'] ?? p['mmc_number'] ?? '';
-          }
-          _isLoading = false;
+          _feedbackUrl = res['certificateFeedbackUrl']?.toString() ?? _feedbackUrl;
+          _buttonText = res['feedbackButtonText']?.toString() ?? _buttonText;
+          _description = res['feedbackDescription']?.toString() ?? _description;
         });
-        return;
       }
     } catch (_) {}
+
+    try {
+      final me = await ApiService.get('/me/profile');
+      if (me is Map && mounted) {
+        setState(() {
+          _participant = me['participant'] is Map ? Map<String, dynamic>.from(me['participant']) : null;
+        });
+      }
+    } catch (_) {}
+
     if (mounted) {
-      setState(() {
-        _certData = _certData ?? {};
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _submitFeedbackAndGenerate() async {
-    final missing = <int>[];
-    for (int i = 1; i <= 17; i++) {
-      if (!_ratings.containsKey('q$i') || _ratings['q$i'] == null || _ratings['q$i'] == 0) {
-        missing.add(i);
-      }
-    }
+  Future<void> _launchFeedbackUrl(String url) async {
+    final cleanUrl = url.trim();
+    if (cleanUrl.isEmpty) return;
 
-    if (missing.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('⚠️ Please answer all 17 evaluation questions before submitting (Missing: Q${missing.join(", Q")}).'),
-          backgroundColor: const Color(0xFFDC2626),
-          duration: const Duration(seconds: 4),
-        ),
-      );
-      return;
-    }
-
-    setState(() => _isSubmitting = true);
-    final payload = {
-      'delegateName': _nameController.text.trim(),
-      'mmcNumber': _mmcController.text.trim(),
-      'topicClearRelevant': _ratings['q1'],
-      'contentAcademicDepth': _ratings['q2'],
-      'speakerClarity': _ratings['q3'],
-      'slidesClearUnderstandable': _ratings['q4'],
-      'relevanceClinicalPractice': _ratings['q5'],
-      'contentUpToDate': _ratings['q6'],
-      'sessionWithinTime': _ratings['q7'],
-      'discussionTimeProvided': _ratings['q8'],
-      'questionsAddressedSatisfactorily': _ratings['q9'],
-      'preConfInfoTimely': _ratings['q10'],
-      'digitalCommunicationAccess': _ratings['q11'],
-      'registrationSmoothEfficient': _ratings['q12'],
-      'sessionsOnTime': _ratings['q13'],
-      'venueComfortableOrganized': _ratings['q14'],
-      'audiovisualFacilitiesSatisfactory': _ratings['q15'],
-      'foodBeverageSatisfactory': _ratings['q16'],
-      'committeeSupportHelpful': _ratings['q17'],
-      'q1': _ratings['q1'],
-      'q2': _ratings['q2'],
-      'q3': _ratings['q3'],
-      'q4': _ratings['q4'],
-      'q5': _ratings['q5'],
-      'q6': _ratings['q6'],
-      'q7': _ratings['q7'],
-      'q8': _ratings['q8'],
-      'q9': _ratings['q9'],
-      'q10': _ratings['q10'],
-      'q11': _ratings['q11'],
-      'q12': _ratings['q12'],
-      'q13': _ratings['q13'],
-      'q14': _ratings['q14'],
-      'q15': _ratings['q15'],
-      'q16': _ratings['q16'],
-      'q17': _ratings['q17'],
-      'suggestions': _suggestionsController.text.trim(),
-      'comment': _suggestionsController.text.trim(),
-    };
+    final targetUrl = (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://'))
+        ? cleanUrl
+        : 'https://$cleanUrl';
 
     try {
-      dynamic res;
-      try {
-        res = await ApiService.post('/me/feedback-and-certificate', payload);
-      } catch (_) {
-        res = await ApiService.post('/me/feedback', payload);
-      }
-
-      await _loadInitialData();
-
-      if (mounted) {
-        setState(() => _isSubmitting = false);
+      final uri = Uri.parse(targetUrl);
+      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('🎉 Feedback recorded! Your verified Certificate of Participation is now ready for download.'),
-            backgroundColor: Color(0xFF1E3A8A),
-            duration: Duration(seconds: 4),
+          SnackBar(
+            content: Text('Could not launch $targetUrl. Link copied to clipboard.'),
+            backgroundColor: maroon,
           ),
         );
+        await Clipboard.setData(ClipboardData(text: targetUrl));
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isSubmitting = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Submission failed: ${e.toString().replaceAll("Exception: ", "")}'),
+            content: Text('Failed to open link: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -7637,38 +7564,16 @@ class _CertificateScreenState extends State<CertificateScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading && _certData == null) {
-      return Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
-        appBar: AppBar(
-          title: const Text('MAPCON-2026 Feedback Form', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 17)),
-          backgroundColor: const Color(0xFF1E3A8A),
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
-            onPressed: () => Navigator.pop(context),
-          ),
-        ),
-        body: const Center(child: CircularProgressIndicator(color: Color(0xFF1E3A8A))),
-      );
-    }
-
-    final data = _certData ?? {};
-    final bool hasFeedback = data['hasFeedback'] == true || data['feedback_submitted'] == true;
-    final cert = data['certificate'] is Map
-        ? data['certificate'] as Map
-        : (data.containsKey('certificate_url') ? data : null);
-    final certUrl = cert?['certificate_url']?.toString();
-    final fullImageUrl = certUrl != null ? resolveMediaUrl(certUrl) : null;
+    final conference = ConferenceScope.of(context);
+    final confFeedbackUrl = conference.settings['certificateFeedbackUrl']?.toString() ?? _feedbackUrl;
+    final confButtonText = conference.settings['feedbackButtonText']?.toString() ?? _buttonText;
+    final confDescription = conference.settings['feedbackDescription']?.toString() ?? _description;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F9),
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: Text(
-          (!hasFeedback || cert == null || fullImageUrl == null) ? 'Delegate Feedback Form' : 'Verified E-Certificate',
-          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 17),
-        ),
-        backgroundColor: const Color(0xFF1E3A8A),
+        title: const Text('Conference Feedback & Certificate', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Colors.white)),
+        backgroundColor: maroon,
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
@@ -7676,611 +7581,267 @@ class _CertificateScreenState extends State<CertificateScreen> {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: (!hasFeedback || cert == null || fullImageUrl == null)
-          ? _buildFeedbackUnlockView(data['participant'])
-          : _buildUnlockedCertificateView(cert, fullImageUrl),
-    );
-  }
-
-  Widget _buildFeedbackUnlockView(dynamic participant) {
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-      children: [
-        // Paper Form Shell
-        Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFCBD5E1), width: 1.2),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.06),
-                blurRadius: 14,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Conference & Form Header
-              const Text(
-                '47th Annual Conference of Maharashtra Chapter',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w900,
-                  color: Color(0xFF1E3A8A),
-                ),
-              ),
-              const SizedBox(height: 3),
-              const Text(
-                'MAPCON-2026 held on 2/3/4 October- 2026',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14.5,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF1E3A8A),
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Center(
-                child: Text(
-                  'FEEDBACK FORM',
-                  style: TextStyle(
-                    fontSize: 15.5,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF1E3A8A),
-                    decoration: TextDecoration.underline,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 18),
-
-              // Delegate Info Fields
-              _buildDelegateInfoRow('Delegate Name:', _nameController, 'Dr. / Delegate Name'),
-              const SizedBox(height: 10),
-              _buildDelegateInfoRow('MMC Registration / State Registration:', _mmcController, 'MMC-12345 / State Reg No'),
-              const SizedBox(height: 14),
-
-              // Rating Scale Legend
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEFF6FF),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFBFDBFE)),
-                ),
-                child: const Text(
-                  'Rating Scale:  1 = Poor  |  2 = Fair  |  3 = Good  |  4 = Excellent',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF1E3A8A),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // SECTION A: SCIENTIFIC PROGRAM
-              const Text(
-                'Section A: Scientific Program',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 15.5,
-                  fontWeight: FontWeight.w900,
-                  color: Color(0xFF0F172A),
-                ),
-              ),
-              const SizedBox(height: 10),
-
-              _buildEvaluationTable(
-                categories: [
-                  _EvaluationCategory(
-                    title: '1. TOPIC EVALUATION',
-                    questions: [
-                      _EvaluationQuestion('q1', 'Was the topic clear and relevant to the session objectives?'),
-                      _EvaluationQuestion('q2', 'Was the content covered with appropriate academic/clinical depth?'),
-                    ],
-                  ),
-                  _EvaluationCategory(
-                    title: '2. SPEAKER EVALUATION',
-                    questions: [
-                      _EvaluationQuestion('q3', 'Did the speaker explain the topic clearly?'),
-                    ],
-                  ),
-                  _EvaluationCategory(
-                    title: '3. PRESENTATION QUALITY',
-                    questions: [
-                      _EvaluationQuestion('q4', 'Were the slides clear and easy to understand?'),
-                    ],
-                  ),
-                  _EvaluationCategory(
-                    title: '4. RELEVANCE AND APPLICABLITY',
-                    questions: [
-                      _EvaluationQuestion('q5', 'Was the content relevant to clinical practice and professional work?'),
-                      _EvaluationQuestion('q6', 'Was the content up to date with current practices and advancements?'),
-                    ],
-                  ),
-                  _EvaluationCategory(
-                    title: '5. TIME TAKEN AND PACING',
-                    questions: [
-                      _EvaluationQuestion('q7', 'Was the session conducted within the scheduled time?'),
-                    ],
-                  ),
-                  _EvaluationCategory(
-                    title: '6. Q&A SESSION AND INTERACTION',
-                    questions: [
-                      _EvaluationQuestion('q8', 'Was sufficient time provided for discussion and questions?'),
-                      _EvaluationQuestion('q9', 'Were audience questions addressed satisfactorily?'),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-
-              // SECTION B: OVERALL CONFERENCE FEEDBACK FORM
-              const Text(
-                'Section B: Overall Conference Feedback Form',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 15.5,
-                  fontWeight: FontWeight.w900,
-                  color: Color(0xFF0F172A),
-                  decoration: TextDecoration.underline,
-                ),
-              ),
-              const SizedBox(height: 10),
-
-              _buildEvaluationTable(
-                categories: [
-                  _EvaluationCategory(
-                    title: '1. LOGISTICS & EVENT ADMINISTRATION',
-                    questions: [
-                      _EvaluationQuestion('q10', 'Was the pre-conference information clear and timely?'),
-                      _EvaluationQuestion('q11', 'Was the digital communication easy to access and use?'),
-                      _EvaluationQuestion('q12', 'Was the registration process smooth and efficient?'),
-                      _EvaluationQuestion('q13', 'Were the sessions and activities conducted on time?'),
-                    ],
-                  ),
-                  _EvaluationCategory(
-                    title: '2. VENUE, INFRASTRUCTURE & HOSPITALITY',
-                    questions: [
-                      _EvaluationQuestion('q14', 'Was the venue comfortable and well organized?'),
-                      _EvaluationQuestion('q15', 'Were the audio-visual facilities satisfactory?'),
-                      _EvaluationQuestion('q16', 'Was the food and beverage service satisfactory?'),
-                      _EvaluationQuestion('q17', 'Was the support from the organizing committee helpful?'),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 22),
-
-              // General Feedback & Recommendations
-              const Text(
-                'General Feedback & Recommendations if any:',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF1E3A8A),
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _suggestionsController,
-                maxLines: 4,
-                decoration: InputDecoration(
-                  hintText: 'Enter your suggestions, appreciation, or recommendations...',
-                  hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
-                  filled: true,
-                  fillColor: const Color(0xFFF8FAFC),
-                  contentPadding: const EdgeInsets.all(12),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: Color(0xFF1E3A8A), width: 1.5),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 18),
-
-              // Note & Sign-off
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFEF2F2),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFFECACA)),
-                ),
-                child: const Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('⚠️ ', style: TextStyle(fontSize: 14)),
-                    Expanded(
-                      child: Text(
-                        'Note: Submission of the post-conference feedback form is a prerequisite for receiving the e-certificate.',
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF991B1B),
-                          height: 1.35,
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: maroon))
+          : SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Header Hero Card
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [maroon, Color(0xFF5C0008)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(22),
+                      boxShadow: [
+                        BoxShadow(
+                          color: maroon.withOpacity(0.28),
+                          blurRadius: 18,
+                          offset: const Offset(0, 8),
                         ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 72,
+                          height: 72,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.12),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: gold.withOpacity(0.6), width: 2),
+                          ),
+                          child: const Center(
+                            child: Icon(Icons.rate_review_rounded, color: gold, size: 38),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          conference.shortName.isNotEmpty ? conference.shortName : 'MAPCON 2026',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: gold,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Official Conference Feedback',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          conference.theme.isNotEmpty ? conference.theme : 'D. Y. Patil Education Society â€¢ Kolhapur',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.85),
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Delegate Info Badge
+                  if (_participant != null) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.grey.shade200, width: 1.2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.03),
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: maroon.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.badge_rounded, color: maroon, size: 24),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _participant?['name'] ?? _participant?['participant_name'] ?? 'Registered Delegate',
+                                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5, color: slate),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Reg No: ${_participant?['registration_no'] ?? 'MAPCON-2026'} â€¢ ${_participant?['category'] ?? 'Delegate'}',
+                                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
+                    const SizedBox(height: 18),
                   ],
-                ),
-              ),
-              const SizedBox(height: 18),
 
-              const Text(
-                'Thank you for your valuable presence and support in making MAPCON 2026 a memorable success.\n\n'
-                'MAPCON 2026 Organizing Committee\n'
-                'Department of Pathology, D. Y. Patil Medical College, Kolhapur',
-                style: TextStyle(
-                  fontSize: 12.5,
-                  color: Color(0xFF475569),
-                  height: 1.45,
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Submit Button
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1E3A8A),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  elevation: 4,
-                ),
-                icon: _isSubmitting
-                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : const Icon(Icons.verified_rounded, color: Color(0xFFFDE047), size: 22),
-                label: Text(
-                  _isSubmitting ? 'Submitting & Unlocking Certificate...' : 'Submit Feedback & Unlock Certificate',
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
-                ),
-                onPressed: _isSubmitting ? null : _submitFeedbackAndGenerate,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 30),
-      ],
-    );
-  }
-
-  Widget _buildDelegateInfoRow(String label, TextEditingController controller, String placeholder) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w800,
-            color: Color(0xFF1E3A8A),
-          ),
-        ),
-        const SizedBox(height: 4),
-        TextField(
-          controller: controller,
-          style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
-          decoration: InputDecoration(
-            hintText: placeholder,
-            hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
-            isDense: true,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            filled: true,
-            fillColor: const Color(0xFFF8FAFC),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Color(0xFF1E3A8A), width: 1.5),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildEvaluationTable({required List<_EvaluationCategory> categories}) {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFF1A365D), width: 1.2),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          // Table Header
-          Container(
-            color: const Color(0xFF1A365D),
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-            child: const Row(
-              children: [
-                Expanded(
-                  flex: 5,
-                  child: Text(
-                    'Evaluation Domain',
-                    style: TextStyle(
+                  // Instructions Card
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
                       color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: Colors.grey.shade200, width: 1.2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.04),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEFF6FF),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.info_outline_rounded, color: Color(0xFF2563EB), size: 18),
+                            ),
+                            const SizedBox(width: 10),
+                            const Text(
+                              'Feedback Portal Instructions',
+                              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: slate),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          confDescription.isNotEmpty
+                              ? confDescription
+                              : 'Please submit your feedback on the official evaluation portal to provide session feedback and receive conference credentials.',
+                          style: const TextStyle(
+                            fontSize: 13.5,
+                            color: Color(0xFF475569),
+                            height: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF3C7),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFFFDE68A)),
+                          ),
+                          child: const Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('ðŸ’¡ ', style: TextStyle(fontSize: 14)),
+                              Expanded(
+                                child: Text(
+                                  'Tapping the button below will open the official feedback website form in your browser.',
+                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF92400E), height: 1.35),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-                Expanded(
-                  flex: 1,
-                  child: Text(
-                    '1\nPoor',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold, height: 1.1),
-                  ),
-                ),
-                Expanded(
-                  flex: 1,
-                  child: Text(
-                    '2\nFair',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold, height: 1.1),
-                  ),
-                ),
-                Expanded(
-                  flex: 1,
-                  child: Text(
-                    '3\nGood',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold, height: 1.1),
-                  ),
-                ),
-                Expanded(
-                  flex: 1,
-                  child: Text(
-                    '4\nExcellent',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold, height: 1.1),
-                  ),
-                ),
-              ],
-            ),
-          ),
+                  const SizedBox(height: 26),
 
-          // Categories & Rows
-          for (final cat in categories) ...[
-            // Category Banner
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-              color: const Color(0xFFF1F5F9),
-              child: Text(
-                cat.title,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w900,
-                  color: Color(0xFF0F172A),
-                  letterSpacing: 0.3,
-                ),
+                  // The Primary Website Feedback Action Button
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: maroon,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
+                      elevation: 6,
+                      shadowColor: maroon.withOpacity(0.4),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    onPressed: () => _launchFeedbackUrl(confFeedbackUrl),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.open_in_browser_rounded, color: gold, size: 24),
+                        const SizedBox(width: 12),
+                        Flexible(
+                          child: Text(
+                            confButtonText.isNotEmpty ? confButtonText : 'Fill Feedback Form',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Secondary Copy Link Button
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF475569),
+                      side: BorderSide(color: Colors.grey.shade300, width: 1.2),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    icon: const Icon(Icons.copy_rounded, size: 17),
+                    label: const Text('Copy Website Link', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                    onPressed: () async {
+                      await Clipboard.setData(ClipboardData(text: confFeedbackUrl));
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('ðŸ“‹ Feedback website link copied to clipboard!'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 30),
+                ],
               ),
             ),
-            const Divider(height: 1, color: Color(0xFFCBD5E1)),
-
-            // Questions in Category
-            for (int qIdx = 0; qIdx < cat.questions.length; qIdx++) ...[
-              _buildQuestionRow(cat.questions[qIdx]),
-              if (qIdx < cat.questions.length - 1)
-                const Divider(height: 1, color: Color(0xFFE2E8F0)),
-            ],
-            const Divider(height: 1, color: Color(0xFFCBD5E1)),
-          ],
-        ],
-      ),
     );
   }
-
-  Widget _buildQuestionRow(_EvaluationQuestion q) {
-    final selectedRating = _ratings[q.id] ?? 0;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-      color: selectedRating > 0 ? const Color(0xFFF8FAFC) : Colors.white,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Question Text
-          Expanded(
-            flex: 5,
-            child: Text(
-              q.text,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF1E293B),
-                height: 1.3,
-              ),
-            ),
-          ),
-
-          // Checkbox Column 1 (Poor)
-          Expanded(
-            flex: 1,
-            child: _buildCheckboxRatingCell(q.id, 1, selectedRating == 1),
-          ),
-
-          // Checkbox Column 2 (Fair)
-          Expanded(
-            flex: 1,
-            child: _buildCheckboxRatingCell(q.id, 2, selectedRating == 2),
-          ),
-
-          // Checkbox Column 3 (Good)
-          Expanded(
-            flex: 1,
-            child: _buildCheckboxRatingCell(q.id, 3, selectedRating == 3),
-          ),
-
-          // Checkbox Column 4 (Excellent)
-          Expanded(
-            flex: 1,
-            child: _buildCheckboxRatingCell(q.id, 4, selectedRating == 4),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCheckboxRatingCell(String questionId, int value, bool isSelected) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () {
-        setState(() {
-          _ratings[questionId] = value;
-        });
-      },
-      child: Center(
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          width: 22,
-          height: 22,
-          decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF1E3A8A) : Colors.white,
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(
-              color: isSelected ? const Color(0xFF1E3A8A) : const Color(0xFF64748B),
-              width: 1.6,
-            ),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: const Color(0xFF1E3A8A).withOpacity(0.25),
-                      blurRadius: 4,
-                      offset: const Offset(0, 1),
-                    )
-                  ]
-                : null,
-          ),
-          child: isSelected
-              ? const Icon(
-                  Icons.check_rounded,
-                  size: 16,
-                  color: Colors.white,
-                )
-              : null,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildUnlockedCertificateView(Map cert, String fullImageUrl) {
-    final certificateNo = cert['certificate_no']?.toString() ?? '—';
-    final issuedAt = cert['issued_at']?.toString() ?? '—';
-
-    return ListView(
-      padding: const EdgeInsets.all(18),
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFFECFDF5),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFF10B981), width: 1.2),
-          ),
-          child: const Row(
-            children: [
-              Icon(Icons.verified_rounded, color: Color(0xFF047857), size: 24),
-              SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Certificate Verified & Issued', style: TextStyle(color: Color(0xFF065F46), fontWeight: FontWeight.w900, fontSize: 13.5)),
-                    Text('Feedback submitted. Ready for download.', style: TextStyle(color: Color(0xFF047857), fontSize: 12)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 18),
-        Card(
-          elevation: 6,
-          shadowColor: maroon.withOpacity(0.2),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: gold, width: 1.5)),
-          clipBehavior: Clip.antiAlias,
-          child: Image.network(
-            fullImageUrl,
-            fit: BoxFit.contain,
-            errorBuilder: (context, _, __) => Container(height: 250, color: Colors.grey.shade100, child: const Icon(Icons.error_outline, size: 40, color: Colors.red)),
-          ),
-        ),
-        const SizedBox(height: 20),
-        Card(
-          elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: BorderSide(color: Colors.grey.shade200, width: 1.2)),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              children: [
-                ListTile(
-                  leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: maroon.withOpacity(0.08), shape: BoxShape.circle), child: const Icon(Icons.workspace_premium, color: maroon, size: 22)),
-                  title: const Text('CERTIFICATE NUMBER', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w900, color: muted)),
-                  subtitle: Text(certificateNo, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14.5, color: slate)),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: maroon.withOpacity(0.08), shape: BoxShape.circle), child: const Icon(Icons.calendar_month, color: maroon, size: 22)),
-                  title: const Text('DATE OF ISSUANCE', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w900, color: muted)),
-                  subtitle: Text(issuedAt.contains('T') || issuedAt.contains('-') ? formatSessionDate(issuedAt) : issuedAt, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: slate)),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 20),
-        ElevatedButton.icon(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: maroon,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          ),
-          icon: const Icon(Icons.download_rounded, size: 22, color: gold),
-          label: const Text('Download High-Res Certificate', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900)),
-          onPressed: () async {
-            final uri = Uri.parse(fullImageUrl);
-            if (await canLaunchUrl(uri)) {
-              await launchUrl(uri, mode: LaunchMode.externalApplication);
-            } else {
-              if (!context.mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open download link')));
-            }
-          },
-        ),
-      ],
-    );
-  }
-}
-
-class _EvaluationCategory {
-  final String title;
-  final List<_EvaluationQuestion> questions;
-  const _EvaluationCategory({required this.title, required this.questions});
-}
-
-class _EvaluationQuestion {
-  final String id;
-  final String text;
-  const _EvaluationQuestion(this.id, this.text);
 }
 
 class EmergencyScreen extends StatelessWidget {

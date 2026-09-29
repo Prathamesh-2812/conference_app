@@ -502,6 +502,9 @@ async function runMigrations(){
       await pool.query(`ALTER TABLE conference_settings ADD COLUMN enable_emergency TINYINT(1) DEFAULT 1`).catch(() => {});
       await pool.query(`ALTER TABLE conference_settings ADD COLUMN enable_sponsors TINYINT(1) DEFAULT 1`).catch(() => {});
       await pool.query(`ALTER TABLE conference_settings ADD COLUMN enable_notices TINYINT(1) DEFAULT 1`).catch(() => {});
+      await pool.query(`ALTER TABLE conference_settings ADD COLUMN certificate_feedback_url VARCHAR(500) DEFAULT 'https://dypesconf.io/feedback'`).catch(() => {});
+      await pool.query(`ALTER TABLE conference_settings ADD COLUMN feedback_button_text VARCHAR(100) DEFAULT 'Fill Feedback Form'`).catch(() => {});
+      await pool.query(`ALTER TABLE conference_settings ADD COLUMN feedback_description TEXT NULL`).catch(() => {});
     } catch(_) {}
 
     try {
@@ -555,13 +558,13 @@ async function getConference(conferenceId=1){
   const [[venue]]=await pool.query('SELECT * FROM venues WHERE conference_id=? ORDER BY id LIMIT 1',[conferenceId]);
   const [[branding]]=await pool.query('SELECT * FROM conference_branding WHERE conference_id=?',[conferenceId]);
   const [[settings]]=await pool.query('SELECT * FROM conference_settings WHERE conference_id=?',[conferenceId]);
-  return {id:conference.id,name:conference.name,shortName:conference.short_name,description:conference.description,welcomeMessage:conference.welcome_message,aboutConference:conference.about_conference,startDate:conference.start_date,endDate:conference.end_date,registrationStartDate:conference.registration_start_date,registrationEndDate:conference.registration_end_date,contactPerson:conference.contact_person,contactPhone:conference.contact_phone,contactEmail:conference.contact_email,website:conference.website,organizer:conference.organizer,hostInstitution:conference.host_institution,theme:conference.theme,status:conference.status,active:conference.active,venue:{id:venue?.id||null,name:venue?.name||conference.venue,address:venue?.address||conference.address,city:venue?.city,state:venue?.state,country:venue?.country,pincode:venue?.pincode,latitude:venue?.latitude,longitude:venue?.longitude,googleMapsUrl:venue?.google_maps_url,parkingInformation:venue?.parking_information,directions:venue?.directions,contactNumber:venue?.contact_number},branding:{logoUrl:branding?.conference_logo||conference.logo_url,organizerLogoUrl:branding?.organizer_logo,bannerUrl:branding?.banner||conference.banner_url,splashScreenUrl:branding?.splash_screen,faviconUrl:branding?.favicon,primaryColor:branding?.primary_color,secondaryColor:branding?.secondary_color,accentColor:branding?.accent_color,backgroundColor:branding?.background_color},settings:{enableRegistration:!!settings?.enable_registration,enableChat:!!settings?.enable_chat,enableGallery:settings?.enable_gallery!==0&&settings?.enable_gallery!==false,enableAttendance:!!settings?.enable_attendance,enableQr:!!settings?.enable_qr,enablePushNotifications:!!settings?.enable_push_notifications,enableCertificates:settings?.enable_certificates!==0&&settings?.enable_certificates!==false,enableTransport:!!settings?.enable_transport,enableDuties:!!settings?.enable_duties,enableAccommodation:!!settings?.enable_accommodation,enableSlider:settings?.enable_slider!==0&&settings?.enable_slider!==false,enableHybridStage:settings?.enable_hybrid_stage!==0&&settings?.enable_hybrid_stage!==false,enableSchedule:settings?.enable_schedule!==0&&settings?.enable_schedule!==false,enableSpeakers:settings?.enable_speakers!==0&&settings?.enable_speakers!==false,enableVenueDirections:settings?.enable_venue_directions!==0&&settings?.enable_venue_directions!==false,enableTravelGuide:settings?.enable_travel_guide!==0&&settings?.enable_travel_guide!==false,enableEmergency:settings?.enable_emergency!==0&&settings?.enable_emergency!==false,enableSponsors:settings?.enable_sponsors!==0&&settings?.enable_sponsors!==false,enableNotices:settings?.enable_notices!==0&&settings?.enable_notices!==false,enablePolls:!!settings?.enable_polls,enableFeedback:!!settings?.enable_feedback}};
+  return {id:conference.id,name:conference.name,shortName:conference.short_name,description:conference.description,welcomeMessage:conference.welcome_message,aboutConference:conference.about_conference,startDate:conference.start_date,endDate:conference.end_date,registrationStartDate:conference.registration_start_date,registrationEndDate:conference.registration_end_date,contactPerson:conference.contact_person,contactPhone:conference.contact_phone,contactEmail:conference.contact_email,website:conference.website,organizer:conference.organizer,hostInstitution:conference.host_institution,theme:conference.theme,status:conference.status,active:conference.active,venue:{id:venue?.id||null,name:venue?.name||conference.venue,address:venue?.address||conference.address,city:venue?.city,state:venue?.state,country:venue?.country,pincode:venue?.pincode,latitude:venue?.latitude,longitude:venue?.longitude,googleMapsUrl:venue?.google_maps_url,parkingInformation:venue?.parking_information,directions:venue?.directions,contactNumber:venue?.contact_number},branding:{logoUrl:branding?.conference_logo||conference.logo_url,organizerLogoUrl:branding?.organizer_logo,bannerUrl:branding?.banner||conference.banner_url,splashScreenUrl:branding?.splash_screen,faviconUrl:branding?.favicon,primaryColor:branding?.primary_color,secondaryColor:branding?.secondary_color,accentColor:branding?.accent_color,backgroundColor:branding?.background_color},settings:{enableRegistration:!!settings?.enable_registration,enableChat:!!settings?.enable_chat,enableGallery:settings?.enable_gallery!==0&&settings?.enable_gallery!==false,enableAttendance:!!settings?.enable_attendance,enableQr:!!settings?.enable_qr,enablePushNotifications:!!settings?.enable_push_notifications,enableCertificates:settings?.enable_certificates!==0&&settings?.enable_certificates!==false,enableTransport:!!settings?.enable_transport,enableDuties:!!settings?.enable_duties,enableAccommodation:!!settings?.enable_accommodation,enableSlider:settings?.enable_slider!==0&&settings?.enable_slider!==false,enableHybridStage:settings?.enable_hybrid_stage!==0&&settings?.enable_hybrid_stage!==false,enableSchedule:settings?.enable_schedule!==0&&settings?.enable_schedule!==false,enableSpeakers:settings?.enable_speakers!==0&&settings?.enable_speakers!==false,enableVenueDirections:settings?.enable_venue_directions!==0&&settings?.enable_venue_directions!==false,enableTravelGuide:settings?.enable_travel_guide!==0&&settings?.enable_travel_guide!==false,enableEmergency:settings?.enable_emergency!==0&&settings?.enable_emergency!==false,enableSponsors:settings?.enable_sponsors!==0&&settings?.enable_sponsors!==false,enableNotices:settings?.enable_notices!==0&&settings?.enable_notices!==false,enablePolls:!!settings?.enable_polls,enableFeedback:!!settings?.enable_feedback,certificateFeedbackUrl:settings?.certificate_feedback_url||'https://dypesconf.io/feedback',feedbackButtonText:settings?.feedback_button_text||'Fill Feedback Form',feedbackDescription:settings?.feedback_description||'Please submit the official conference feedback form to evaluate sessions and receive your conference credentials.'}};
 }
 
 const bool = v => v === 'true' || v === true || v === 1 || v === '1';
 const emptyStr = v => v === undefined || v === null ? '' : String(v).trim();
 function toClientConference(conference, venue, branding, settings) {
-  return { id: conference.id, name: conference.name, shortName: conference.short_name, description: conference.description, welcomeMessage: conference.welcome_message, aboutConference: conference.about_conference, startDate: conference.start_date, endDate: conference.end_date, registrationStartDate: conference.registration_start_date, registrationEndDate: conference.registration_end_date, contactPerson: conference.contact_person, contactPhone: conference.contact_phone, contactEmail: conference.contact_email, website: conference.website, organizer: conference.organizer, hostInstitution: conference.host_institution, theme: conference.theme, status: conference.status, active: conference.active, venue: { id: venue?.id || null, name: venue?.name || conference.venue, address: venue?.address || conference.address, city: venue?.city, state: venue?.state, country: venue?.country, pincode: venue?.pincode, latitude: venue?.latitude, longitude: venue?.longitude, googleMapsUrl: venue?.google_maps_url, parkingInformation: venue?.parking_information, directions: venue?.directions, contactNumber: venue?.contact_number }, branding: { logoUrl: branding?.conference_logo || conference.logo_url, organizerLogoUrl: branding?.organizer_logo, bannerUrl: branding?.banner || conference.banner_url, splashScreenUrl: branding?.splash_screen, faviconUrl: branding?.favicon, primaryColor: branding?.primary_color, secondaryColor: branding?.secondary_color, accentColor: branding?.accent_color, backgroundColor: branding?.background_color }, settings: { enableRegistration: !!settings?.enable_registration, enableChat: !!settings?.enable_chat, enableGallery: settings?.enable_gallery!==0&&settings?.enable_gallery!==false, enableAttendance: !!settings?.enable_attendance, enableQr: !!settings?.enable_qr, enablePushNotifications: !!settings?.enable_push_notifications, enableCertificates: settings?.enable_certificates!==0&&settings?.enable_certificates!==false, enableTransport: !!settings?.enable_transport, enableDuties: !!settings?.enable_duties, enableAccommodation: !!settings?.enable_accommodation, enableSlider: settings?.enable_slider!==0&&settings?.enable_slider!==false, enableHybridStage: settings?.enable_hybrid_stage!==0&&settings?.enable_hybrid_stage!==false, enableSchedule: settings?.enable_schedule!==0&&settings?.enable_schedule!==false, enableSpeakers: settings?.enable_speakers!==0&&settings?.enable_speakers!==false, enableVenueDirections: settings?.enable_venue_directions!==0&&settings?.enable_venue_directions!==false, enableTravelGuide: settings?.enable_travel_guide!==0&&settings?.enable_travel_guide!==false, enableEmergency: settings?.enable_emergency!==0&&settings?.enable_emergency!==false, enableSponsors: settings?.enable_sponsors!==0&&settings?.enable_sponsors!==false, enableNotices: settings?.enable_notices!==0&&settings?.enable_notices!==false, enablePolls: !!settings?.enable_polls, enableFeedback: !!settings?.enable_feedback } };
+  return { id: conference.id, name: conference.name, shortName: conference.short_name, description: conference.description, welcomeMessage: conference.welcome_message, aboutConference: conference.about_conference, startDate: conference.start_date, endDate: conference.end_date, registrationStartDate: conference.registration_start_date, registrationEndDate: conference.registration_end_date, contactPerson: conference.contact_person, contactPhone: conference.contact_phone, contactEmail: conference.contact_email, website: conference.website, organizer: conference.organizer, hostInstitution: conference.host_institution, theme: conference.theme, status: conference.status, active: conference.active, venue: { id: venue?.id || null, name: venue?.name || conference.venue, address: venue?.address || conference.address, city: venue?.city, state: venue?.state, country: venue?.country, pincode: venue?.pincode, latitude: venue?.latitude, longitude: venue?.longitude, googleMapsUrl: venue?.google_maps_url, parkingInformation: venue?.parking_information, directions: venue?.directions, contactNumber: venue?.contact_number }, branding: { logoUrl: branding?.conference_logo || conference.logo_url, organizerLogoUrl: branding?.organizer_logo, bannerUrl: branding?.banner || conference.banner_url, splashScreenUrl: branding?.splash_screen, faviconUrl: branding?.favicon, primaryColor: branding?.primary_color, secondaryColor: branding?.secondary_color, accentColor: branding?.accent_color, backgroundColor: branding?.background_color }, settings: { enableRegistration: !!settings?.enable_registration, enableChat: !!settings?.enable_chat, enableGallery: settings?.enable_gallery!==0&&settings?.enable_gallery!==false, enableAttendance: !!settings?.enable_attendance, enableQr: !!settings?.enable_qr, enablePushNotifications: !!settings?.enable_push_notifications, enableCertificates: settings?.enable_certificates!==0&&settings?.enable_certificates!==false, enableTransport: !!settings?.enable_transport, enableDuties: !!settings?.enable_duties, enableAccommodation: !!settings?.enable_accommodation, enableSlider: settings?.enable_slider!==0&&settings?.enable_slider!==false, enableHybridStage: settings?.enable_hybrid_stage!==0&&settings?.enable_hybrid_stage!==false, enableSchedule: settings?.enable_schedule!==0&&settings?.enable_schedule!==false, enableSpeakers: settings?.enable_speakers!==0&&settings?.enable_speakers!==false, enableVenueDirections: settings?.enable_venue_directions!==0&&settings?.enable_venue_directions!==false, enableTravelGuide: settings?.enable_travel_guide!==0&&settings?.enable_travel_guide!==false, enableEmergency: settings?.enable_emergency!==0&&settings?.enable_emergency!==false, enableSponsors: settings?.enable_sponsors!==0&&settings?.enable_sponsors!==false, enableNotices: settings?.enable_notices!==0&&settings?.enable_notices!==false, enablePolls: !!settings?.enable_polls, enableFeedback: !!settings?.enable_feedback, certificateFeedbackUrl: settings?.certificate_feedback_url || 'https://dypesconf.io/feedback', feedbackButtonText: settings?.feedback_button_text || 'Fill Feedback Form', feedbackDescription: settings?.feedback_description || 'Please submit the official conference feedback form to evaluate sessions and receive your conference credentials.' } };
 }
 function emptyToNull(v) { return v === '' ? null : v; }
 function normalizeValues(obj) { return Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, emptyToNull(v)])); }
@@ -795,9 +798,10 @@ app.put('/api/admin/conference/settings',auth,roles('ADMIN','SUPER_ADMIN'),async
      enable_qr, enable_push_notifications, enable_certificates, enable_transport,
      enable_duties, enable_accommodation, enable_slider, enable_hybrid_stage,
      enable_schedule, enable_speakers, enable_venue_directions, enable_travel_guide,
-     enable_emergency, enable_sponsors, enable_notices, enable_polls, enable_feedback
+     enable_emergency, enable_sponsors, enable_notices, enable_polls, enable_feedback,
+     certificate_feedback_url, feedback_button_text, feedback_description
    )
-   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
    ON DUPLICATE KEY UPDATE
      enable_registration=VALUES(enable_registration),
      enable_chat=VALUES(enable_chat),
@@ -819,7 +823,10 @@ app.put('/api/admin/conference/settings',auth,roles('ADMIN','SUPER_ADMIN'),async
      enable_sponsors=VALUES(enable_sponsors),
      enable_notices=VALUES(enable_notices),
      enable_polls=VALUES(enable_polls),
-     enable_feedback=VALUES(enable_feedback)
+     enable_feedback=VALUES(enable_feedback),
+     certificate_feedback_url=VALUES(certificate_feedback_url),
+     feedback_button_text=VALUES(feedback_button_text),
+     feedback_description=VALUES(feedback_description)
  `, [
    conferenceId,
    bool(req.body.enableRegistration),
@@ -842,12 +849,49 @@ app.put('/api/admin/conference/settings',auth,roles('ADMIN','SUPER_ADMIN'),async
    bool(req.body.enableSponsors),
    bool(req.body.enableNotices),
    bool(req.body.enablePolls),
-   bool(req.body.enableFeedback)
+   bool(req.body.enableFeedback),
+   req.body.certificateFeedbackUrl || 'https://dypesconf.io/feedback',
+   req.body.feedbackButtonText || 'Fill Feedback Form',
+   req.body.feedbackDescription || 'Please submit the official conference feedback form to evaluate sessions and receive your conference credentials.'
  ]);
  const after=await getConference(conferenceId);
  await audit(req,'conference.settings.update','conference_settings',conferenceId,before,after);
  io.emit('conference_updated',after);
  ok(res,after,'Settings updated');
+}));
+
+app.get('/api/conference/feedback-link', asyncRoute(async (req, res) => {
+  const confId = req.query.conferenceId || 1;
+  const [[settings]] = await pool.query('SELECT certificate_feedback_url, feedback_button_text, feedback_description FROM conference_settings WHERE conference_id = ?', [confId]);
+  ok(res, {
+    certificateFeedbackUrl: settings?.certificate_feedback_url || 'https://dypesconf.io/feedback',
+    feedbackButtonText: settings?.feedback_button_text || 'Fill Feedback Form',
+    feedbackDescription: settings?.feedback_description || 'Please submit the official conference feedback form to evaluate sessions and receive your conference credentials.'
+  });
+}));
+
+app.put('/api/admin/conference/feedback-link', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncRoute(async (req, res) => {
+  const confId = req.body.conferenceId || 1;
+  const url = req.body.certificateFeedbackUrl || req.body.url || 'https://dypesconf.io/feedback';
+  const buttonText = req.body.feedbackButtonText || req.body.buttonText || 'Fill Feedback Form';
+  const description = req.body.feedbackDescription || req.body.description || 'Please submit the official conference feedback form to evaluate sessions and receive your conference credentials.';
+
+  await pool.query(`
+    INSERT INTO conference_settings (conference_id, certificate_feedback_url, feedback_button_text, feedback_description)
+    VALUES (?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE
+      certificate_feedback_url = VALUES(certificate_feedback_url),
+      feedback_button_text = VALUES(feedback_button_text),
+      feedback_description = VALUES(feedback_description)
+  `, [confId, url, buttonText, description]);
+
+  const after = await getConference(confId);
+  io.emit('conference_updated', after);
+  ok(res, {
+    certificateFeedbackUrl: url,
+    feedbackButtonText: buttonText,
+    feedbackDescription: description
+  }, 'Feedback link updated successfully');
 }));
 app.post('/api/admin/uploads',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{const url=await saveDataUrlUpload(req.body.folder,req.body.file);await audit(req,'file.upload','uploads',null,null,{url});res.status(201).json({success:true,url,data:{url},message:'File uploaded'});}));
 app.post('/api/auth/login', asyncRoute(async(req,res)=>{

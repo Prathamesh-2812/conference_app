@@ -17,7 +17,7 @@ const API = getApiBase();
 const emptyConference={name:'',shortName:'',description:'',welcomeMessage:'',aboutConference:'',startDate:'',endDate:'',registrationStartDate:'',registrationEndDate:'',contactPerson:'',contactPhone:'',contactEmail:'',website:'',organizer:'',hostInstitution:'',theme:'',status:'ACTIVE'};
 const emptyVenue={name:'',address:'',city:'',state:'',country:'',pincode:'',latitude:'',longitude:'',googleMapsUrl:'',parkingInformation:'',directions:'',contactNumber:''};
 const emptyBranding={logoUrl:'',organizerLogoUrl:'',bannerUrl:'',splashScreenUrl:'',faviconUrl:'',primaryColor:'#8C1119',secondaryColor:'#C8A45A',accentColor:'#2E6F95',backgroundColor:'#FCFAF5'};
-const emptySettings={enableRegistration:true,enableChat:false,enableGallery:true,enableAttendance:true,enableQr:false,enablePushNotifications:false,enableCertificates:true,enableTransport:false,enableDuties:false,enableAccommodation:false,enableSlider:true,enableHybridStage:true,enableSchedule:true,enableSpeakers:true,enableVenueDirections:true,enableTravelGuide:true,enableEmergency:true,enableSponsors:true,enableNotices:true,enablePolls:false,enableFeedback:true};
+const emptySettings={enableRegistration:true,enableChat:false,enableGallery:true,enableAttendance:true,enableQr:false,enablePushNotifications:false,enableCertificates:true,enableTransport:false,enableDuties:false,enableAccommodation:false,enableSlider:true,enableHybridStage:true,enableSchedule:true,enableSpeakers:true,enableVenueDirections:true,enableTravelGuide:true,enableEmergency:true,enableSponsors:true,enableNotices:true,enablePolls:false,enableFeedback:true,certificateFeedbackUrl:'https://dypesconf.io/feedback',feedbackButtonText:'Fill Feedback Form',feedbackDescription:'Please submit the official conference feedback form to evaluate sessions and receive your conference credentials.'};
 
 async function req(path,opt={}){
   const token=localStorage.getItem('token');
@@ -3669,11 +3669,17 @@ function DutyAssignmentModal({duties,users,onSave,onClose}){
 
 function Certificates({tab, notify, selectedConferenceId}){
   const[d,setD]=useState([]),[participants,setParticipants]=useState([]),[busy,setBusy]=useState(false),[showAdd,setShowAdd]=useState(false);
-  const[subTab,setSubTab]=useState('issued');
+  const[subTab,setSubTab]=useState('link');
   const[certQ,setCertQ]=useState(''),[certCat,setCertCat]=useState('ALL');
   const[eligibilityFilter,setEligibilityFilter]=useState('ALL');
   const[bulkGenBusy,setBulkGenBusy]=useState(false);
   
+  // Feedback Link management state
+  const[feedbackUrl, setFeedbackUrl]=useState('https://dypesconf.io/feedback');
+  const[feedbackBtnText, setFeedbackBtnText]=useState('Fill Feedback Form');
+  const[feedbackDesc, setFeedbackDesc]=useState('Please submit the official conference feedback form to evaluate sessions and receive your conference credentials.');
+  const[savingLink, setSavingLink]=useState(false);
+
   // Generator states
   const[template,setTemplate]=useState(null);
   const[imgSize,setImgSize]=useState({width: 1200, height: 800});
@@ -3691,21 +3697,49 @@ function Certificates({tab, notify, selectedConferenceId}){
     setBusy(true); 
     const confId = selectedConferenceId || 1;
     try{
-      const[c,p,s]=await Promise.all([
+      const[c,p,s,confRes]=await Promise.all([
         req('/admin/certificates?conferenceId='+confId),
         req('/admin/participants?conferenceId='+confId),
-        req('/admin/certificates/settings').catch(()=>null)
+        req('/admin/certificates/settings').catch(()=>null),
+        req('/conference/feedback-link?conferenceId='+confId).catch(()=>null)
       ]);
       setD(c); 
       setParticipants(p);
       if(s?.template) setTemplate(s.template);
       if(s?.layout) setLayout(prev => ({...prev, ...s.layout}));
+      if(confRes?.data?.certificateFeedbackUrl || confRes?.certificateFeedbackUrl) {
+        const fData = confRes.data || confRes;
+        setFeedbackUrl(fData.certificateFeedbackUrl || 'https://dypesconf.io/feedback');
+        setFeedbackBtnText(fData.feedbackButtonText || 'Fill Feedback Form');
+        setFeedbackDesc(fData.feedbackDescription || 'Please submit the official conference feedback form to evaluate sessions and receive your conference credentials.');
+      }
     }finally{
       setBusy(false)
     }
   };
   useEffect(()=>{load()},[selectedConferenceId]);
   useEffect(()=>{if(tab==='Issue Certificate')setShowAdd(true)},[tab]);
+
+  const handleSaveFeedbackLink = async () => {
+    if(!feedbackUrl.trim()) return alert('Please enter a valid Feedback Website URL.');
+    setSavingLink(true);
+    try {
+      await req('/admin/conference/feedback-link', {
+        method: 'PUT',
+        body: JSON.stringify({
+          conferenceId: selectedConferenceId || 1,
+          certificateFeedbackUrl: feedbackUrl.trim(),
+          feedbackButtonText: feedbackBtnText.trim() || 'Fill Feedback Form',
+          feedbackDescription: feedbackDesc.trim()
+        })
+      });
+      notify('✅ Feedback website link & button configuration saved successfully! Mobile & Web apps updated.');
+    } catch(e) {
+      alert(e.message);
+    } finally {
+      setSavingLink(false);
+    }
+  };
 
   const handleSaveLayout = async () => {
     setSavingLayout(true);
@@ -3843,13 +3877,14 @@ function Certificates({tab, notify, selectedConferenceId}){
   return <div className="panel">
     <div className="pagehead">
       <div>
-        <h3>Certificates</h3>
-        <p>Manage, issue, and verify conference participation certificates ({filteredIssued.length} issued of {participants.length} delegates).</p>
+        <h3>Certificates & Feedback Website Link</h3>
+        <p>Manage the external feedback website link shown to delegates on the mobile app, or view the issued certificates roster.</p>
       </div>
       <div className="actions" style={{display:'flex', gap:'12px', alignItems:'center'}}>
         <div style={{background:'var(--bg-app)', padding:'4px', borderRadius:'var(--radius-sm)', display:'flex', gap:'4px', border:'1px solid var(--border)'}}>
+          <button style={{padding:'6px 12px', fontSize:'13px', background:subTab==='link'?'var(--surface)':'transparent', color:subTab==='link'?'var(--primary)':'var(--text-muted)', border:0, boxShadow:subTab==='link'?'var(--shadow-sm)':'none', fontWeight:700}} onClick={()=>setSubTab('link')}>🔗 Active Feedback Link & App Button</button>
           <button style={{padding:'6px 12px', fontSize:'13px', background:subTab==='issued'?'var(--surface)':'transparent', color:subTab==='issued'?'var(--primary)':'var(--text-muted)', border:0, boxShadow:subTab==='issued'?'var(--shadow-sm)':'none', fontWeight:600}} onClick={()=>setSubTab('issued')}>📜 Issued Roster ({d.length})</button>
-          <button style={{padding:'6px 12px', fontSize:'13px', background:subTab==='generate'?'var(--surface)':'transparent', color:subTab==='generate'?'var(--primary)':'var(--text-muted)', border:0, boxShadow:subTab==='generate'?'var(--shadow-sm)':'none', fontWeight:600}} onClick={()=>setSubTab('generate')}>🎨 Certificate Designer & Bulk Generator</button>
+          <button style={{padding:'6px 12px', fontSize:'13px', background:subTab==='generate'?'var(--surface)':'transparent', color:subTab==='generate'?'var(--primary)':'var(--text-muted)', border:0, boxShadow:subTab==='generate'?'var(--shadow-sm)':'none', fontWeight:600}} onClick={()=>setSubTab('generate')}>🎨 Certificate Designer</button>
         </div>
         {subTab === 'issued' && (
           <div style={{display:'flex', gap:'8px'}}>
@@ -3858,14 +3893,142 @@ function Certificates({tab, notify, selectedConferenceId}){
             <button className="secondary" onClick={()=>window.print()} style={{display:'flex', alignItems:'center', gap:'6px'}}><Printer size={15}/> Print</button>
           </div>
         )}
-        <button className="secondary" disabled={bulkGenBusy} onClick={()=>handleAutoBulkGenerate(false)} style={{fontWeight:700}}>
-          {bulkGenBusy ? 'Generating...' : '⚡ 1-Click Auto Issue All'}
-        </button>
-        <button className="primary" onClick={()=>setShowAdd(true)}>+ Issue Single</button>
+        {subTab === 'issued' && (
+          <button className="secondary" disabled={bulkGenBusy} onClick={()=>handleAutoBulkGenerate(false)} style={{fontWeight:700}}>
+            {bulkGenBusy ? 'Generating...' : '⚡ 1-Click Auto Issue All'}
+          </button>
+        )}
+        {subTab === 'issued' && <button className="primary" onClick={()=>setShowAdd(true)}>+ Issue Single</button>}
       </div>
     </div>
 
-    {subTab === 'issued' ? (
+    {subTab === 'link' ? (
+      <div style={{display:'grid', gridTemplateColumns:'1.2fr 1fr', gap:'24px', alignItems:'start'}}>
+        {/* Left Side: Form Configuration */}
+        <div style={{background:'#ffffff', padding:'24px', borderRadius:'16px', border:'1px solid #e2e8f0', boxShadow:'0 4px 20px rgba(0,0,0,0.04)'}}>
+          <div style={{display:'flex', alignItems:'center', gap:'12px', marginBottom:'18px', paddingBottom:'14px', borderBottom:'1px solid #f1f5f9'}}>
+            <div style={{width:'40px', height:'40px', borderRadius:'10px', background:'linear-gradient(135deg, #8C1119, #5C0008)', color:'#ffffff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'20px'}}>🔗</div>
+            <div>
+              <h4 style={{margin:0, fontSize:'16px', fontWeight:800, color:'#0f172a'}}>Feedback Form Website Link Settings</h4>
+              <p style={{margin:0, fontSize:'12.5px', color:'#64748b'}}>Configure the link and action button displayed in the mobile & web app.</p>
+            </div>
+          </div>
+
+          <div style={{background:'#FEF3C7', padding:'12px 16px', borderRadius:'10px', border:'1px solid #FDE68A', marginBottom:'20px', display:'flex', gap:'10px'}}>
+            <span style={{fontSize:'18px'}}>💡</span>
+            <div style={{fontSize:'12.5px', color:'#92400E', lineHeight:1.5}}>
+              <b>Single-Button Mode Active:</b> The previous internal certificate & 17-question form have been deactivated in the delegate app. Delegates will see one clean action button that opens your external website link directly in their browser.
+            </div>
+          </div>
+
+          <div style={{display:'flex', flexDirection:'column', gap:'18px'}}>
+            <div>
+              <label style={{display:'block', fontSize:'13px', fontWeight:700, color:'#1e293b', marginBottom:'6px'}}>
+                Website / Google Form URL <span style={{color:'#dc2626'}}>*</span>
+              </label>
+              <div style={{display:'flex', gap:'8px'}}>
+                <input 
+                  style={{flex:1, padding:'10px 14px', borderRadius:'8px', border:'1.5px solid #cbd5e1', fontSize:'13.5px', background:'#f8fafc', fontWeight:600}} 
+                  value={feedbackUrl} 
+                  onChange={e => setFeedbackUrl(e.target.value)} 
+                  placeholder="https://example.com/feedback or https://forms.gle/..."
+                />
+                <button 
+                  type="button" 
+                  className="secondary" 
+                  style={{padding:'0 14px', fontSize:'12.5px', display:'flex', alignItems:'center', gap:'4px'}}
+                  onClick={() => {
+                    if(feedbackUrl.startsWith('http')) window.open(feedbackUrl, '_blank');
+                    else alert('Please enter a valid URL starting with https:// or http://');
+                  }}
+                >
+                  <ExternalLink size={14}/> Test
+                </button>
+              </div>
+              <small style={{color:'#64748b', fontSize:'11.5px', marginTop:'4px', display:'block'}}>Delegates will be redirected to this website URL when tapping the feedback button.</small>
+            </div>
+
+            <div>
+              <label style={{display:'block', fontSize:'13px', fontWeight:700, color:'#1e293b', marginBottom:'6px'}}>
+                Button Text on Mobile App <span style={{color:'#dc2626'}}>*</span>
+              </label>
+              <input 
+                style={{width:'100%', padding:'10px 14px', borderRadius:'8px', border:'1.5px solid #cbd5e1', fontSize:'13.5px', background:'#f8fafc', fontWeight:600}} 
+                value={feedbackBtnText} 
+                onChange={e => setFeedbackBtnText(e.target.value)} 
+                placeholder="e.g., Fill Feedback Form / Open Feedback Portal"
+              />
+            </div>
+
+            <div>
+              <label style={{display:'block', fontSize:'13px', fontWeight:700, color:'#1e293b', marginBottom:'6px'}}>
+                Instructions / Description for Delegates
+              </label>
+              <textarea 
+                rows={3}
+                style={{width:'100%', padding:'10px 14px', borderRadius:'8px', border:'1.5px solid #cbd5e1', fontSize:'13px', background:'#f8fafc', lineHeight:1.4}} 
+                value={feedbackDesc} 
+                onChange={e => setFeedbackDesc(e.target.value)} 
+                placeholder="Enter helpful instructions for delegates..."
+              />
+            </div>
+
+            <div style={{paddingTop:'12px', borderTop:'1px solid #f1f5f9', display:'flex', justifyContent:'flex-end'}}>
+              <button 
+                className="primary" 
+                disabled={savingLink} 
+                onClick={handleSaveFeedbackLink} 
+                style={{padding:'12px 24px', fontSize:'14px', fontWeight:800, display:'flex', alignItems:'center', gap:'8px', background:'linear-gradient(135deg, #8C1119, #A91D22)', border:0, borderRadius:'10px', boxShadow:'0 4px 14px rgba(140,17,25,0.3)'}}
+              >
+                {savingLink ? 'Saving...' : '💾 Save Feedback Link Configuration'}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Side: Live Mobile App Preview */}
+        <div style={{background:'#F8FAFC', padding:'24px', borderRadius:'16px', border:'1px solid #E2E8F0'}}>
+          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px'}}>
+            <div style={{fontSize:'13px', fontWeight:800, color:'#475569', textTransform:'uppercase', letterSpacing:'0.5px'}}>📱 Mobile App Live Preview</div>
+            <span style={{fontSize:'11px', background:'#DCFCE7', color:'#166534', padding:'3px 8px', borderRadius:'6px', fontWeight:700}}>Live Sync</span>
+          </div>
+
+          {/* Smartphone mockup */}
+          <div style={{background:'#ffffff', borderRadius:'24px', border:'6px solid #1e293b', boxShadow:'0 16px 32px rgba(0,0,0,0.12)', padding:'18px', maxWidth:'360px', margin:'0 auto'}}>
+            {/* Mock Header */}
+            <div style={{background:'#1E3A8A', color:'#ffffff', padding:'12px', borderRadius:'14px', textAlign:'center', marginBottom:'16px'}}>
+              <div style={{fontSize:'13.5px', fontWeight:800}}>Conference Feedback</div>
+              <div style={{fontSize:'10.5px', opacity:0.85}}>MAPCON 2026 Portal</div>
+            </div>
+
+            {/* Delegate Badge Card */}
+            <div style={{background:'#F1F5F9', borderRadius:'12px', padding:'12px', marginBottom:'16px', border:'1px solid #E2E8F0'}}>
+              <div style={{fontSize:'10px', fontWeight:800, color:'#64748B', letterSpacing:'0.5px'}}>DELEGATE PROFILE</div>
+              <div style={{fontSize:'13px', fontWeight:800, color:'#0F172A', marginTop:'2px'}}>Dr. Participant Name</div>
+              <div style={{fontSize:'11px', color:'#475569'}}>Reg No: MAPCON-2026-001</div>
+            </div>
+
+            {/* Instructions */}
+            <div style={{background:'#EFF6FF', borderRadius:'12px', padding:'12px', marginBottom:'18px', border:'1px solid #BFDBFE'}}>
+              <div style={{fontSize:'11.5px', color:'#1E3A8A', fontWeight:600, lineHeight:1.4}}>
+                {feedbackDesc || 'Please submit your feedback on the official website link below.'}
+              </div>
+            </div>
+
+            {/* Action Button */}
+            <div style={{background:'linear-gradient(135deg, #1E3A8A, #2563EB)', color:'#ffffff', padding:'14px 16px', borderRadius:'12px', textAlign:'center', fontWeight:800, fontSize:'14px', boxShadow:'0 6px 16px rgba(30,58,138,0.25)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px'}}>
+              <span>📝</span>
+              <span>{feedbackBtnText || 'Fill Feedback Form'}</span>
+              <span>↗</span>
+            </div>
+
+            <div style={{marginTop:'12px', textAlign:'center'}}>
+              <small style={{fontSize:'10px', color:'#94A3B8'}}>Destination: {feedbackUrl || 'https://dypesconf.io/feedback'}</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    ) : subTab === 'issued' ? (
       <div>
         <div className="toolbar" style={{display:'flex', gap:'10px', alignItems:'center', background:'#f8fafc', padding:'10px 14px', borderRadius:'10px', border:'1px solid #e2e8f0', marginBottom:'16px'}}>
           <div className="search" style={{flex:1, minWidth:'220px'}}>
