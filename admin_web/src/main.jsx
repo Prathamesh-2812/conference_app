@@ -1,4 +1,4 @@
-import React,{useEffect,useState,useMemo} from 'react';
+import React,{useEffect,useState,useMemo,useRef} from 'react';
 import {createRoot} from 'react-dom/client';
 import {Bell,Building2,Bus,CalendarDays,CheckCircle,ChevronDown,FileCheck,Hotel,Image,LayoutDashboard,Lock,LogOut,MapPin,Palette,RefreshCw,Search,Settings,Shield,Upload,Users,QrCode,Maximize2,Minimize2,Printer,Tv,UserCheck,MessageCircle,Send,Share2,Menu,X,Video,Radio,Copy,ExternalLink,ShieldCheck,Trash2,Edit2,CheckSquare,Square,UserPlus,SlidersHorizontal} from 'lucide-react';
 import {QRCodeSVG} from 'qrcode.react';
@@ -151,7 +151,31 @@ export function SpeakerAvatar({ photo, name, designation, size = 90, radius = 22
   );
 }
 function normalizeConference(data){
-  return {...emptyConference,...data,startDate:toInputDate(data?.startDate),endDate:toInputDate(data?.endDate),registrationStartDate:toInputDate(data?.registrationStartDate),registrationEndDate:toInputDate(data?.registrationEndDate),venue:{...emptyVenue,...data?.venue},branding:{...emptyBranding,...data?.branding},settings:{...emptySettings,...data?.settings}};
+  const conf = (data && data.data && typeof data.data === 'object' && !Array.isArray(data.data)) ? data.data : (data || {});
+  return {
+    ...emptyConference,
+    ...conf,
+    name: conf.name || '',
+    shortName: conf.shortName || conf.short_name || '',
+    description: conf.description || '',
+    welcomeMessage: conf.welcomeMessage || conf.welcome_message || '',
+    aboutConference: conf.aboutConference || conf.about_conference || '',
+    theme: conf.theme || '',
+    status: conf.status || 'ACTIVE',
+    startDate: toInputDate(conf.startDate || conf.start_date),
+    endDate: toInputDate(conf.endDate || conf.end_date),
+    registrationStartDate: toInputDate(conf.registrationStartDate || conf.registration_start_date),
+    registrationEndDate: toInputDate(conf.registrationEndDate || conf.registration_end_date),
+    contactPerson: conf.contactPerson || conf.contact_person || '',
+    contactPhone: conf.contactPhone || conf.contact_phone || '',
+    contactEmail: conf.contactEmail || conf.contact_email || '',
+    website: conf.website || '',
+    organizer: conf.organizer || '',
+    hostInstitution: conf.hostInstitution || conf.host_institution || '',
+    venue: { ...emptyVenue, ...(conf.venue || {}) },
+    branding: { ...emptyBranding, ...(conf.branding || {}) },
+    settings: { ...emptySettings, ...(conf.settings || {}) }
+  };
 }
 
 function Login({onLogin}){const[e,setE]=useState(''),[p,setP]=useState(''),[busy,setBusy]=useState(false);const submit=async x=>{x.preventDefault();setBusy(true);try{const d=await req('/auth/login',{method:'POST',body:JSON.stringify({email:e,password:p})});localStorage.setItem('token',d.token);onLogin()}catch(err){alert(err.message)}finally{setBusy(false)}};return <div className="login"><form onSubmit={submit}><div className="brand-logo-container"><img src="/logo.png" alt="DY Patil Logo" className="brand-img" /></div><h1>Conference Control Room</h1><p>Manage live conference content, logistics, and mobile app data from MySQL.</p><input value={e} onChange={x=>setE(x.target.value)} placeholder="Email"/><input type="password" value={p} onChange={x=>setP(x.target.value)} placeholder="Password"/><button disabled={busy}>{busy?'Signing in...':'Sign in'}</button></form></div>}
@@ -1338,7 +1362,7 @@ function SelectField({label,value,onChange,options=[]}){
 function Toggle({label,checked,onChange}){return <label className="toggle"><input type="checkbox" checked={!!checked} onChange={e=>onChange(e.target.checked)}/><span>{label}</span></label>}
 function formState(initial){
   const [v, setV] = useState(initial || {});
-  const prevJsonRef = React.useRef(JSON.stringify(initial || {}));
+  const prevJsonRef = useRef(JSON.stringify(initial || {}));
   
   useEffect(() => {
     const currentJson = JSON.stringify(initial || {});
