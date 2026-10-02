@@ -163,6 +163,153 @@ bool isFemaleGender(String? name, [String? designation, String? gender]) {
   return false;
 }
 
+class DoctorAvatarPainter extends CustomPainter {
+  final bool isFemale;
+  DoctorAvatarPainter({required this.isFemale});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final scale = size.width / 100.0;
+    canvas.save();
+    canvas.scale(scale, scale);
+
+    final bgCirclePaint = Paint()
+      ..color = isFemale ? const Color(0xFFFDF2F8) : const Color(0xFFF8FAFC)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(const Offset(50, 50), 46, bgCirclePaint);
+
+    if (isFemale) {
+      final hairPaint = Paint()..color = const Color(0xFF4A044E)..style = PaintingStyle.fill;
+      final hairBackLeft = Path()
+        ..moveTo(28, 46)
+        ..cubicTo(26, 60, 28, 76, 32, 82)
+        ..cubicTo(35, 82, 38, 76, 38, 68)
+        ..close();
+      canvas.drawPath(hairBackLeft, hairPaint);
+
+      final hairBackRight = Path()
+        ..moveTo(72, 46)
+        ..cubicTo(74, 60, 72, 76, 68, 82)
+        ..cubicTo(65, 82, 62, 76, 62, 68)
+        ..close();
+      canvas.drawPath(hairBackRight, hairPaint);
+
+      final bodyPath = Path()
+        ..moveTo(22, 96)
+        ..cubicTo(22, 75, 35, 68, 50, 68)
+        ..cubicTo(65, 68, 78, 75, 78, 96)
+        ..close();
+      canvas.drawPath(bodyPath, Paint()..color = Colors.white..style = PaintingStyle.fill);
+      canvas.drawPath(bodyPath, Paint()..color = const Color(0xFFCBD5E1)..style = PaintingStyle.stroke..strokeWidth = 1.5);
+
+      final pinkCollar1 = Path()..moveTo(42, 68)..lineTo(50, 82)..lineTo(58, 68)..close();
+      canvas.drawPath(pinkCollar1, Paint()..color = const Color(0xFFEC4899));
+      final pinkCollar2 = Path()..moveTo(44, 68)..lineTo(50, 78)..lineTo(56, 68)..close();
+      canvas.drawPath(pinkCollar2, Paint()..color = const Color(0xFFF472B6));
+
+      final coatL = Path()..moveTo(35, 68)..lineTo(48, 88)..lineTo(43, 96)..lineTo(24, 96)..close();
+      canvas.drawPath(coatL, Paint()..color = const Color(0xFFF8FAFC));
+      final coatR = Path()..moveTo(65, 68)..lineTo(52, 88)..lineTo(57, 96)..lineTo(76, 96)..close();
+      canvas.drawPath(coatR, Paint()..color = const Color(0xFFF8FAFC));
+
+      final stethPaint = Paint()
+        ..color = const Color(0xFF8C1119)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5
+        ..strokeCap = StrokeCap.round;
+      final stethPath = Path()..moveTo(41, 72)..cubicTo(41, 84, 59, 84, 59, 72);
+      canvas.drawPath(stethPath, stethPaint);
+      canvas.drawLine(const Offset(53, 82), const Offset(53, 88), stethPaint);
+      canvas.drawCircle(const Offset(53, 90), 3, Paint()..color = const Color(0xFFD97706));
+
+      final neckPath = Path()..moveTo(43, 54)..lineTo(57, 54)..lineTo(57, 68)..lineTo(43, 68)..close();
+      canvas.drawPath(neckPath, Paint()..color = const Color(0xFFFBCFE8));
+
+      canvas.drawOval(Rect.fromCenter(center: const Offset(50, 44), width: 30, height: 36), Paint()..color = const Color(0xFFFBCFE8));
+
+      final frontHair = Path()
+        ..moveTo(33, 42)
+        ..cubicTo(33, 26, 40, 22, 50, 22)
+        ..cubicTo(60, 22, 67, 26, 67, 42)
+        ..cubicTo(65, 34, 59, 30, 50, 30)
+        ..cubicTo(41, 30, 35, 34, 33, 42)
+        ..close();
+      canvas.drawPath(frontHair, hairPaint);
+
+      final bangs = Path()
+        ..moveTo(34, 38)
+        ..cubicTo(38, 42, 46, 44, 50, 44)
+        ..cubicTo(42, 42, 36, 36, 34, 38)
+        ..close();
+      canvas.drawPath(bangs, hairPaint);
+
+      final strandPaint = Paint()
+        ..color = const Color(0xFF4A044E)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..strokeCap = StrokeCap.round;
+      canvas.drawPath(Path()..moveTo(34, 32)..cubicTo(32, 30, 31, 38, 34, 46), strandPaint);
+      canvas.drawPath(Path()..moveTo(66, 32)..cubicTo(68, 30, 69, 38, 66, 46), strandPaint);
+    } else {
+      final bodyPath = Path()
+        ..moveTo(22, 96)
+        ..cubicTo(22, 75, 35, 68, 50, 68)
+        ..cubicTo(65, 68, 78, 75, 78, 96)
+        ..close();
+      canvas.drawPath(bodyPath, Paint()..color = Colors.white..style = PaintingStyle.fill);
+      canvas.drawPath(bodyPath, Paint()..color = const Color(0xFFCBD5E1)..style = PaintingStyle.stroke..strokeWidth = 1.5);
+
+      final blueShirt = Path()..moveTo(44, 68)..lineTo(50, 78)..lineTo(56, 68)..close();
+      canvas.drawPath(blueShirt, Paint()..color = const Color(0xFF0284C7));
+
+      final tiePath = Path()..moveTo(48, 74)..lineTo(52, 74)..lineTo(51, 86)..lineTo(49, 86)..close();
+      canvas.drawPath(tiePath, Paint()..color = const Color(0xFF8C1119));
+
+      final coatL = Path()..moveTo(34, 68)..lineTo(46, 88)..lineTo(40, 96)..lineTo(24, 96)..close();
+      canvas.drawPath(coatL, Paint()..color = const Color(0xFFF1F5F9));
+      final coatR = Path()..moveTo(66, 68)..lineTo(54, 88)..lineTo(60, 96)..lineTo(76, 96)..close();
+      canvas.drawPath(coatR, Paint()..color = const Color(0xFFF1F5F9));
+
+      final stethPaint = Paint()
+        ..color = const Color(0xFF334155)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5
+        ..strokeCap = StrokeCap.round;
+      final stethPath = Path()..moveTo(39, 72)..cubicTo(39, 84, 61, 84, 61, 72);
+      canvas.drawPath(stethPath, stethPaint);
+      canvas.drawLine(const Offset(55, 82), const Offset(55, 88), stethPaint);
+      canvas.drawCircle(const Offset(55, 90), 3, Paint()..color = const Color(0xFFD97706));
+
+      final neckPath = Path()..moveTo(43, 54)..lineTo(57, 54)..lineTo(57, 68)..lineTo(43, 68)..close();
+      canvas.drawPath(neckPath, Paint()..color = const Color(0xFFFED7AA));
+
+      canvas.drawOval(Rect.fromCenter(center: const Offset(50, 44), width: 30, height: 34), Paint()..color = const Color(0xFFFED7AA));
+
+      final hairPaint = Paint()..color = const Color(0xFF1E293B)..style = PaintingStyle.fill;
+      final maleHair = Path()
+        ..moveTo(34, 40)
+        ..cubicTo(34, 26, 42, 22, 50, 22)
+        ..cubicTo(58, 22, 66, 26, 66, 40)
+        ..cubicTo(63, 32, 58, 28, 50, 28)
+        ..cubicTo(42, 28, 37, 32, 34, 40)
+        ..close();
+      canvas.drawPath(maleHair, hairPaint);
+
+      final hairStroke = Paint()
+        ..color = const Color(0xFF1E293B)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..strokeCap = StrokeCap.round;
+      canvas.drawPath(Path()..moveTo(34, 32)..cubicTo(36, 28, 42, 24, 50, 24)..cubicTo(56, 24, 64, 27, 66, 32), hairStroke);
+    }
+
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
 Widget buildGenderAvatarFallback({
   required bool isFemale,
   required double width,
@@ -170,10 +317,18 @@ Widget buildGenderAvatarFallback({
   double borderRadius = 20,
   bool isCircle = false,
 }) {
-  final primaryColor = isFemale ? const Color(0xFFBE123C) : const Color(0xFF1E40AF);
-  final bgColor = isFemale ? const Color(0xFFFFF1F2) : const Color(0xFFEFF6FF);
-  final borderColor = isFemale ? const Color(0xFFFDA4AF) : const Color(0xFF93C5FD);
-  final icon = isFemale ? Icons.person_2 : Icons.person;
+  final borderColor = isFemale ? const Color(0xFFBE123C) : const Color(0xFF8C1119);
+  final bgGradient = isFemale
+      ? const LinearGradient(
+          colors: [Color(0xFFFFF1F2), Color(0xFFFCE7F3)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        )
+      : const LinearGradient(
+          colors: [Color(0xFFF8FAFC), Color(0xFFE2E8F0)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        );
 
   return Container(
     width: width,
@@ -181,17 +336,24 @@ Widget buildGenderAvatarFallback({
     decoration: BoxDecoration(
       shape: isCircle ? BoxShape.circle : BoxShape.rectangle,
       borderRadius: isCircle ? null : BorderRadius.circular(borderRadius),
-      color: bgColor,
+      gradient: bgGradient,
       border: Border.all(
         color: borderColor,
-        width: 1.5,
+        width: 2.2,
       ),
+      boxShadow: [
+        BoxShadow(
+          color: (isFemale ? const Color(0xFFBE123C) : const Color(0xFF8C1119)).withOpacity(0.12),
+          blurRadius: 8,
+          offset: const Offset(0, 3),
+        ),
+      ],
     ),
-    child: Center(
-      child: Icon(
-        icon,
-        size: width * 0.62,
-        color: primaryColor,
+    child: ClipRRect(
+      borderRadius: isCircle ? BorderRadius.circular(width / 2) : BorderRadius.circular(borderRadius > 2 ? borderRadius - 2 : 0),
+      child: CustomPaint(
+        size: Size(width, height),
+        painter: DoctorAvatarPainter(isFemale: isFemale),
       ),
     ),
   );
@@ -3651,42 +3813,66 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   }
 
   Widget _buildThematicIcon(String title, String category, Color catColor, double size) {
-    IconData iconData = Icons.event_note;
+    IconData iconData = Icons.mic;
+    Color primaryColor = maroon;
+    Color bgColor = const Color(0xFFFEF2F2);
+    Color borderColor = const Color(0xFFFECACA);
+
     if (title.contains('registration') || category.contains('registration')) {
-      iconData = Icons.how_to_reg;
+      iconData = Icons.person;
+      primaryColor = const Color(0xFF059669);
+      bgColor = const Color(0xFFECFDF5);
+      borderColor = const Color(0xFFA7F3D0);
     } else if (title.contains('inaugur') || category.contains('inaugur') || category.contains('ceremony')) {
-      iconData = Icons.celebration;
+      iconData = Icons.star;
+      primaryColor = maroon;
+      bgColor = const Color(0xFFFEF2F2);
+      borderColor = const Color(0xFFFECACA);
     } else if (title.contains('keynote') || category.contains('keynote') || title.contains('oration')) {
-      iconData = Icons.school;
+      iconData = Icons.mic;
+      primaryColor = const Color(0xFFD97706);
+      bgColor = const Color(0xFFFFFBEB);
+      borderColor = const Color(0xFFFDE68A);
     } else if (title.contains('panel') || category.contains('panel') || title.contains('symposium') || category.contains('symposium')) {
-      iconData = Icons.groups;
+      iconData = Icons.group;
+      primaryColor = const Color(0xFF7C3AED);
+      bgColor = const Color(0xFFFAF5FF);
+      borderColor = const Color(0xFFE9D5FF);
     } else if (title.contains('cme') || category.contains('cme') || title.contains('workshop') || category.contains('workshop')) {
-      iconData = Icons.science;
+      iconData = Icons.school;
+      primaryColor = const Color(0xFF2563EB);
+      bgColor = const Color(0xFFEFF6FF);
+      borderColor = const Color(0xFFBFDBFE);
     } else if (title.contains('lunch') || title.contains('dinner') || title.contains('tea') || title.contains('breakfast') || title.contains('banquet')) {
       iconData = Icons.restaurant;
+      primaryColor = const Color(0xFFEA580C);
+      bgColor = const Color(0xFFFFF7ED);
+      borderColor = const Color(0xFFFED7AA);
     } else if (title.contains('valedictory') || category.contains('valedictory') || title.contains('award') || title.contains('prize')) {
-      iconData = Icons.emoji_events;
-    } else if (title.contains('poster') || title.contains('paper') || title.contains('oral')) {
-      iconData = Icons.description;
-    } else if (title.contains('quiz')) {
-      iconData = Icons.psychology;
+      iconData = Icons.star;
+      primaryColor = const Color(0xFF059669);
+      bgColor = const Color(0xFFECFDF5);
+      borderColor = const Color(0xFFA7F3D0);
     } else {
       iconData = Icons.mic;
+      primaryColor = maroon;
+      bgColor = const Color(0xFFFEF2F2);
+      borderColor = const Color(0xFFFECACA);
     }
 
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: catColor.withOpacity(0.16),
+        color: bgColor,
         shape: BoxShape.circle,
-        border: Border.all(color: catColor.withOpacity(0.5), width: 1.5),
+        border: Border.all(color: borderColor, width: 1.5),
       ),
       child: Center(
         child: Icon(
           iconData,
-          size: size * 0.58,
-          color: catColor,
+          size: size * 0.55,
+          color: primaryColor,
         ),
       ),
     );
@@ -4203,57 +4389,32 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                                 ),
                                               ),
                                               if (_isSessionLiveNow(x)) ...[
-                                                 const SizedBox(width: 6),
-                                                 Container(
-                                                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
-                                                   decoration: BoxDecoration(
-                                                     color: const Color(0xFFDC2626).withOpacity(0.12),
-                                                     borderRadius: BorderRadius.circular(8),
-                                                     border: Border.all(color: const Color(0xFFDC2626).withOpacity(0.4)),
-                                                   ),
-                                                   child: const Row(
-                                                     mainAxisSize: MainAxisSize.min,
-                                                     children: [
-                                                       Icon(Icons.fiber_manual_record, size: 10, color: Color(0xFFDC2626)),
-                                                       SizedBox(width: 3.5),
-                                                       Text(
-                                                         'LIVE',
-                                                         style: TextStyle(
-                                                           color: Color(0xFFDC2626),
-                                                           fontSize: 9.5,
-                                                           fontWeight: FontWeight.w900,
-                                                         ),
-                                                       ),
-                                                     ],
-                                                   ),
-                                                 ),
-                                               ] else if ((x['zoom_link'] ?? '').toString().trim().isNotEmpty && (x['zoom_link'] ?? '').toString().trim() != 'null' && (x['zoom_link'] ?? '').toString().trim() != 'undefined') ...[
-                                                 const SizedBox(width: 6),
-                                                 Container(
-                                                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
-                                                   decoration: BoxDecoration(
-                                                     color: const Color(0xFF2563EB).withOpacity(0.12),
-                                                     borderRadius: BorderRadius.circular(8),
-                                                     border: Border.all(color: const Color(0xFF2563EB).withOpacity(0.4)),
-                                                   ),
-                                                   child: const Row(
-                                                     mainAxisSize: MainAxisSize.min,
-                                                     children: [
-                                                       Icon(Icons.videocam_rounded, size: 10, color: Color(0xFF2563EB)),
-                                                       SizedBox(width: 3.5),
-                                                       Text(
-                                                         'ZOOM',
-                                                         style: TextStyle(
-                                                           color: Color(0xFF2563EB),
-                                                           fontSize: 9.5,
-                                                           fontWeight: FontWeight.w900,
-                                                         ),
-                                                       ),
-                                                     ],
-                                                   ),
-                                                 ),
-                                               ],
-                                              const Spacer(),
+                                                  const SizedBox(width: 6),
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFFDC2626).withOpacity(0.12),
+                                                      borderRadius: BorderRadius.circular(8),
+                                                      border: Border.all(color: const Color(0xFFDC2626).withOpacity(0.4)),
+                                                    ),
+                                                    child: const Row(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        Icon(Icons.fiber_manual_record, size: 10, color: Color(0xFFDC2626)),
+                                                        SizedBox(width: 3.5),
+                                                        Text(
+                                                          'LIVE',
+                                                          style: TextStyle(
+                                                            color: Color(0xFFDC2626),
+                                                            fontSize: 9.5,
+                                                            fontWeight: FontWeight.w900,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ],
+                                               const Spacer(),
                                               Container(
                                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                                 decoration: BoxDecoration(
