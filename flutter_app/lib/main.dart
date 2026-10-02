@@ -171,7 +171,9 @@ Widget buildGenderAvatarFallback({
   bool isCircle = false,
 }) {
   final primaryColor = isFemale ? const Color(0xFFBE123C) : const Color(0xFF1E40AF);
-  final icon = isFemale ? Icons.face_3_rounded : Icons.face_6_rounded;
+  final bgColor = isFemale ? const Color(0xFFFFF1F2) : const Color(0xFFEFF6FF);
+  final borderColor = isFemale ? const Color(0xFFFDA4AF) : const Color(0xFF93C5FD);
+  final icon = isFemale ? Icons.person_2 : Icons.person;
 
   return Container(
     width: width,
@@ -179,22 +181,16 @@ Widget buildGenderAvatarFallback({
     decoration: BoxDecoration(
       shape: isCircle ? BoxShape.circle : BoxShape.rectangle,
       borderRadius: isCircle ? null : BorderRadius.circular(borderRadius),
-      gradient: LinearGradient(
-        colors: isFemale
-            ? [const Color(0xFFFFF1F2), const Color(0xFFFCE7F3)]
-            : [const Color(0xFFEFF6FF), const Color(0xFFDBEAFE)],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ),
+      color: bgColor,
       border: Border.all(
-        color: isFemale ? const Color(0xFFFDA4AF) : const Color(0xFF93C5FD),
-        width: 1.2,
+        color: borderColor,
+        width: 1.5,
       ),
     ),
     child: Center(
       child: Icon(
         icon,
-        size: width * 0.58,
+        size: width * 0.62,
         color: primaryColor,
       ),
     ),
@@ -1754,7 +1750,7 @@ class _MainMediaSliderState extends State<MainMediaSlider> {
                     ] else ...[
                       Image.network(
                         fullUrl,
-                        fit: BoxFit.cover,
+                        fit: BoxFit.contain,
                         width: double.infinity,
                         height: double.infinity,
                         alignment: Alignment.center,
@@ -3655,41 +3651,41 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   }
 
   Widget _buildThematicIcon(String title, String category, Color catColor, double size) {
-    IconData iconData = Icons.event_note_rounded;
+    IconData iconData = Icons.event_note;
     if (title.contains('registration') || category.contains('registration')) {
-      iconData = Icons.how_to_reg_rounded;
+      iconData = Icons.how_to_reg;
     } else if (title.contains('inaugur') || category.contains('inaugur') || category.contains('ceremony')) {
-      iconData = Icons.celebration_rounded;
+      iconData = Icons.celebration;
     } else if (title.contains('keynote') || category.contains('keynote') || title.contains('oration')) {
-      iconData = Icons.school_rounded;
+      iconData = Icons.school;
     } else if (title.contains('panel') || category.contains('panel') || title.contains('symposium') || category.contains('symposium')) {
-      iconData = Icons.groups_rounded;
+      iconData = Icons.groups;
     } else if (title.contains('cme') || category.contains('cme') || title.contains('workshop') || category.contains('workshop')) {
-      iconData = Icons.biotech_rounded;
+      iconData = Icons.science;
     } else if (title.contains('lunch') || title.contains('dinner') || title.contains('tea') || title.contains('breakfast') || title.contains('banquet')) {
-      iconData = Icons.restaurant_rounded;
+      iconData = Icons.restaurant;
     } else if (title.contains('valedictory') || category.contains('valedictory') || title.contains('award') || title.contains('prize')) {
-      iconData = Icons.emoji_events_rounded;
+      iconData = Icons.emoji_events;
     } else if (title.contains('poster') || title.contains('paper') || title.contains('oral')) {
-      iconData = Icons.description_rounded;
+      iconData = Icons.description;
     } else if (title.contains('quiz')) {
-      iconData = Icons.psychology_rounded;
+      iconData = Icons.psychology;
     } else {
-      iconData = Icons.mic_none_rounded;
+      iconData = Icons.mic;
     }
 
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: catColor.withOpacity(0.12),
+        color: catColor.withOpacity(0.16),
         shape: BoxShape.circle,
-        border: Border.all(color: catColor.withOpacity(0.35), width: 1.2),
+        border: Border.all(color: catColor.withOpacity(0.5), width: 1.5),
       ),
       child: Center(
         child: Icon(
           iconData,
-          size: size * 0.52,
+          size: size * 0.58,
           color: catColor,
         ),
       ),
