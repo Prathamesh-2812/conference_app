@@ -38,7 +38,7 @@ app.use('/uploads', express.static(uploadRoot));
 app.use('/app', express.static(flutterWebRoot));
 app.use('/admin', express.static(adminWebDist));
 
-app.use('/api', rateLimit({ windowMs: 15 * 60 * 1000, max: 1000, standardHeaders: true, legacyHeaders: false }));
+// app.use('/api', rateLimit({ windowMs: 15 * 60 * 1000, max: 1000, standardHeaders: true, legacyHeaders: false }));
 
 app.get('/', (req, res) => {
   res.send(`
