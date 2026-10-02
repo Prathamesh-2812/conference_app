@@ -7810,7 +7810,7 @@ class _CertificateScreenState extends State<CertificateScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          conference.theme.isNotEmpty ? conference.theme : 'D. Y. Patil Education Society â€¢ Kolhapur',
+                          conference.description.isNotEmpty ? conference.description : 'D. Y. Patil Education Society • Kolhapur',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Colors.white.withOpacity(0.85),
