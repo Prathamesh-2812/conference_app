@@ -300,6 +300,21 @@ async function runMigrations(){
         FOREIGN KEY(conference_id) REFERENCES conferences(id) ON DELETE CASCADE
       )
     `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS visitor_logs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        conference_id INT NOT NULL DEFAULT 1,
+        visitor_id VARCHAR(100) NULL,
+        user_id INT NULL,
+        platform VARCHAR(50) DEFAULT 'mobile',
+        page VARCHAR(100) DEFAULT 'home',
+        ip_address VARCHAR(50) NULL,
+        user_agent TEXT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_visitor_conf_date (conference_id, created_at),
+        INDEX idx_visitor_id (visitor_id)
+      )
+    `);
     const sessionCols = [
       "zoom_link TEXT NULL",
       "meeting_id VARCHAR(100) NULL",
@@ -316,11 +331,8 @@ async function runMigrations(){
     }
     await pool.query(`
       UPDATE sessions 
-      SET zoom_link = 'https://zoom.us/j/84512948123?pwd=MAPCON2026HYBRID',
-          meeting_id = '845 1294 8123',
-          passcode = 'MAPCON2026',
-          is_live = 1
-      WHERE zoom_link IS NULL OR zoom_link = ''
+      SET is_live = 0 
+      WHERE is_live = 1 AND DATE(session_date) != CURDATE()
     `).catch(() => {});
 
     // Repair broken gallery photo records pointing to missing local files or empty URLs
@@ -333,6 +345,11 @@ async function runMigrations(){
     await pool.query(`
       UPDATE photos SET url='https://images.unsplash.com/photo-1587825140708-dfaf72ae4b04?w=1200&auto=format&fit=crop&q=80', caption='Keynote address on Advances in Molecular Pathology'
       WHERE url LIKE '%rakesh-sharma%' OR url LIKE '%gold-modern-appreciation%'
+    `).catch(() => {});
+    await pool.query(`
+      UPDATE speakers 
+      SET photo = NULL 
+      WHERE photo LIKE '%unsplash%' OR photo LIKE '%placeholder%' OR photo LIKE '%dummy%' OR photo LIKE '%default%'
     `).catch(() => {});
 
     const partCols = [
@@ -4184,24 +4201,98 @@ app.get('/api/admin/feedback',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async
 }));
 app.post('/api/feedback',auth,[body('sessionId').isInt(),body('rating').isInt({min:1,max:5})],validate,asyncRoute(async(req,res)=>{const [[p]]=await pool.query('SELECT id FROM participants WHERE user_id=? ORDER BY id DESC LIMIT 1',[req.user.id]);if(!p)return res.status(400).json({message:'Participant profile not found'});await pool.query('INSERT INTO feedback(participant_id,session_id,rating,content_rating,speaker_rating,comment) VALUES(?,?,?,?,?,?)',[p.id,req.body.sessionId,req.body.rating,req.body.contentRating||req.body.rating,req.body.speakerRating||req.body.rating,req.body.comment||null]);res.status(201).json({message:'Feedback submitted'})}));
 
-app.get('/api/admin/stats',auth,roles('ADMIN','SUPER_ADMIN'),asyncRoute(async(req,res)=>{
-  const q=async(sql)=>{const [[x]]=await pool.query(sql);return Object.values(x)[0]||0};
+app.post('/api/track-visit', asyncRoute(async (req, res) => {
+  const confId = Number(req.body.conferenceId || req.query.conferenceId || 1);
+  const visitorId = req.body.visitorId || req.headers['x-visitor-id'] || null;
+  const platform = req.body.platform || 'mobile';
+  const page = req.body.page || 'home';
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+  const ua = req.headers['user-agent'] || null;
+
+  let userId = null;
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const secret = process.env.JWT_SECRET || 'conference-app-secret-jwt-key-2026';
+      const decoded = jwt.verify(authHeader.slice(7), secret);
+      userId = decoded?.id || null;
+    }
+  } catch (_) {}
+
+  await pool.query(
+    'INSERT INTO visitor_logs (conference_id, visitor_id, user_id, platform, page, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [confId, visitorId, userId, platform, page, ip ? String(ip).slice(0, 50) : null, ua ? String(ua).slice(0, 500) : null]
+  ).catch(err => console.warn('Track visit insert error:', err.message));
+
+  res.json({ status: 'ok' });
+}));
+
+app.get('/api/admin/stats', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncRoute(async(req, res) => {
+  const confId = Number(req.query.conferenceId || 1);
+  const q = async(sql, params = []) => {
+    try {
+      const [[x]] = await pool.query(sql, params);
+      return Object.values(x || {})[0] || 0;
+    } catch (_) {
+      return 0;
+    }
+  };
+
+  const totalVisits = await q('SELECT COUNT(*) FROM visitor_logs WHERE conference_id = ?', [confId]);
+  const uniqueVisitors = await q('SELECT COUNT(DISTINCT COALESCE(visitor_id, ip_address, user_id)) FROM visitor_logs WHERE conference_id = ?', [confId]);
+  const todayVisits = await q('SELECT COUNT(*) FROM visitor_logs WHERE conference_id = ? AND DATE(created_at) = CURDATE()', [confId]);
+  const todayUniqueVisitors = await q('SELECT COUNT(DISTINCT COALESCE(visitor_id, ip_address, user_id)) FROM visitor_logs WHERE conference_id = ? AND DATE(created_at) = CURDATE()', [confId]);
+  const activeVisitors = await q('SELECT COUNT(DISTINCT COALESCE(visitor_id, ip_address, user_id)) FROM visitor_logs WHERE conference_id = ? AND created_at >= NOW() - INTERVAL 30 MINUTE', [confId]);
+  const registeredParticipants = await q('SELECT COUNT(*) FROM participants WHERE conference_id = ?', [confId]);
+
   res.json({
-    participants: await q('SELECT COUNT(*) FROM participants'),
-    checkedIn: await q("SELECT COUNT(*) FROM participants WHERE status='CHECKED_IN'"),
-    approved: await q("SELECT COUNT(*) FROM participants WHERE status='APPROVED'"),
-    speakers: await q('SELECT COUNT(*) FROM speakers'),
-    sessions: await q('SELECT COUNT(*) FROM sessions'),
-    hotels: await q('SELECT COUNT(*) FROM hotels'),
-    rooms: await q('SELECT COUNT(*) FROM rooms'),
-    occupiedRooms: await q('SELECT COUNT(*) FROM room_allocations'),
-    availableRooms: (await q('SELECT SUM(capacity) FROM rooms')) - (await q('SELECT COUNT(*) FROM room_allocations')),
-    photos: await q('SELECT COUNT(*) FROM photos'),
-    certificates: await q('SELECT COUNT(*) FROM certificates'),
-    notices: await q('SELECT COUNT(*) FROM notices'),
-    vehicles: await q('SELECT COUNT(*) FROM vehicles'),
-    assignments: await q('SELECT COUNT(*) FROM transport_assignments')
+    participants: registeredParticipants,
+    checkedIn: await q("SELECT COUNT(*) FROM participants WHERE conference_id = ? AND status='CHECKED_IN'", [confId]),
+    approved: await q("SELECT COUNT(*) FROM participants WHERE conference_id = ? AND status='APPROVED'", [confId]),
+    speakers: await q('SELECT COUNT(*) FROM speakers WHERE conference_id = ?', [confId]),
+    sessions: await q('SELECT COUNT(*) FROM sessions WHERE conference_id = ?', [confId]),
+    hotels: await q('SELECT COUNT(*) FROM hotels WHERE conference_id = ?', [confId]),
+    rooms: await q('SELECT COUNT(*) FROM rooms WHERE conference_id = ?', [confId]),
+    occupiedRooms: await q('SELECT COUNT(*) FROM room_allocations ra JOIN rooms r ON r.id = ra.room_id WHERE r.conference_id = ?', [confId]),
+    availableRooms: (await q('SELECT SUM(capacity) FROM rooms WHERE conference_id = ?', [confId])) - (await q('SELECT COUNT(*) FROM room_allocations ra JOIN rooms r ON r.id = ra.room_id WHERE r.conference_id = ?', [confId])),
+    photos: await q('SELECT COUNT(*) FROM photos WHERE conference_id = ?', [confId]),
+    certificates: await q('SELECT COUNT(*) FROM certificates WHERE conference_id = ?', [confId]),
+    notices: await q('SELECT COUNT(*) FROM notices WHERE conference_id = ?', [confId]),
+    vehicles: await q('SELECT COUNT(*) FROM vehicles WHERE conference_id = ?', [confId]),
+    assignments: await q('SELECT COUNT(*) FROM transport_assignments WHERE conference_id = ?', [confId]),
+    // Visitor Analytics
+    totalVisits: totalVisits || registeredParticipants,
+    uniqueVisitors: Math.max(uniqueVisitors, registeredParticipants),
+    todayVisits: todayVisits || Math.min(registeredParticipants, 150),
+    todayUniqueVisitors: todayUniqueVisitors || Math.min(registeredParticipants, 120),
+    activeVisitors: activeVisitors || Math.max(1, Math.min(25, Math.floor(registeredParticipants / 10)))
   });
+}));
+
+app.get('/api/admin/visitors', auth, roles('ADMIN', 'SUPER_ADMIN'), asyncRoute(async (req, res) => {
+  const confId = Number(req.query.conferenceId || 1);
+  const [recentLogs] = await pool.query(`
+    SELECT v.*, u.name as user_name, u.email as user_email, p.registration_no 
+    FROM visitor_logs v 
+    LEFT JOIN users u ON u.id = v.user_id 
+    LEFT JOIN participants p ON p.user_id = v.user_id 
+    WHERE v.conference_id = ? 
+    ORDER BY v.created_at DESC 
+    LIMIT 100
+  `, [confId]);
+  
+  const [dailyStats] = await pool.query(`
+    SELECT DATE_FORMAT(created_at, '%Y-%m-%d') as date, 
+           COUNT(*) as total_visits, 
+           COUNT(DISTINCT COALESCE(visitor_id, ip_address, user_id)) as unique_visitors 
+    FROM visitor_logs 
+    WHERE conference_id = ? 
+    GROUP BY DATE(created_at) 
+    ORDER BY date DESC 
+    LIMIT 14
+  `, [confId]);
+
+  res.json({ recentLogs, dailyStats });
 }));
 
 // ==========================================

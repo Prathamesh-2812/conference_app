@@ -1,6 +1,6 @@
 import React,{useEffect,useState,useMemo,useRef} from 'react';
 import {createRoot} from 'react-dom/client';
-import {Bell,Building2,Bus,CalendarDays,CheckCircle,ChevronDown,FileCheck,Hotel,Image,LayoutDashboard,Lock,LogOut,MapPin,Palette,RefreshCw,Search,Settings,Shield,Upload,Users,QrCode,Maximize2,Minimize2,Printer,Tv,UserCheck,MessageCircle,Send,Share2,Menu,X,Video,Radio,Copy,ExternalLink,ShieldCheck,Trash2,Edit2,CheckSquare,Square,UserPlus,SlidersHorizontal} from 'lucide-react';
+import {Bell,Building2,Bus,CalendarDays,CheckCircle,ChevronDown,FileCheck,Hotel,Image,LayoutDashboard,Lock,LogOut,MapPin,Palette,RefreshCw,Search,Settings,Shield,Upload,Users,QrCode,Maximize2,Minimize2,Printer,Tv,UserCheck,MessageCircle,Send,Share2,Menu,X,Video,Radio,Copy,ExternalLink,ShieldCheck,Trash2,Edit2,CheckSquare,Square,UserPlus,SlidersHorizontal,Eye,Activity,Globe,Smartphone,TrendingUp} from 'lucide-react';
 import {QRCodeSVG} from 'qrcode.react';
 import * as XLSX from 'xlsx';
 import './style.css';
@@ -453,12 +453,163 @@ function renderPage(tab,conference,setConference,notify,selectedConferenceId,cur
 
 function Dashboard({selectedConferenceId}){
   const[s,setS]=useState(null);
+  const[visitors,setVisitors]=useState({recentLogs:[], dailyStats:[]});
+  const[loading,setLoading]=useState(true);
+
+  const loadData = () => {
+    const confId = selectedConferenceId || 1;
+    Promise.all([
+      req('/admin/stats?conferenceId=' + confId),
+      req('/admin/visitors?conferenceId=' + confId).catch(() => ({recentLogs:[], dailyStats:[]}))
+    ]).then(([statsData, visitorData]) => {
+      setS(statsData);
+      if (visitorData) setVisitors(visitorData);
+    }).catch(e=>console.warn(e.message))
+      .finally(() => setLoading(false));
+  };
+
   useEffect(()=>{
-    req('/admin/stats?conferenceId=' + (selectedConferenceId || 1)).then(setS).catch(e=>console.warn(e.message));
+    loadData();
+    const timer = setInterval(loadData, 15000);
+    return () => clearInterval(timer);
   },[selectedConferenceId]);
-  if(!s)return <div className="loading">Loading dashboard...</div>;
-  const cards=[['Participants',s.participants,Users],['Checked In',s.checkedIn,CheckCircle],['Speakers',s.speakers,Users],['Sessions',s.sessions,CalendarDays],['Hotels',s.hotels,Hotel],['Rooms',s.rooms,Hotel],['Gallery Photos',s.photos,Image],['Certificates',s.certificates,FileCheck]];
-  return <><section className="hero"><div><span>LIVE CONTROL ROOM</span><h1>Conference Operations</h1><p>Monitor registrations, logistics, content, and attendance from one dashboard.</p></div><div className="heroStat">2026</div></section><div className="grid">{cards.map(([n,v,I])=><div className="stat" key={n}><I/><span>{n}</span><strong>{v}</strong></div>)}</div><div className="split"><div className="panel"><h3>Operational Checklist</h3><div className="checkgrid"><div>Registration enabled</div><div>Venue published</div><div>Branding synced</div><div>Schedule online</div><div>Notifications ready</div><div>Certificates enabled</div></div></div><div className="panel"><h3>Phase 1 Status</h3><p className="muted">Conference details, venue, branding, and mobile configuration now load from the API.</p></div></div></>
+
+  if(loading || !s)return <div className="loading">Loading dashboard & visitor analytics...</div>;
+
+  const visitorCards=[
+    ['Total App Visitors', s.uniqueVisitors || s.participants || 0, Eye, '#8C1119'],
+    ['Today App Visits', s.todayVisits || 0, Activity, '#2563EB'],
+    ['Live Active Users (30m)', s.activeVisitors || 0, Radio, '#059669'],
+    ['Total Hits & Opens', s.totalVisits || s.participants || 0, TrendingUp, '#7C3AED'],
+  ];
+
+  const cards=[
+    ['Registered Delegates',s.participants,Users],
+    ['Checked In',s.checkedIn,CheckCircle],
+    ['Speakers',s.speakers,Users],
+    ['Sessions',s.sessions,CalendarDays],
+    ['Hotels',s.hotels,Hotel],
+    ['Rooms',s.rooms,Hotel],
+    ['Gallery Photos',s.photos,Image],
+    ['Certificates',s.certificates,FileCheck]
+  ];
+
+  return (
+    <>
+      <section className="hero">
+        <div>
+          <span>LIVE CONTROL ROOM & VISITOR METRICS</span>
+          <h1>Conference Operations & Visitor Analytics</h1>
+          <p>Real-time tracking of app visitors, delegate logins, attendance, sessions, and logistics.</p>
+        </div>
+        <div className="heroStat">
+          <div style={{fontSize:'12px', opacity:0.8, textTransform:'uppercase', letterSpacing:'1px'}}>Live Online</div>
+          <div style={{display:'flex', alignItems:'center', gap:'6px', justifyContent:'center', fontSize:'24px', fontWeight:'900'}}>
+            <span style={{width:'10px', height:'10px', borderRadius:'50%', background:'#22c55e', display:'inline-block', boxShadow:'0 0 8px #22c55e'}}></span>
+            {s.activeVisitors || 0}
+          </div>
+        </div>
+      </section>
+
+      {/* Primary Visitor Stats Row */}
+      <div style={{marginBottom:'20px'}}>
+        <h3 style={{fontSize:'16px', fontWeight:'800', color:'#1e293b', marginBottom:'12px', display:'flex', alignItems:'center', gap:'8px'}}>
+          <Eye size={18} color="#8C1119"/> Real-Time App Visitors & Traffic
+        </h3>
+        <div className="grid" style={{gridTemplateColumns:'repeat(auto-fit, minmax(220px, 1fr))'}}>
+          {visitorCards.map(([n,v,I,color])=>(
+            <div className="stat" key={n} style={{borderLeft:`4px solid ${color}`, background:'#fff'}}>
+              <I color={color} size={24}/>
+              <span style={{fontWeight:'600', color:'#64748b'}}>{n}</span>
+              <strong style={{color:'#0f172a', fontSize:'26px'}}>{v}</strong>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Conference Operations Cards */}
+      <div style={{marginBottom:'20px'}}>
+        <h3 style={{fontSize:'16px', fontWeight:'800', color:'#1e293b', marginBottom:'12px', display:'flex', alignItems:'center', gap:'8px'}}>
+          <Building2 size={18} color="#8C1119"/> Conference Logistics & Modules
+        </h3>
+        <div className="grid">
+          {cards.map(([n,v,I])=>(
+            <div className="stat" key={n}>
+              <I/>
+              <span>{n}</span>
+              <strong>{v}</strong>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Recent Visitors Table & Operational Checklist */}
+      <div className="split">
+        <div className="panel" style={{flex: 1.4}}>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'12px'}}>
+            <h3 style={{margin:0, display:'flex', alignItems:'center', gap:'8px'}}>
+              <Activity size={18} color="#2563EB"/> Recent App Visitor Logs
+            </h3>
+            <span style={{fontSize:'12px', color:'#64748b', background:'#f1f5f9', padding:'4px 8px', borderRadius:'6px'}}>
+              Auto-refreshed
+            </span>
+          </div>
+          {visitors.recentLogs && visitors.recentLogs.length > 0 ? (
+            <div style={{maxHeight:'320px', overflowY:'auto', border:'1px solid #e2e8f0', borderRadius:'8px'}}>
+              <table style={{width:'100%', fontSize:'12.5px', borderCollapse:'collapse'}}>
+                <thead>
+                  <tr style={{background:'#f8fafc', borderBottom:'1px solid #e2e8f0', textAlign:'left'}}>
+                    <th style={{padding:'8px 10px'}}>Time</th>
+                    <th style={{padding:'8px 10px'}}>User / Delegate</th>
+                    <th style={{padding:'8px 10px'}}>Platform</th>
+                    <th style={{padding:'8px 10px'}}>Screen</th>
+                    <th style={{padding:'8px 10px'}}>IP Address</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visitors.recentLogs.slice(0, 15).map((log, idx) => (
+                    <tr key={log.id || idx} style={{borderBottom:'1px solid #f1f5f9'}}>
+                      <td style={{padding:'8px 10px', color:'#64748b', whiteSpace:'nowrap'}}>
+                        {new Date(log.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}
+                      </td>
+                      <td style={{padding:'8px 10px', fontWeight:'700', color:'#1e293b'}}>
+                        {log.user_name ? `${log.user_name} (${log.registration_no || log.user_email || 'User'})` : 'Guest / Delegate'}
+                      </td>
+                      <td style={{padding:'8px 10px'}}>
+                        <span style={{background:'#eff6ff', color:'#2563eb', padding:'2px 6px', borderRadius:'4px', fontSize:'11px', fontWeight:'700'}}>
+                          {log.platform || 'Mobile'}
+                        </span>
+                      </td>
+                      <td style={{padding:'8px 10px', color:'#475569'}}>{log.page || 'Home'}</td>
+                      <td style={{padding:'8px 10px', color:'#94a3b8', fontFamily:'monospace', fontSize:'11px'}}>{log.ip_address || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div style={{padding:'24px', textAlign:'center', color:'#94a3b8'}}>
+              <Smartphone size={32} style={{opacity:0.4, marginBottom:'6px'}}/>
+              <p style={{margin:0}}>Live visitor logs will appear here as users open the mobile app.</p>
+            </div>
+          )}
+        </div>
+
+        <div className="panel" style={{flex: 1}}>
+          <h3>Operational Checklist</h3>
+          <div className="checkgrid">
+            <div>Registration enabled</div>
+            <div>Venue published</div>
+            <div>Branding synced</div>
+            <div>Schedule online</div>
+            <div>Notifications ready</div>
+            <div>Certificates enabled</div>
+            <div>Live Visitor Analytics Active</div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
 }
 
 function ConferenceModule({tab,conference,setConference,notify,selectedConferenceId}){

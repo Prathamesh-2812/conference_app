@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -97,7 +97,16 @@ String formatTimeRange(dynamic startTime, dynamic endTime) {
 String resolveSpeakerPhoto(dynamic rawPhoto) {
   if (rawPhoto == null) return '';
   final str = rawPhoto.toString().trim();
-  if (str.isEmpty || str == 'null' || str.contains('photo-1534528741775-53994a69daeb')) {
+  if (str.isEmpty || 
+      str == 'null' || 
+      str == 'undefined' || 
+      str.contains('unsplash.com') || 
+      str.contains('placeholder') || 
+      str.contains('default') || 
+      str.contains('dummy') || 
+      str.contains('avatar') || 
+      str.contains('photo-1534528741775-53994a69daeb') || 
+      str.contains('photo-1494790108377')) {
     return '';
   }
   if (str.startsWith('http://') || str.startsWith('https://') || str.startsWith('data:image')) {
@@ -114,35 +123,44 @@ bool isFemaleGender(String? name, [String? designation, String? gender]) {
 
   final combined = '${name ?? ''} ${designation ?? ''}'.toLowerCase();
   
-  // Female honorifics & titles
   final femaleTitleRegex = RegExp(r'\b(mrs|ms|smt|miss|dr\s*\(\s*mrs\s*\)|dr\s*\(\s*ms\s*\)|dr\s*mrs|dr\s*ms|sister|madam|shrimati|smt\.)\b', caseSensitive: false);
   if (femaleTitleRegex.hasMatch(combined)) return true;
 
-  // Male honorifics & titles
-  final maleTitleRegex = RegExp(r'\b(mr|shri|shree|master|sir|dr\s*mr)\b', caseSensitive: false);
-  if (maleTitleRegex.hasMatch(combined)) return false;
+  final maleTitleRegex = RegExp(r'\b(mr|shri|shree|master|sir|dr\s*mr|col\.|col|colonel|brig\.|brig|brigadier|maj\.|maj|major|gen\.|gen|general|capt\.|capt|captain|lt\.|lt)\b', caseSensitive: false);
+  if (maleTitleRegex.hasMatch(combined) && !femaleTitleRegex.hasMatch(combined)) return false;
 
-  // Check first / clean name tokens
-  final cleanName = (name ?? '').replaceAll(RegExp(r'^(dr|prof|dr\.|prof\.|mr|mrs|ms|smt)\.?\s*', caseSensitive: false), '').trim().toLowerCase();
-  final tokens = cleanName.split(RegExp(r'\s+'));
-  final firstName = tokens.isNotEmpty ? tokens.first : '';
+  final cleanName = (name ?? '').replaceAll(RegExp(r'^(col|colonel|brig|brigadier|maj|major|gen|general|capt|captain|lt|dr|prof|mr|mrs|ms|smt|shri|shree)\.?\s*', caseSensitive: false), '').trim().toLowerCase();
+  final tokens = cleanName.split(RegExp(r'[\s\.\,\-_]+'));
 
   const femaleNames = {
     'priya', 'anita', 'sunita', 'sneha', 'pooja', 'puja', 'neha', 'deepa', 'deepika', 'shweta', 'swati', 'swetha',
     'rashmi', 'vandana', 'archana', 'meena', 'kavita', 'anjali', 'jyoti', 'rekha', 'smita', 'seema',
     'tanvi', 'sonal', 'ritu', 'pallavi', 'prerna', 'namrata', 'payal', 'monika', 'mona', 'roshni',
-    'sheetal', 'shilpa', 'richa', 'divya', 'shruti', 'radhika', 'madhuri', 'leena', 'geeta', 'gita',
+    'sheetal', 'shital', 'shilpa', 'richa', 'divya', 'shruti', 'radhika', 'madhuri', 'leena', 'geeta', 'gita',
     'rani', 'rupa', 'rupali', 'vidya', 'alka', 'usha', 'sarita', 'sandhya', 'chitra', 'maya',
-    'manju', 'preeti', 'priti', 'nandini', 'amrita', 'aditi', 'arpita', 'bhavna', 'poonam', 'ananya',
+    'manju', 'preeti', 'priti', 'nandini', 'amrita', 'amruta', 'aditi', 'arpita', 'bhavna', 'poonam', 'ananya',
     'aarti', 'arti', 'aishwarya', 'meenakshi', 'sudha', 'sujata', 'sadhana', 'supriya', 'sangeeta', 'savita',
     'saroj', 'pramila', 'renuka', 'urvashi', 'kiran', 'komal', 'kalpana', 'lata', 'jaya', 'hansa',
     'daksha', 'chetna', 'bina', 'beena', 'asha', 'anuradha', 'alpa', 'alpana', 'akanksha', 'snehal',
     'vaishali', 'ashwini', 'prachi', 'sayali', 'tejaswini', 'manisha', 'shubhangi', 'yogita', 'rohini',
     'pranjal', 'pranali', 'mrunal', 'ketaki', 'devyani', 'trupti', 'pratiksha', 'gauri', 'kasturi',
-    'tanuja', 'anupama', 'aparna', 'ruchira', 'fatima', 'ayesha', 'mary', 'sarah', 'lisa', 'emily', 'anna', 'maria'
+    'tanuja', 'anupama', 'aparna', 'ruchira', 'fatima', 'ayesha', 'mary', 'sarah', 'lisa', 'emily', 'anna', 'maria',
+    'priyanka', 'nisha', 'deepali', 'sonali', 'monali', 'kajal', 'kranti', 'shraddha', 'shradha', 'shashi', 'varsha',
+    'megha', 'anagha', 'hema', 'hemangi', 'harsha', 'namita', 'jyotsna', 'shobha', 'veena', 'vimal', 'sarojini', 'leela',
+    'sharda', 'sharada', 'chhaya', 'kusum', 'kamal', 'pushpa', 'sulabha', 'prabhavati', 'shanti', 'parvati', 'laxmi',
+    'lakshmi', 'saraswati', 'durga', 'bhagwati', 'shakuntala', 'vasanti', 'mohini', 'nalini', 'padmini', 'kamla',
+    'kamala', 'indira', 'kalyani', 'madhavi', 'manasi', 'mansee', 'mrunalini', 'mugdha', 'nayana', 'neelam', 'padma',
+    'padmaja', 'pari', 'rajashree', 'rajshree', 'reshma', 'ruchika', 'rutuja', 'sakshi', 'sampada', 'sanjivani', 'sanjana',
+    'sarika', 'saumya', 'somya', 'shailaja', 'shikha', 'shivani', 'shobhana', 'shravani', 'shreya', 'shubha', 'siddhi',
+    'sidhi', 'suchitra', 'sudeshna', 'sumedha', 'sumitra', 'suniti', 'suparna', 'surabhi', 'surbhi', 'sushma', 'sushila',
+    'swapna', 'swapnali', 'tanaya', 'tanu', 'teja', 'tejal', 'tejaswi', 'uma', 'unnati', 'upasana', 'urmila', 'utkarsha',
+    'vaidehi', 'vanita', 'vasudha', 'vedika', 'vibha', 'vidhi', 'vijaya', 'vinita', 'vrinda', 'vrushali', 'yashaswi', 'yashoda'
   };
 
-  return femaleNames.contains(firstName);
+  for (final token in tokens) {
+    if (femaleNames.contains(token)) return true;
+  }
+  return false;
 }
 
 Widget buildGenderAvatarFallback({
@@ -152,7 +170,7 @@ Widget buildGenderAvatarFallback({
   double borderRadius = 20,
   bool isCircle = false,
 }) {
-  final primaryColor = isFemale ? const Color(0xFFBE123C) : const Color(0xFF8C1119);
+  final primaryColor = isFemale ? const Color(0xFFBE123C) : const Color(0xFF1E40AF);
   final icon = isFemale ? Icons.face_3_rounded : Icons.face_6_rounded;
 
   return Container(
@@ -164,9 +182,13 @@ Widget buildGenderAvatarFallback({
       gradient: LinearGradient(
         colors: isFemale
             ? [const Color(0xFFFFF1F2), const Color(0xFFFCE7F3)]
-            : [const Color(0xFFF8FAFC), const Color(0xFFE2E8F0)],
+            : [const Color(0xFFEFF6FF), const Color(0xFFDBEAFE)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
+      ),
+      border: Border.all(
+        color: isFemale ? const Color(0xFFFDA4AF) : const Color(0xFF93C5FD),
+        width: 1.2,
       ),
     ),
     child: Center(
@@ -1732,7 +1754,9 @@ class _MainMediaSliderState extends State<MainMediaSlider> {
                     ] else ...[
                       Image.network(
                         fullUrl,
-                        fit: BoxFit.contain,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: double.infinity,
                         alignment: Alignment.center,
                         errorBuilder: (context, error, stackTrace) => Container(
                           color: const Color(0xFFF8FAFC),
@@ -1742,6 +1766,7 @@ class _MainMediaSliderState extends State<MainMediaSlider> {
                         ),
                       ),
                     ],
+
 
                     if (badgeText.isNotEmpty)
                       Positioned(
@@ -1780,16 +1805,21 @@ class _MainMediaSliderState extends State<MainMediaSlider> {
                         ),
                       ),
 
-                    if (title.isNotEmpty && title.trim().toLowerCase() != 'banner' && title.trim().toLowerCase() != 'main screen slide')
+                    if (title.isNotEmpty &&
+                        title.trim().toLowerCase() != 'banner' &&
+                        title.trim().toLowerCase() != 'main screen slide' &&
+                        !title.toLowerCase().contains('mapcon') &&
+                        !title.toLowerCase().contains('annual conference') &&
+                        !title.toLowerCase().contains('d. y. patil'))
                       Positioned(
                         bottom: 0,
                         left: 0,
                         right: 0,
                         child: Container(
-                          padding: const EdgeInsets.fromLTRB(14, 24, 14, 12),
+                          padding: const EdgeInsets.fromLTRB(14, 18, 14, 10),
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
-                              colors: [Colors.transparent, Colors.black.withOpacity(0.88)],
+                              colors: [Colors.transparent, Colors.black.withOpacity(0.65)],
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
                             ),
@@ -1799,8 +1829,8 @@ class _MainMediaSliderState extends State<MainMediaSlider> {
                             style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.w800,
-                              fontSize: 13.5,
-                              height: 1.25,
+                              fontSize: 13,
+                              height: 1.2,
                               shadows: [
                                 Shadow(color: Colors.black, blurRadius: 4),
                               ],
@@ -1852,7 +1882,17 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadUserProfile();
+    _trackAppVisit();
     RealtimeSyncService.instance.syncNotifier.addListener(_loadUserProfile);
+  }
+
+  Future<void> _trackAppVisit() async {
+    try {
+      await ApiService.post('/track-visit', {
+        'page': 'HomeScreen',
+        'platform': 'Flutter Mobile'
+      });
+    } catch (_) {}
   }
 
   @override
@@ -3556,6 +3596,141 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     return const Color(0xFF475569);
   }
 
+  DateTime? _parseTimeToToday(String timeStr, DateTime today) {
+    final clean = timeStr.trim().toUpperCase();
+    if (clean.isEmpty) return null;
+    try {
+      bool isPm = clean.contains('PM');
+      bool isAm = clean.contains('AM');
+      String digitsOnly = clean.replaceAll(RegExp(r'[^\d:]'), '');
+      final parts = digitsOnly.split(':');
+      if (parts.isEmpty) return null;
+      int? hour = int.tryParse(parts[0]);
+      int minute = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
+      if (hour == null) return null;
+      if (isPm && hour < 12) hour += 12;
+      if (isAm && hour == 12) hour = 0;
+      return DateTime(today.year, today.month, today.day, hour, minute);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool _isSessionLiveNow(dynamic session) {
+    try {
+      final dateRaw = (session['session_date'] ?? '').toString();
+      if (dateRaw.isEmpty) return false;
+      
+      final dateClean = dateRaw.split('T')[0].split(' ')[0].trim();
+      final dParts = dateClean.split('-');
+      if (dParts.length != 3) return false;
+      final y = int.tryParse(dParts[0]);
+      final m = int.tryParse(dParts[1]);
+      final d = int.tryParse(dParts[2]);
+      if (y == null || m == null || d == null) return false;
+      
+      final now = DateTime.now();
+      // If session date is not today, it is not live!
+      if (now.year != y || now.month != m || now.day != d) {
+        return false;
+      }
+      
+      final sTimeStr = (session['start_time'] ?? '').toString().trim();
+      final eTimeStr = (session['end_time'] ?? '').toString().trim();
+      if (sTimeStr.isEmpty) {
+        return session['is_live'] == 1 || session['is_live'] == true;
+      }
+      
+      final startDt = _parseTimeToToday(sTimeStr, now);
+      final endDt = eTimeStr.isNotEmpty ? _parseTimeToToday(eTimeStr, now) : null;
+      if (startDt != null) {
+        final effectiveStart = startDt.subtract(const Duration(minutes: 5));
+        final effectiveEnd = endDt != null ? endDt.add(const Duration(minutes: 5)) : startDt.add(const Duration(hours: 1));
+        return now.isAfter(effectiveStart) && now.isBefore(effectiveEnd);
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Widget _buildThematicIcon(String title, String category, Color catColor, double size) {
+    IconData iconData = Icons.event_note_rounded;
+    if (title.contains('registration') || category.contains('registration')) {
+      iconData = Icons.how_to_reg_rounded;
+    } else if (title.contains('inaugur') || category.contains('inaugur') || category.contains('ceremony')) {
+      iconData = Icons.celebration_rounded;
+    } else if (title.contains('keynote') || category.contains('keynote') || title.contains('oration')) {
+      iconData = Icons.school_rounded;
+    } else if (title.contains('panel') || category.contains('panel') || title.contains('symposium') || category.contains('symposium')) {
+      iconData = Icons.groups_rounded;
+    } else if (title.contains('cme') || category.contains('cme') || title.contains('workshop') || category.contains('workshop')) {
+      iconData = Icons.biotech_rounded;
+    } else if (title.contains('lunch') || title.contains('dinner') || title.contains('tea') || title.contains('breakfast') || title.contains('banquet')) {
+      iconData = Icons.restaurant_rounded;
+    } else if (title.contains('valedictory') || category.contains('valedictory') || title.contains('award') || title.contains('prize')) {
+      iconData = Icons.emoji_events_rounded;
+    } else if (title.contains('poster') || title.contains('paper') || title.contains('oral')) {
+      iconData = Icons.description_rounded;
+    } else if (title.contains('quiz')) {
+      iconData = Icons.psychology_rounded;
+    } else {
+      iconData = Icons.mic_none_rounded;
+    }
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: catColor.withOpacity(0.12),
+        shape: BoxShape.circle,
+        border: Border.all(color: catColor.withOpacity(0.35), width: 1.2),
+      ),
+      child: Center(
+        child: Icon(
+          iconData,
+          size: size * 0.52,
+          color: catColor,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSessionLeadingIcon(dynamic session, {double size = 38}) {
+    final title = (session['title'] ?? '').toString().toLowerCase();
+    final category = (session['category'] ?? '').toString().toLowerCase();
+    final speakerName = (session['speaker_name'] ?? '').toString().trim();
+    final photoRaw = session['speaker_photo'];
+    final photoUrl = resolveSpeakerPhoto(photoRaw);
+    final catColor = _getCategoryColor(session['category']);
+
+    final isTba = speakerName.isEmpty || 
+                  speakerName.toLowerCase().contains('to be announced') || 
+                  speakerName.toLowerCase().contains('tba') || 
+                  speakerName.toLowerCase().contains('guest speaker') ||
+                  title.contains('registration') ||
+                  title.contains('inaugur') ||
+                  title.contains('valedictory') ||
+                  title.contains('lunch') ||
+                  title.contains('tea') ||
+                  title.contains('breakfast');
+
+    if (!isTba && photoUrl.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(size / 2),
+        child: Image.network(
+          photoUrl,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _buildThematicIcon(title, category, catColor, size),
+        ),
+      );
+    }
+
+    return _buildThematicIcon(title, category, catColor, size);
+  }
+
   void _showSessionDetails(BuildContext context, dynamic session) {
     final title = session['title'] ?? 'Session Details';
     final dateStr = formatSessionDate(session['session_date']);
@@ -3565,10 +3740,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     final category = session['category'] ?? 'General';
     final photoUrl = resolveSpeakerPhoto(session['speaker_photo']);
     final catColor = _getCategoryColor(category);
-    final zoomLink = (session['zoom_link'] ?? 'https://zoom.us/j/84512948123?pwd=MAPCON2026HYBRID').toString().trim();
+    final rawZoom = (session['zoom_link'] ?? '').toString().trim();
+    final zoomLink = (rawZoom == 'null' || rawZoom == 'undefined') ? '' : rawZoom;
     final meetingId = (session['meeting_id'] ?? '845 1294 8123').toString().trim();
     final passcode = (session['passcode'] ?? 'MAPCON2026').toString().trim();
-    final isLive = session['is_live'] == 1 || session['is_live'] == true;
+    final isLive = _isSessionLiveNow(session);
 
     showModalBottomSheet(
       context: context,
@@ -3759,27 +3935,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             const SizedBox(height: 10),
             Row(
               children: [
-                Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: maroon, width: 2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: maroon.withOpacity(0.15),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: buildSpeakerAvatarWidget(
-                    rawPhoto: session['speaker_photo'],
-                    name: speakerName,
-                    designation: category,
-                    width: 52,
-                    height: 52,
-                    isCircle: true,
-                  ),
-                ),
+                _buildSessionLeadingIcon(session, size: 52),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
@@ -4050,32 +4206,57 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                                   ),
                                                 ),
                                               ),
-                                              if ((x['zoom_link'] ?? '').toString().isNotEmpty || x['is_live'] == 1 || x['is_live'] == true) ...[
-                                                const SizedBox(width: 6),
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
-                                                  decoration: BoxDecoration(
-                                                    color: ((x['is_live'] == 1 || x['is_live'] == true) ? const Color(0xFFDC2626) : const Color(0xFF2563EB)).withOpacity(0.12),
-                                                    borderRadius: BorderRadius.circular(8),
-                                                    border: Border.all(color: ((x['is_live'] == 1 || x['is_live'] == true) ? const Color(0xFFDC2626) : const Color(0xFF2563EB)).withOpacity(0.4)),
-                                                  ),
-                                                  child: Row(
-                                                    mainAxisSize: MainAxisSize.min,
-                                                    children: [
-                                                      Icon((x['is_live'] == 1 || x['is_live'] == true) ? Icons.fiber_manual_record : Icons.videocam_rounded, size: 10, color: (x['is_live'] == 1 || x['is_live'] == true) ? const Color(0xFFDC2626) : const Color(0xFF2563EB)),
-                                                      const SizedBox(width: 3.5),
-                                                      Text(
-                                                        (x['is_live'] == 1 || x['is_live'] == true) ? 'LIVE' : 'ZOOM',
-                                                        style: TextStyle(
-                                                          color: (x['is_live'] == 1 || x['is_live'] == true) ? const Color(0xFFDC2626) : const Color(0xFF2563EB),
-                                                          fontSize: 9.5,
-                                                          fontWeight: FontWeight.w900,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ],
+                                              if (_isSessionLiveNow(x)) ...[
+                                                 const SizedBox(width: 6),
+                                                 Container(
+                                                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+                                                   decoration: BoxDecoration(
+                                                     color: const Color(0xFFDC2626).withOpacity(0.12),
+                                                     borderRadius: BorderRadius.circular(8),
+                                                     border: Border.all(color: const Color(0xFFDC2626).withOpacity(0.4)),
+                                                   ),
+                                                   child: const Row(
+                                                     mainAxisSize: MainAxisSize.min,
+                                                     children: [
+                                                       Icon(Icons.fiber_manual_record, size: 10, color: Color(0xFFDC2626)),
+                                                       SizedBox(width: 3.5),
+                                                       Text(
+                                                         'LIVE',
+                                                         style: TextStyle(
+                                                           color: Color(0xFFDC2626),
+                                                           fontSize: 9.5,
+                                                           fontWeight: FontWeight.w900,
+                                                         ),
+                                                       ),
+                                                     ],
+                                                   ),
+                                                 ),
+                                               ] else if ((x['zoom_link'] ?? '').toString().trim().isNotEmpty && (x['zoom_link'] ?? '').toString().trim() != 'null' && (x['zoom_link'] ?? '').toString().trim() != 'undefined') ...[
+                                                 const SizedBox(width: 6),
+                                                 Container(
+                                                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+                                                   decoration: BoxDecoration(
+                                                     color: const Color(0xFF2563EB).withOpacity(0.12),
+                                                     borderRadius: BorderRadius.circular(8),
+                                                     border: Border.all(color: const Color(0xFF2563EB).withOpacity(0.4)),
+                                                   ),
+                                                   child: const Row(
+                                                     mainAxisSize: MainAxisSize.min,
+                                                     children: [
+                                                       Icon(Icons.videocam_rounded, size: 10, color: Color(0xFF2563EB)),
+                                                       SizedBox(width: 3.5),
+                                                       Text(
+                                                         'ZOOM',
+                                                         style: TextStyle(
+                                                           color: Color(0xFF2563EB),
+                                                           fontSize: 9.5,
+                                                           fontWeight: FontWeight.w900,
+                                                         ),
+                                                       ),
+                                                     ],
+                                                   ),
+                                                 ),
+                                               ],
                                               const Spacer(),
                                               Container(
                                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -4138,22 +4319,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                           // Bottom Row: Speaker, Hall & Bookmark
                                           Row(
                                             children: [
-                                              Container(
-                                                width: 38,
-                                                height: 38,
-                                                decoration: BoxDecoration(
-                                                  shape: BoxShape.circle,
-                                                  border: Border.all(color: maroon.withOpacity(0.3), width: 1.5),
-                                                ),
-                                                child: buildSpeakerAvatarWidget(
-                                                   rawPhoto: x['speaker_photo'],
-                                                   name: speakerName,
-                                                   designation: category,
-                                                   width: 38,
-                                                   height: 38,
-                                                   isCircle: true,
-                                                 ),
-                                              ),
+                                              _buildSessionLeadingIcon(x, size: 38),
                                               const SizedBox(width: 10),
                                               Expanded(
                                                 child: Column(
