@@ -3812,67 +3812,20 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     }
   }
 
-  Widget _buildThematicIcon(String title, String category, Color catColor, double size) {
-    IconData iconData = Icons.mic;
-    Color primaryColor = maroon;
-    Color bgColor = const Color(0xFFFEF2F2);
-    Color borderColor = const Color(0xFFFECACA);
-
-    if (title.contains('registration') || category.contains('registration')) {
-      iconData = Icons.person;
-      primaryColor = const Color(0xFF059669);
-      bgColor = const Color(0xFFECFDF5);
-      borderColor = const Color(0xFFA7F3D0);
-    } else if (title.contains('inaugur') || category.contains('inaugur') || category.contains('ceremony')) {
-      iconData = Icons.star;
-      primaryColor = maroon;
-      bgColor = const Color(0xFFFEF2F2);
-      borderColor = const Color(0xFFFECACA);
-    } else if (title.contains('keynote') || category.contains('keynote') || title.contains('oration')) {
-      iconData = Icons.mic;
-      primaryColor = const Color(0xFFD97706);
-      bgColor = const Color(0xFFFFFBEB);
-      borderColor = const Color(0xFFFDE68A);
-    } else if (title.contains('panel') || category.contains('panel') || title.contains('symposium') || category.contains('symposium')) {
-      iconData = Icons.group;
-      primaryColor = const Color(0xFF7C3AED);
-      bgColor = const Color(0xFFFAF5FF);
-      borderColor = const Color(0xFFE9D5FF);
-    } else if (title.contains('cme') || category.contains('cme') || title.contains('workshop') || category.contains('workshop')) {
-      iconData = Icons.school;
-      primaryColor = const Color(0xFF2563EB);
-      bgColor = const Color(0xFFEFF6FF);
-      borderColor = const Color(0xFFBFDBFE);
-    } else if (title.contains('lunch') || title.contains('dinner') || title.contains('tea') || title.contains('breakfast') || title.contains('banquet')) {
-      iconData = Icons.restaurant;
-      primaryColor = const Color(0xFFEA580C);
-      bgColor = const Color(0xFFFFF7ED);
-      borderColor = const Color(0xFFFED7AA);
-    } else if (title.contains('valedictory') || category.contains('valedictory') || title.contains('award') || title.contains('prize')) {
-      iconData = Icons.star;
-      primaryColor = const Color(0xFF059669);
-      bgColor = const Color(0xFFECFDF5);
-      borderColor = const Color(0xFFA7F3D0);
-    } else {
-      iconData = Icons.mic;
-      primaryColor = maroon;
-      bgColor = const Color(0xFFFEF2F2);
-      borderColor = const Color(0xFFFECACA);
-    }
-
+    Widget _buildThematicIcon(String title, String category, Color catColor, double size) {
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: bgColor,
+        color: const Color(0xFFECFDF5),
         shape: BoxShape.circle,
-        border: Border.all(color: borderColor, width: 1.5),
+        border: Border.all(color: const Color(0xFFA7F3D0), width: 1.5),
       ),
       child: Center(
         child: Icon(
-          iconData,
+          Icons.person,
           size: size * 0.55,
-          color: primaryColor,
+          color: const Color(0xFF059669),
         ),
       ),
     );
