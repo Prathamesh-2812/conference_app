@@ -387,6 +387,10 @@ async function runMigrations(){
       if(!ucRows.length){
         await pool.query("ALTER TABLE participants ADD UNIQUE KEY user_conf_unique (user_id, conference_id)");
       }
+      await pool.query("ALTER TABLE users ADD INDEX idx_users_email (email)").catch(() => {});
+      await pool.query("ALTER TABLE users ADD INDEX idx_users_phone (phone)").catch(() => {});
+      await pool.query("ALTER TABLE participants ADD INDEX idx_participants_reg (registration_no)").catch(() => {});
+      await pool.query("ALTER TABLE participants ADD INDEX idx_participants_conf (conference_id)").catch(() => {});
     } catch(migErr) {
       console.warn("Participants composite key migration notice:", migErr.message);
     }
