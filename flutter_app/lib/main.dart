@@ -7694,78 +7694,31 @@ class DigitalIdScreen extends StatelessWidget {
   }
 }
 
-class CertificateScreen extends StatefulWidget {
+class CertificateScreen extends StatelessWidget {
   const CertificateScreen({super.key});
 
-  @override
-  State<CertificateScreen> createState() => _CertificateScreenState();
-}
+  static const String feedbackUrl = 'https://mapcon2026kop.com/feedback.php';
 
-class _CertificateScreenState extends State<CertificateScreen> {
-  bool _isLoading = true;
-  String _feedbackUrl = 'https://dypesconf.io/feedback';
-  String _buttonText = 'Fill Feedback Form';
-  String _description = 'Please submit the official conference feedback form to evaluate sessions and receive your conference credentials.';
-  Map<String, dynamic>? _participant;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadFeedbackLink();
-  }
-
-  Future<void> _loadFeedbackLink() async {
+  Future<void> _openFeedback(BuildContext context) async {
     try {
-      final res = await ApiService.get('/conference/feedback-link');
-      if (res is Map && mounted) {
-        setState(() {
-          _feedbackUrl = res['certificateFeedbackUrl']?.toString() ?? _feedbackUrl;
-          _buttonText = res['feedbackButtonText']?.toString() ?? _buttonText;
-          _description = res['feedbackDescription']?.toString() ?? _description;
-        });
-      }
-    } catch (_) {}
-
-    try {
-      final me = await ApiService.get('/me/profile');
-      if (me is Map && mounted) {
-        setState(() {
-          _participant = me['participant'] is Map ? Map<String, dynamic>.from(me['participant']) : null;
-        });
-      }
-    } catch (_) {}
-
-    if (mounted) {
-      setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _launchFeedbackUrl(String url) async {
-    final cleanUrl = url.trim();
-    if (cleanUrl.isEmpty) return;
-
-    final targetUrl = (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://'))
-        ? cleanUrl
-        : 'https://$cleanUrl';
-
-    try {
-      final uri = Uri.parse(targetUrl);
+      final uri = Uri.parse(feedbackUrl);
       final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!launched && mounted) {
+      if (!launched && context.mounted) {
+        await Clipboard.setData(const ClipboardData(text: feedbackUrl));
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Could not launch $targetUrl. Link copied to clipboard.'),
+          const SnackBar(
+            content: Text('Link copied: https://mapcon2026kop.com/feedback.php'),
             backgroundColor: maroon,
           ),
         );
-        await Clipboard.setData(ClipboardData(text: targetUrl));
       }
     } catch (e) {
-      if (mounted) {
+      if (context.mounted) {
+        await Clipboard.setData(const ClipboardData(text: feedbackUrl));
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to open link: $e'),
-            backgroundColor: Colors.red,
+          const SnackBar(
+            content: Text('Opening in browser... Link copied: https://mapcon2026kop.com/feedback.php'),
+            backgroundColor: maroon,
           ),
         );
       }
@@ -7775,14 +7728,11 @@ class _CertificateScreenState extends State<CertificateScreen> {
   @override
   Widget build(BuildContext context) {
     final conference = ConferenceScope.of(context);
-    final confFeedbackUrl = conference.settings['certificateFeedbackUrl']?.toString() ?? _feedbackUrl;
-    final confButtonText = conference.settings['feedbackButtonText']?.toString() ?? _buttonText;
-    final confDescription = conference.settings['feedbackDescription']?.toString() ?? _description;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Conference Feedback & Certificate', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Colors.white)),
+        title: const Text('Feedback & Certificate', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Colors.white)),
         backgroundColor: maroon,
         elevation: 0,
         centerTitle: true,
@@ -7791,265 +7741,121 @@ class _CertificateScreenState extends State<CertificateScreen> {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: maroon))
-          : SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Header Hero Card
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [maroon, Color(0xFF5C0008)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(22),
-                      boxShadow: [
-                        BoxShadow(
-                          color: maroon.withOpacity(0.28),
-                          blurRadius: 18,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        Container(
-                          width: 72,
-                          height: 72,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.12),
-                            shape: BoxShape.circle,
-                            border: Border.all(color: gold.withOpacity(0.6), width: 2),
-                          ),
-                          child: const Center(
-                            child: Icon(Icons.rate_review_rounded, color: gold, size: 38),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          conference.shortName.isNotEmpty ? conference.shortName : 'MAPCON 2026',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: gold,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        const Text(
-                          'Official Conference Feedback',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 20,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -0.3,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          conference.description.isNotEmpty ? conference.description : 'D. Y. Patil Education Society • Kolhapur',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.85),
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Certificate & Feedback Card
+              Container(
+                padding: const EdgeInsets.all(28),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [maroon, Color(0xFF5C0008)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                  const SizedBox(height: 20),
-
-                  // Delegate Info Badge
-                  if (_participant != null) ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.grey.shade200, width: 1.2),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.03),
-                            blurRadius: 10,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: maroon.withOpacity(0.08),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(Icons.badge_rounded, color: maroon, size: 24),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _participant?['name'] ?? _participant?['participant_name'] ?? 'Registered Delegate',
-                                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5, color: slate),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Reg No: ${_participant?['registration_no'] ?? 'MAPCON-2026'} â€¢ ${_participant?['category'] ?? 'Delegate'}',
-                                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w600),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: maroon.withOpacity(0.3),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
                     ),
-                    const SizedBox(height: 18),
                   ],
-
-                  // Instructions Card
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: Colors.grey.shade200, width: 1.2),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFEFF6FF),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Icon(Icons.info_outline_rounded, color: Color(0xFF2563EB), size: 18),
-                            ),
-                            const SizedBox(width: 10),
-                            const Text(
-                              'Feedback Portal Instructions',
-                              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: slate),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          confDescription.isNotEmpty
-                              ? confDescription
-                              : 'Please submit your feedback on the official evaluation portal to provide session feedback and receive conference credentials.',
-                          style: const TextStyle(
-                            fontSize: 13.5,
-                            color: Color(0xFF475569),
-                            height: 1.5,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFEF3C7),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: const Color(0xFFFDE68A)),
-                          ),
-                          child: const Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('ðŸ’¡ ', style: TextStyle(fontSize: 14)),
-                              Expanded(
-                                child: Text(
-                                  'Tapping the button below will open the official feedback website form in your browser.',
-                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF92400E), height: 1.35),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 26),
-
-                  // The Primary Website Feedback Action Button
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: maroon,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
-                      elevation: 6,
-                      shadowColor: maroon.withOpacity(0.4),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: gold.withOpacity(0.8), width: 2.5),
+                      ),
+                      child: const Center(
+                        child: Icon(Icons.workspace_premium_rounded, color: gold, size: 44),
                       ),
                     ),
-                    onPressed: () => _launchFeedbackUrl(confFeedbackUrl),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.open_in_browser_rounded, color: gold, size: 24),
-                        const SizedBox(width: 12),
-                        Flexible(
-                          child: Text(
-                            confButtonText.isNotEmpty ? confButtonText : 'Fill Feedback Form',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
-                      ],
+                    const SizedBox(height: 20),
+                    Text(
+                      conference.shortName.isNotEmpty ? conference.shortName : 'MAPCON 2026',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: gold,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.5,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Secondary Copy Link Button
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF475569),
-                      side: BorderSide(color: Colors.grey.shade300, width: 1.2),
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Conference Certificate & Feedback',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 21,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.3,
+                      ),
                     ),
-                    icon: const Icon(Icons.copy_rounded, size: 17),
-                    label: const Text('Copy Website Link', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                    onPressed: () async {
-                      await Clipboard.setData(ClipboardData(text: confFeedbackUrl));
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('ðŸ“‹ Feedback website link copied to clipboard!'),
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 30),
-                ],
+                    const SizedBox(height: 10),
+                    Text(
+                      'Submit your conference evaluation feedback to receive and download your official certificate of participation.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 13.5,
+                        height: 1.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
+              const SizedBox(height: 32),
+
+              // The ONLY Primary Action Button
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: maroon,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
+                  elevation: 6,
+                  shadowColor: maroon.withOpacity(0.45),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                ),
+                onPressed: () => _openFeedback(context),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.rate_review_rounded, color: gold, size: 24),
+                    SizedBox(width: 12),
+                    Flexible(
+                      child: Text(
+                        'Give Feedback & Get Certificate',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 10),
+                    Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
