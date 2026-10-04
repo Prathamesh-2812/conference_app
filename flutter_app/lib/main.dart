@@ -5799,27 +5799,6 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
                           style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                         ),
                       ),
-                      if (confidence != null) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.green.shade700,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.face_retouching_natural, color: Colors.white, size: 13),
-                              const SizedBox(width: 4),
-                              Text(
-                                '$confidence',
-                                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -6000,19 +5979,6 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
               'Your Matched Photos (${_matchedPhotos.length})',
               style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: slate),
             ),
-            if (_matchedPhotos.isNotEmpty)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.green.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.green.shade200),
-                ),
-                child: Text(
-                  'AI Verified',
-                  style: TextStyle(color: Colors.green.shade800, fontWeight: FontWeight.bold, fontSize: 11),
-                ),
-              ),
           ],
         ),
         const SizedBox(height: 12),
@@ -6083,38 +6049,6 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
                           errorBuilder: (_, __, ___) => Container(
                             color: Colors.grey.shade200,
                             child: const Icon(Icons.broken_image, color: Colors.grey),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: confidence.contains('Exact') 
-                                ? const Color(0xFF047857) 
-                                : const Color(0xFF1E293B).withOpacity(0.85),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: confidence.contains('Exact') ? Colors.greenAccent : gold.withOpacity(0.7),
-                              width: 1.2,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                confidence.contains('Exact') ? Icons.check_circle : Icons.auto_awesome,
-                                color: confidence.contains('Exact') ? Colors.greenAccent : gold,
-                                size: 12,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                confidence,
-                                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800),
-                              ),
-                            ],
                           ),
                         ),
                       ),
