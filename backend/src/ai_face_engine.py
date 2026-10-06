@@ -177,7 +177,7 @@ def cmd_reindex():
                     )
                     conn.commit()
                     batch_insert.clear()
-        except Exception as err:
+        except Exception:
             pass
 
         if idx % 50 == 0 or idx == len(photos):
