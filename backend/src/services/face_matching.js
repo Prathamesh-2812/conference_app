@@ -155,7 +155,7 @@ export async function detectFaceRegions(rawBuffer) {
   ];
 }
 
-// Generate 256-d biometric feature vector from an isolated face crop
+// Generate 256-d balanced biometric feature vector from an isolated face crop
 async function computeFaceVector(faceBuffer) {
   const vec = new Float64Array(256);
   try {
@@ -165,7 +165,14 @@ async function computeFaceVector(faceBuffer) {
       .raw()
       .toBuffer();
 
-    // 1. Skin Melanin & Color Spectrum (64 dims)
+    const v1 = new Float64Array(64);
+    const v2 = new Float64Array(64);
+    const v3 = new Float64Array(64);
+    const v4 = new Float64Array(64);
+
+    const totalPixels = 32 * 32;
+
+    // 1. Skin Melanin & Color Spectrum (64 dims) - Normalized by pixel count
     for (let i = 0; i < rawRgb.length; i += 3) {
       const r = rawRgb[i];
       const g = rawRgb[i + 1];
@@ -174,7 +181,7 @@ async function computeFaceVector(faceBuffer) {
       const gBin = Math.min(3, Math.floor(g / 64));
       const bBin = Math.min(3, Math.floor(b / 64));
       const idx = rBin * 16 + gBin * 4 + bBin;
-      vec[idx] += 1.0;
+      v1[idx] += 1.0 / totalPixels;
     }
 
     // 2. Spatial Facial Gradient Moments: Forehead, Eyes, Nose, Mouth (64 dims)
@@ -196,26 +203,34 @@ async function computeFaceVector(faceBuffer) {
           }
         }
         const cell = (gy * 4 + gx) * 4;
-        vec[64 + cell] = (rSum / count) / 255.0;
-        vec[64 + cell + 1] = (gSum / count) / 255.0;
-        vec[64 + cell + 2] = (bSum / count) / 255.0;
-        vec[64 + cell + 3] = (lumSum / count) / 255.0;
+        v2[cell] = (rSum / count) / 255.0;
+        v2[cell + 1] = (gSum / count) / 255.0;
+        v2[cell + 2] = (bSum / count) / 255.0;
+        v2[cell + 3] = (lumSum / count) / 255.0;
       }
     }
 
-    // 3. Hair & Eyebrow Contrast Signatures (64 dims)
-    for (let y = 0; y < 8; y++) {
-      for (let x = 0; x < 8; x++) {
-        const idx = (y * 32 + (x * 4)) * 3;
-        const r = rawRgb[idx];
-        const g = rawRgb[idx + 1];
-        const b = rawRgb[idx + 2];
-        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-        vec[128 + (y * 8 + x)] = lum / 255.0;
+    // 3. High-Frequency Edge & Structural Gradients (64 dims)
+    for (let y = 1; y < 31; y += 4) {
+      for (let x = 1; x < 31; x += 4) {
+        const outIdx = Math.floor(y / 4) * 8 + Math.floor(x / 4);
+        if (outIdx < 64) {
+          const idxCenter = (y * 32 + x) * 3;
+          const idxRight = (y * 32 + (x + 1)) * 3;
+          const idxDown = ((y + 1) * 32 + x) * 3;
+          
+          const lumCenter = 0.299 * rawRgb[idxCenter] + 0.587 * rawRgb[idxCenter + 1] + 0.114 * rawRgb[idxCenter + 2];
+          const lumRight = 0.299 * rawRgb[idxRight] + 0.587 * rawRgb[idxRight + 1] + 0.114 * rawRgb[idxRight + 2];
+          const lumDown = 0.299 * rawRgb[idxDown] + 0.587 * rawRgb[idxDown + 1] + 0.114 * rawRgb[idxDown + 2];
+          
+          const gradX = Math.abs(lumRight - lumCenter);
+          const gradY = Math.abs(lumDown - lumCenter);
+          v3[outIdx] = Math.sqrt(gradX * gradX + gradY * gradY) / 255.0;
+        }
       }
     }
 
-    // 4. Biometric Bilateral Symmetry Moments (64 dims)
+    // 4. Bilateral Facial Symmetry Moments (64 dims)
     for (let y = 0; y < 16; y++) {
       for (let x = 0; x < 4; x++) {
         const leftIdx = (y * 2 * 32 + (x * 4)) * 3;
@@ -223,16 +238,31 @@ async function computeFaceVector(faceBuffer) {
         const leftLum = 0.299 * rawRgb[leftIdx] + 0.587 * rawRgb[leftIdx + 1] + 0.114 * rawRgb[leftIdx + 2];
         const rightLum = 0.299 * rawRgb[rightIdx] + 0.587 * rawRgb[rightIdx + 1] + 0.114 * rawRgb[rightIdx + 2];
         const symDiff = Math.abs(leftLum - rightLum) / 255.0;
-        vec[192 + (y * 4 + x)] = 1.0 - symDiff; // High symmetry = close to 1
+        v4[y * 4 + x] = 1.0 - symDiff;
       }
     }
-  } catch (_) {}
 
-  // L2 normalize vector
-  let sumSq = 0;
-  for (let i = 0; i < 256; i++) sumSq += vec[i] * vec[i];
-  const mag = Math.sqrt(sumSq) || 1;
-  for (let i = 0; i < 256; i++) vec[i] /= mag;
+    // Helper: Normalize sub-vector to target L2 norm (0.5)
+    function normalizeSub(sub) {
+      let sum = 0;
+      for (let i = 0; i < sub.length; i++) sum += sub[i] * sub[i];
+      const mag = Math.sqrt(sum) || 1;
+      for (let i = 0; i < sub.length; i++) sub[i] = (sub[i] / mag) * 0.5;
+    }
+
+    normalizeSub(v1);
+    normalizeSub(v2);
+    normalizeSub(v3);
+    normalizeSub(v4);
+
+    // Concatenate into final 256-d vector (total L2 norm = 1.0)
+    for (let i = 0; i < 64; i++) {
+      vec[i] = v1[i];
+      vec[64 + i] = v2[i];
+      vec[128 + i] = v3[i];
+      vec[192 + i] = v4[i];
+    }
+  } catch (_) {}
 
   return Array.from(vec);
 }
@@ -325,11 +355,10 @@ export async function extractGroupPhotoFaces(imageData, maxFaces = 4) {
  * Match a query selfie against all indexed conference gallery faces with high precision.
  * 
  * Strict Thresholding:
- * - Similarity >= 0.72: Highly Confident Match
- * - Only photos truly containing the user are returned.
- * - No fake or random hall photos will ever be shown.
+ * - Similarity >= 0.80: High confidence face biometric match.
+ * - Filters out all unrelated hall/presentation photos.
  */
-export function rankGalleryMatches(queryEmbedding, photoFaces, threshold = 0.72) {
+export function rankGalleryMatches(queryEmbedding, photoFaces, threshold = 0.80) {
   if (!queryEmbedding || !photoFaces || !photoFaces.length) return [];
 
   const photoBestMatch = {};
@@ -344,7 +373,7 @@ export function rankGalleryMatches(queryEmbedding, photoFaces, threshold = 0.72)
 
     const sim = cosineSimilarity(queryEmbedding, targetVec);
 
-    // Only consider candidates meeting the similarity threshold
+    // Only consider candidates meeting the strict similarity threshold
     if (sim >= threshold) {
       if (!photoBestMatch[f.photo_id] || photoBestMatch[f.photo_id].score < sim) {
         photoBestMatch[f.photo_id] = {

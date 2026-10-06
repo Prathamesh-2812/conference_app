@@ -2578,6 +2578,26 @@ app.get('/api/thumbnail', async (req, res) => {
   }
 });
 
+app.get('/api/download', async (req, res) => {
+  try {
+    let rawUrl = req.query.url;
+    if (!rawUrl) return res.status(400).send('Missing url');
+
+    rawUrl = decodeURIComponent(rawUrl);
+    let relativePath = rawUrl.replace(/^https?:\/\/[^\/]+/, '');
+    relativePath = relativePath.replace(/^\/?uploads\//, '');
+    relativePath = relativePath.split('?')[0];
+
+    const sourcePath = path.join(uploadRoot, relativePath);
+    const fileName = path.basename(sourcePath) || `conference_photo_${Date.now()}.jpg`;
+
+    res.download(sourcePath, fileName);
+  } catch (err) {
+    if (req.query.url) return res.redirect(req.query.url);
+    res.status(404).send('File not found');
+  }
+});
+
 app.get('/api/gallery/albums', asyncRoute(async(req, res) => {
   const confId = parseInt(req.query.conferenceId) || 1;
   const [rows] = await pool.query(

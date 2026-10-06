@@ -5634,7 +5634,6 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _loadInitialMatchedPhotos();
     _loadAlbums();
     _loadAllPhotos(refresh: true);
 
@@ -5918,7 +5917,8 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
                     icon: const Icon(Icons.download_rounded, size: 20),
                     label: const Text('Download High-Res Photo', style: TextStyle(fontWeight: FontWeight.bold)),
                     onPressed: () {
-                      launchUrl(Uri.parse(photoUrl), mode: LaunchMode.externalApplication);
+                      final downloadUrl = resolveMediaUrl('/api/download?url=' + Uri.encodeComponent(photoUrl));
+                      launchUrl(Uri.parse(downloadUrl), mode: LaunchMode.externalApplication);
                     },
                   ),
                 ],
