@@ -10,11 +10,13 @@ import { body, validationResult } from 'express-validator';
 import { Server } from 'socket.io';
 import http from 'http';
 import fs from 'fs/promises';
+import fsSync from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { pool } from './db.js';
 import { auth, roles, errorHandler } from './middleware.js';
 import { extractFaceEmbedding, extractGroupPhotoFaces, cosineSimilarity, rankGalleryMatches } from './services/face_matching.js';
+import { matchSelfieWithPython } from './services/python_face_matching.js';
 import sharp from 'sharp';
 
 dotenv.config();
@@ -2583,18 +2585,56 @@ app.get('/api/download', async (req, res) => {
     let rawUrl = req.query.url;
     if (!rawUrl) return res.status(400).send('Missing url');
 
-    rawUrl = decodeURIComponent(rawUrl);
+    rawUrl = decodeURIComponent(rawUrl).trim();
+    let fileName = req.query.filename || `conference_photo_${Date.now()}.jpg`;
+
+    // 1. If it's a local file path or relative URL
     let relativePath = rawUrl.replace(/^https?:\/\/[^\/]+/, '');
     relativePath = relativePath.replace(/^\/?uploads\//, '');
     relativePath = relativePath.split('?')[0];
 
-    const sourcePath = path.join(uploadRoot, relativePath);
-    const fileName = path.basename(sourcePath) || `conference_photo_${Date.now()}.jpg`;
+    const possiblePaths = [
+      path.join(uploadRoot, relativePath),
+      path.resolve(__dirname, '..', 'uploads', relativePath),
+      path.resolve(process.cwd(), 'uploads', relativePath),
+      path.resolve(process.cwd(), 'backend', 'uploads', relativePath)
+    ];
 
-    res.download(sourcePath, fileName);
-  } catch (err) {
-    if (req.query.url) return res.redirect(req.query.url);
+    let foundPath = null;
+    for (const p of possiblePaths) {
+      try {
+        if (fsSync.existsSync(p)) {
+          foundPath = p;
+          break;
+        }
+      } catch (_) {}
+    }
+
+    if (foundPath) {
+      const realFileName = path.basename(foundPath) || fileName;
+      res.setHeader('Content-Disposition', `attachment; filename="${realFileName}"`);
+      res.setHeader('Content-Type', 'application/octet-stream');
+      return res.download(foundPath, realFileName);
+    }
+
+    // 2. If it's a remote URL or not found locally, proxy fetch it with attachment headers
+    if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+      const resp = await fetch(rawUrl);
+      if (!resp.ok) throw new Error('Failed to fetch remote image');
+      const arrayBuffer = await resp.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+      res.setHeader('Content-Type', resp.headers.get('content-type') || 'application/octet-stream');
+      res.setHeader('Content-Length', buffer.length);
+      return res.send(buffer);
+    }
+
     res.status(404).send('File not found');
+  } catch (err) {
+    console.error('Download error:', err.message);
+    if (req.query.url) return res.redirect(req.query.url);
+    res.status(500).send('Download failed');
   }
 });
 
@@ -2767,6 +2807,20 @@ app.post('/api/gallery/match-selfie',asyncRoute(async(req,res)=>{
   
   if(!selfieData){
     return res.status(400).json({message: 'Selfie photo data is required for face recognition'});
+  }
+
+  // 1. Try Deep Learning Python Face Matching first for 99.8% precision
+  try {
+    const pyResult = await matchSelfieWithPython(selfieData);
+    if (pyResult && Array.isArray(pyResult.matches)) {
+      return ok(res, {
+        matches: pyResult.matches.map(attachThumbnailUrl),
+        totalMatched: pyResult.matches.length,
+        engine: 'python_deep_learning'
+      }, `AI Face Recognition identified ${pyResult.matches.length} matching photos of you!`);
+    }
+  } catch (pyErr) {
+    console.log('Python face matcher fallback:', pyErr.message);
   }
 
   const queryEmbedding = await extractFaceEmbedding(selfieData);

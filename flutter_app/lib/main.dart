@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -5824,6 +5824,25 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
     }
   }
 
+  void _triggerDownload(String? rawUrl, [String? caption]) {
+    if (rawUrl == null || rawUrl.isEmpty) return;
+    final resolved = resolveMediaUrl(rawUrl);
+    final cleanName = (caption != null && caption.isNotEmpty && caption != 'Conference moment' && caption != 'Conference Moment')
+        ? '${caption.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_')}.jpg'
+        : 'conference_photo_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final downloadEndpoint = resolveMediaUrl('/api/download?url=${Uri.encodeComponent(resolved)}&filename=${Uri.encodeComponent(cleanName)}');
+    launchUrl(Uri.parse(downloadEndpoint), mode: LaunchMode.externalApplication);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Downloading photo to your device...'),
+          duration: Duration(seconds: 2),
+          backgroundColor: Color(0xFF16A34A),
+        ),
+      );
+    }
+  }
+
   void _openPhotoViewer(BuildContext context, dynamic photo, {bool isMatched = false}) {
     final photoUrl = resolveMediaUrl(photo['url']);
     final caption = photo['caption'] ?? 'Conference Moment';
@@ -5916,10 +5935,7 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
                     ),
                     icon: const Icon(Icons.download_rounded, size: 20),
                     label: const Text('Download High-Res Photo', style: TextStyle(fontWeight: FontWeight.bold)),
-                    onPressed: () {
-                      final downloadUrl = resolveMediaUrl('/api/download?url=' + Uri.encodeComponent(photoUrl));
-                      launchUrl(Uri.parse(downloadUrl), mode: LaunchMode.externalApplication);
-                    },
+                    onPressed: () => _triggerDownload(photoUrl, caption),
                   ),
                 ],
               ),
@@ -6176,9 +6192,7 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
                         top: 8,
                         right: 8,
                         child: InkWell(
-                          onTap: () {
-                            launchUrl(Uri.parse(fullUrl), mode: LaunchMode.externalApplication);
-                          },
+                          onTap: () => _triggerDownload(fullUrl, caption),
                           child: Container(
                             padding: const EdgeInsets.all(6),
                             decoration: BoxDecoration(
@@ -6367,9 +6381,7 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
                                     top: 8,
                                     right: 8,
                                     child: InkWell(
-                                      onTap: () {
-                                        launchUrl(Uri.parse(fullUrl), mode: LaunchMode.externalApplication);
-                                      },
+                                      onTap: () => _triggerDownload(fullUrl, caption),
                                       child: Container(
                                         padding: const EdgeInsets.all(6),
                                         decoration: BoxDecoration(
