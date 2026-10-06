@@ -5763,7 +5763,7 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
         if (photo == null) return;
 
         final bytes = await photo.readAsBytes();
-        base64Image = 'data:image/jpeg;base64,$';
+        base64Image = 'data:image/jpeg;base64,' + base64Encode(bytes);
       }
 
       setState(() {
@@ -5797,7 +5797,7 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
         if (matched.isNotEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('AI Face Recognition found $ photos of you!'),
+              content: Text('AI Face Recognition found ' + matched.length.toString() + ' photos of you!'),
               backgroundColor: maroon,
             ),
           );
@@ -6075,7 +6075,7 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Your Matched Photos ($)',
+              'Your Matched Photos (' + _matchedPhotos.length.toString() + ')',
               style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: slate),
             ),
           ],
@@ -6120,7 +6120,8 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
             itemCount: _matchedPhotos.length,
             itemBuilder: (context, index) {
               final item = _matchedPhotos[index];
-              final url = resolveMediaUrl(item['url']);
+              final thumbUrl = resolveMediaUrl(item['thumbnail_url'] ?? item['url']);
+              final fullUrl = resolveMediaUrl(item['url']);
               final caption = item['caption'] ?? 'Conference moment';
 
               return GestureDetector(
@@ -6142,7 +6143,7 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
                     children: [
                       Positioned.fill(
                         child: Image.network(
-                          url,
+                          thumbUrl,
                           fit: BoxFit.cover,
                           cacheWidth: 400,
                           cacheHeight: 400,
@@ -6174,7 +6175,7 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
                         right: 8,
                         child: InkWell(
                           onTap: () {
-                            launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                            launchUrl(Uri.parse(fullUrl), mode: LaunchMode.externalApplication);
                           },
                           child: Container(
                             padding: const EdgeInsets.all(6),
@@ -6309,7 +6310,8 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
                           }
 
                           final item = _allPhotos[index];
-                          final url = resolveMediaUrl(item['url']);
+                          final thumbUrl = resolveMediaUrl(item['thumbnail_url'] ?? item['url']);
+                          final fullUrl = resolveMediaUrl(item['url']);
                           final caption = item['caption'] ?? 'Conference moment';
                           final album = item['album'] ?? 'General';
 
@@ -6332,7 +6334,7 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
                                 children: [
                                   Positioned.fill(
                                     child: Image.network(
-                                      url,
+                                      thumbUrl,
                                       fit: BoxFit.cover,
                                       cacheWidth: 400,
                                       cacheHeight: 400,
@@ -6364,7 +6366,7 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
                                     right: 8,
                                     child: InkWell(
                                       onTap: () {
-                                        launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                                        launchUrl(Uri.parse(fullUrl), mode: LaunchMode.externalApplication);
                                       },
                                       child: Container(
                                         padding: const EdgeInsets.all(6),

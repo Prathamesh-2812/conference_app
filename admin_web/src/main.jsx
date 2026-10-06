@@ -4587,7 +4587,7 @@ function Gallery({tab, notify}){
     <div className="grid" style={{gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))',gap:'16px'}}>
       {filtered.map(x=><div key={x.id} style={{background:'#fff',borderRadius:'12px',overflow:'hidden',border:'1px solid #e2e8f0',boxShadow:'0 2px 8px rgba(0,0,0,0.05)',display:'flex',flexDirection:'column'}}>
         <div style={{height:'190px',background:'#eee',overflow:'hidden',position:'relative'}}>
-          <img src={resolveMediaUrl(x.url)} alt={x.caption||'Photo'} style={{width:'100%',height:'100%',objectFit:'cover'}} onError={(e)=>{e.target.src='https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800'}}/>
+          <img src={resolveMediaUrl(x.thumbnail_url || x.url)} alt={x.caption||'Photo'} style={{width:'100%',height:'100%',objectFit:'cover'}} onError={(e)=>{e.target.src='https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800'}}/>
           <span className="pill" style={{position:'absolute',top:'10px',left:'10px',background:'rgba(0,0,0,0.7)',color:'#fff',backdropFilter:'blur(4px)',fontSize:'11px'}}>{x.album}</span>
         </div>
         <div style={{padding:'14px',display:'flex',flexDirection:'column',flex:1,gap:'8px'}}>

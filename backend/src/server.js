@@ -2524,6 +2524,60 @@ app.get('/api/notices', asyncRoute(async (req, res) => {
   res.json(r);
 }));
 
+const thumbCacheDir = path.resolve(uploadRoot, 'thumbs_cache');
+fs.mkdir(thumbCacheDir, { recursive: true }).catch(() => {});
+
+function attachThumbnailUrl(item) {
+  if (!item || !item.url) return item;
+  const isHttp = item.url.startsWith('http://') || item.url.startsWith('https://');
+  const targetUrl = isHttp ? item.url : `/uploads/${item.url.replace(/^\/?uploads\//, '')}`;
+  return {
+    ...item,
+    thumbnail_url: `/api/thumbnail?url=${encodeURIComponent(targetUrl)}&w=400`
+  };
+}
+
+app.get('/api/thumbnail', async (req, res) => {
+  try {
+    let rawUrl = req.query.url;
+    if (!rawUrl) return res.status(400).send('Missing url');
+
+    rawUrl = decodeURIComponent(rawUrl);
+    let relativePath = rawUrl.replace(/^https?:\/\/[^\/]+/, '');
+    relativePath = relativePath.replace(/^\/?uploads\//, '');
+    relativePath = relativePath.split('?')[0];
+
+    const sourcePath = path.join(uploadRoot, relativePath);
+    const width = parseInt(req.query.w) || 400;
+    const quality = parseInt(req.query.q) || 75;
+    const cacheKey = `${relativePath.replace(/[^a-zA-Z0-9]/g, '_')}_w${width}_q${quality}.webp`;
+    const cachedFilePath = path.join(thumbCacheDir, cacheKey);
+
+    try {
+      await fs.access(cachedFilePath);
+      res.setHeader('Content-Type', 'image/webp');
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      return res.sendFile(cachedFilePath);
+    } catch (_) {}
+
+    const thumbBuffer = await sharp(sourcePath)
+      .resize({ width, withoutEnlargement: true })
+      .webp({ quality })
+      .toBuffer();
+
+    fs.writeFile(cachedFilePath, thumbBuffer).catch(() => {});
+
+    res.setHeader('Content-Type', 'image/webp');
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.send(thumbBuffer);
+  } catch (err) {
+    if (req.query.url) {
+      return res.redirect(req.query.url);
+    }
+    res.status(404).send('Not found');
+  }
+});
+
 app.get('/api/gallery/albums', asyncRoute(async(req, res) => {
   const confId = parseInt(req.query.conferenceId) || 1;
   const [rows] = await pool.query(
@@ -2552,7 +2606,7 @@ app.get('/api/gallery', asyncRoute(async(req, res) => {
   params.push(limit, offset);
 
   const [rows] = await pool.query(query, params);
-  res.json(rows);
+  res.json(rows.map(attachThumbnailUrl));
 }));
 
 app.get('/api/admin/gallery/albums',auth,roles('ADMIN','SUPER_ADMIN','PHOTOGRAPHER'),asyncRoute(async(req,res)=>{
@@ -2561,14 +2615,29 @@ app.get('/api/admin/gallery/albums',auth,roles('ADMIN','SUPER_ADMIN','PHOTOGRAPH
 }));
 
 app.get('/api/admin/gallery',auth,roles('ADMIN','SUPER_ADMIN','PHOTOGRAPHER'),asyncRoute(async(req,res)=>{
-  const [r]=await pool.query(`
-    SELECT ph.*, u.name as uploader_name,
-           (SELECT COUNT(*) FROM photo_faces WHERE photo_id = ph.id) as indexed_faces
+  const confId = parseInt(req.query.conferenceId) || 1;
+  const album = req.query.album;
+  const page = parseInt(req.query.page) || 1;
+  const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+  const offset = (page - 1) * limit;
+
+  let query = `
+    SELECT ph.id, ph.conference_id, ph.album, ph.url, ph.caption, ph.created_at, u.name as uploader_name
     FROM photos ph
     LEFT JOIN users u ON u.id = ph.uploaded_by
-    WHERE ph.conference_id=?
-    ORDER BY ph.created_at DESC`, [req.query.conferenceId||1]);
-  res.json(r);
+    WHERE ph.conference_id=?`;
+  const params = [confId];
+
+  if (album && album !== 'ALL' && album !== 'All') {
+    query += ` AND ph.album = ?`;
+    params.push(album);
+  }
+
+  query += ` ORDER BY ph.id DESC LIMIT ? OFFSET ?`;
+  params.push(limit, offset);
+
+  const [r]=await pool.query(query, params);
+  res.json(r.map(attachThumbnailUrl));
 }));
 
 app.post('/api/admin/gallery',auth,roles('ADMIN','SUPER_ADMIN','PHOTOGRAPHER'),asyncRoute(async(req,res)=>{
@@ -2716,7 +2785,7 @@ app.post('/api/gallery/match-selfie',asyncRoute(async(req,res)=>{
   const matchedPhotos = rankGalleryMatches(queryEmbedding, faces);
 
   ok(res, {
-    matches: matchedPhotos,
+    matches: matchedPhotos.map(attachThumbnailUrl),
     totalMatched: matchedPhotos.length,
   }, `AI Face Recognition identified ${matchedPhotos.length} matching photos of you!`);
 }));
@@ -2738,7 +2807,7 @@ app.get('/api/gallery/my-photos',auth,asyncRoute(async(req,res)=>{
 
   const matched = rankGalleryMatches(queryVec, faces);
   ok(res, {
-    matches: matched,
+    matches: matched.map(attachThumbnailUrl),
     totalMatched: matched.length,
     hasProfilePhoto: true,
   }, `Found ${matched.length} photos of you in the conference gallery`);
