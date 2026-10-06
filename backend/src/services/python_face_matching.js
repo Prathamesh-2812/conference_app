@@ -7,6 +7,23 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const pythonScriptPath = path.resolve(__dirname, '..', 'ai_face_engine.py');
 
+function getPythonBinary() {
+  const possiblePaths = [
+    path.resolve(__dirname, '..', 'venv', 'bin', 'python3'),
+    path.resolve(__dirname, '..', '..', 'venv', 'bin', 'python3'),
+    path.resolve(__dirname, '..', 'venv', 'bin', 'python'),
+    path.resolve(__dirname, '..', '..', 'venv', 'bin', 'python'),
+    'python3',
+    'python'
+  ];
+  for (const p of possiblePaths) {
+    if (p.includes('/') || p.includes('\\')) {
+      if (fs.existsSync(p)) return p;
+    }
+  }
+  return 'python3';
+}
+
 /**
  * Execute Python deep-learning face matcher
  * Returns Promise<{ status: string, matches: Array, totalMatched: number } | null>
@@ -18,8 +35,8 @@ export async function matchSelfieWithPython(selfieData, tolerance = 0.55) {
         return resolve(null);
       }
 
-      // Try python3 first, then python
-      const pyProcess = spawn('python3', [pythonScriptPath, 'match', '--tolerance', String(tolerance)], {
+      const pythonBin = getPythonBinary();
+      const pyProcess = spawn(pythonBin, [pythonScriptPath, 'match', '--tolerance', String(tolerance)], {
         stdio: ['pipe', 'pipe', 'pipe']
       });
 
