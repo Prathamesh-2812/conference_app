@@ -63,6 +63,55 @@
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+  <script>
+    // Automatic Direct Photo Download Engine for DYPESCONF
+    (function() {
+      var origOpen = window.open;
+      window.open = function(url, target, features) {
+        if (typeof url === 'string') {
+          var isImage = /\.(jpg|jpeg|png|webp|gif)(\?.*)?$/i.test(url) || url.indexOf('/uploads/') !== -1 || url.indexOf('/api/download') !== -1;
+          if (isImage) {
+            var filename = url.split('/').pop().split('?')[0] || ('conference_photo_' + Date.now() + '.jpg');
+            if (filename.indexOf('.') === -1) filename += '.jpg';
+            var downloadUrl = url.indexOf('/api/download') !== -1 ? url : ('/api/download?url=' + encodeURIComponent(url) + '&filename=' + encodeURIComponent(filename));
+
+            // Fetch as blob for instant direct download without opening new tabs
+            fetch(url)
+              .then(function(res) {
+                if (!res.ok) throw new Error('Fetch failed');
+                return res.blob();
+              })
+              .then(function(blob) {
+                var blobUrl = window.URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = blobUrl;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(function() {
+                  window.URL.revokeObjectURL(blobUrl);
+                  document.body.removeChild(a);
+                }, 1000);
+              })
+              .catch(function() {
+                var a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = downloadUrl;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(function() {
+                  document.body.removeChild(a);
+                }, 1000);
+              });
+            return null;
+          }
+        }
+        return origOpen.apply(this, arguments);
+      };
+    })();
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
