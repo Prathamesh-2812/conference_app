@@ -1,14 +1,27 @@
-import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { pool } from './db.js';
-import { extractGroupPhotoFaces } from './services/face_matching.js';
-
-dotenv.config();
+import dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+const envPaths = [
+  path.resolve(process.cwd(), '.env'),
+  path.resolve(__dirname, '..', '.env'),
+  path.resolve(__dirname, '../..', '.env')
+];
+
+for (const p of envPaths) {
+  if (fs.existsSync(p)) {
+    dotenv.config({ path: p });
+    break;
+  }
+}
+
+import { pool } from './db.js';
+import { extractGroupPhotoFaces } from './services/face_matching.js';
+
 const uploadRoot = path.resolve(__dirname, '..', 'uploads');
 
 async function reindexGallery() {
