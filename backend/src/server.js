@@ -2524,9 +2524,35 @@ app.get('/api/notices', asyncRoute(async (req, res) => {
   res.json(r);
 }));
 
-app.get('/api/gallery',asyncRoute(async(req,res)=>{
-  const [r]=await pool.query('SELECT * FROM photos WHERE conference_id=? ORDER BY created_at DESC',[req.query.conferenceId||1]);
-  res.json(r);
+app.get('/api/gallery/albums', asyncRoute(async(req, res) => {
+  const confId = parseInt(req.query.conferenceId) || 1;
+  const [rows] = await pool.query(
+    'SELECT album, COUNT(*) as photo_count FROM photos WHERE conference_id=? GROUP BY album ORDER BY photo_count DESC',
+    [confId]
+  );
+  res.json(rows);
+}));
+
+app.get('/api/gallery', asyncRoute(async(req, res) => {
+  const confId = parseInt(req.query.conferenceId) || 1;
+  const album = req.query.album;
+  const page = parseInt(req.query.page) || 1;
+  const limit = Math.min(parseInt(req.query.limit) || 40, 100);
+  const offset = (page - 1) * limit;
+
+  let query = 'SELECT id, conference_id, album, url, caption, created_at FROM photos WHERE conference_id=?';
+  const params = [confId];
+
+  if (album && album !== 'ALL' && album !== 'All') {
+    query += ' AND album = ?';
+    params.push(album);
+  }
+
+  query += ' ORDER BY id DESC LIMIT ? OFFSET ?';
+  params.push(limit, offset);
+
+  const [rows] = await pool.query(query, params);
+  res.json(rows);
 }));
 
 app.get('/api/admin/gallery/albums',auth,roles('ADMIN','SUPER_ADMIN','PHOTOGRAPHER'),asyncRoute(async(req,res)=>{

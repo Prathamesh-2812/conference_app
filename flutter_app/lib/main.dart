@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -5617,22 +5617,107 @@ class GalleryScreen extends StatefulWidget {
 class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final ImagePicker _picker = ImagePicker();
+  final ScrollController _allPhotosScroll = ScrollController();
+
   bool _isMatching = false;
   List<dynamic> _matchedPhotos = [];
+
+  List<String> _albums = ['ALL'];
+  List<dynamic> _allPhotos = [];
   String _activeAlbum = 'ALL';
-  int _refreshKey = 0;
+  int _currentPage = 1;
+  bool _isLoadingAllPhotos = false;
+  bool _hasMoreAllPhotos = true;
+  bool _initialLoaded = false;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _loadInitialMatchedPhotos();
+    _loadAlbums();
+    _loadAllPhotos(refresh: true);
+
+    _allPhotosScroll.addListener(() {
+      if (_allPhotosScroll.hasClients &&
+          _allPhotosScroll.position.pixels >= _allPhotosScroll.position.maxScrollExtent - 400) {
+        if (!_isLoadingAllPhotos && _hasMoreAllPhotos) {
+          _loadAllPhotos(refresh: false);
+        }
+      }
+    });
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _allPhotosScroll.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadAlbums() async {
+    try {
+      final res = await ApiService.get('/gallery/albums?conferenceId=${ConferenceService.activeConferenceId}');
+      if (res is List) {
+        final loaded = ['ALL', ...res.map((r) => (r['album'] ?? 'General').toString())].toSet().toList();
+        if (mounted) {
+          setState(() => _albums = loaded);
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _loadAllPhotos({bool refresh = false}) async {
+    if (_isLoadingAllPhotos) return;
+    if (refresh) {
+      _currentPage = 1;
+      _hasMoreAllPhotos = true;
+    }
+    if (!_hasMoreAllPhotos) return;
+
+    setState(() => _isLoadingAllPhotos = true);
+
+    try {
+      final albumParam = _activeAlbum == 'ALL' ? '' : '&album=${Uri.encodeComponent(_activeAlbum)}';
+      final res = await ApiService.get(
+        '/gallery?conferenceId=${ConferenceService.activeConferenceId}&page=$_currentPage&limit=40$albumParam',
+      );
+
+      final List<dynamic> newItems = res is List ? res : [];
+      if (mounted) {
+        setState(() {
+          if (refresh) {
+            _allPhotos = newItems;
+          } else {
+            _allPhotos.addAll(newItems);
+          }
+          if (newItems.length < 40) {
+            _hasMoreAllPhotos = false;
+          } else {
+            _currentPage++;
+          }
+          _isLoadingAllPhotos = false;
+          _initialLoaded = true;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingAllPhotos = false;
+          _initialLoaded = true;
+        });
+      }
+    }
+  }
+
+  void _switchAlbum(String album) {
+    if (_activeAlbum == album) return;
+    setState(() {
+      _activeAlbum = album;
+      _allPhotos.clear();
+      _isLoadingAllPhotos = true;
+    });
+    _loadAllPhotos(refresh: true);
   }
 
   Future<void> _loadInitialMatchedPhotos() async {
@@ -5678,7 +5763,7 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
         if (photo == null) return;
 
         final bytes = await photo.readAsBytes();
-        base64Image = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+        base64Image = 'data:image/jpeg;base64,$';
       }
 
       setState(() {
@@ -5712,7 +5797,7 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
         if (matched.isNotEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('AI Face Recognition found ${matched.length} photos of you!'),
+              content: Text('AI Face Recognition found $ photos of you!'),
               backgroundColor: maroon,
             ),
           );
@@ -5799,6 +5884,20 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
                           style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                         ),
                       ),
+                      if (confidence != null) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF16A34A).withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            confidence,
+                            style: const TextStyle(color: Color(0xFF16A34A), fontSize: 11, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -5976,7 +6075,7 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Your Matched Photos (${_matchedPhotos.length})',
+              'Your Matched Photos ($)',
               style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: slate),
             ),
           ],
@@ -6023,7 +6122,6 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
               final item = _matchedPhotos[index];
               final url = resolveMediaUrl(item['url']);
               final caption = item['caption'] ?? 'Conference moment';
-              final confidence = item['confidencePercent'] ?? '94% Match';
 
               return GestureDetector(
                 onTap: () => _openPhotoViewer(context, item, isMatched: true),
@@ -6046,6 +6144,25 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
                         child: Image.network(
                           url,
                           fit: BoxFit.cover,
+                          cacheWidth: 400,
+                          cacheHeight: 400,
+                          filterQuality: FilterQuality.low,
+                          loadingBuilder: (ctx, child, progress) {
+                            if (progress == null) return child;
+                            return Container(
+                              color: const Color(0xFFF1F5F9),
+                              child: const Center(
+                                child: SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    color: Color(0xFFC7A762),
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
                           errorBuilder: (_, __, ___) => Container(
                             color: Colors.grey.shade200,
                             child: const Icon(Icons.broken_image, color: Colors.grey),
@@ -6104,212 +6221,211 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
     return RefreshIndicator(
       color: maroon,
       onRefresh: () async {
-        setState(() => _refreshKey++);
+        await _loadAlbums();
+        await _loadAllPhotos(refresh: true);
       },
-      child: FutureBuilder(
-        key: ValueKey(_refreshKey),
-        future: ApiService.get('/gallery'),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: maroon));
-          }
-          if (snapshot.hasError) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.photo_library_outlined, size: 48, color: muted),
-                    const SizedBox(height: 12),
-                    const Text('Unable to load conference gallery', style: TextStyle(fontWeight: FontWeight.bold, color: slate)),
-                    const SizedBox(height: 12),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(backgroundColor: maroon, foregroundColor: Colors.white),
-                      icon: const Icon(Icons.refresh, size: 16),
-                      label: const Text('Retry'),
-                      onPressed: () => setState(() => _refreshKey++),
+      child: Column(
+        children: [
+          Container(
+            height: 48,
+            margin: const EdgeInsets.symmetric(vertical: 8),
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              itemCount: _albums.length,
+              itemBuilder: (context, idx) {
+                final album = _albums[idx];
+                final isSelected = _activeAlbum == album;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(album),
+                    selected: isSelected,
+                    selectedColor: maroon,
+                    backgroundColor: const Color(0xFFF1F5F9),
+                    labelStyle: TextStyle(
+                      color: isSelected ? Colors.white : slate,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                      fontSize: 12,
                     ),
-                  ],
-                ),
-              ),
-            );
-          }
-
-          final photos = snapshot.data is List ? (snapshot.data as List) : [];
-          if (photos.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.photo_library_outlined, size: 64, color: Colors.grey.shade300),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'No Conference Photos Yet',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: slate),
-                    ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      'Photos uploaded by event organizers will appear here.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 13, color: muted),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }
-
-          final distinctAlbums = {'ALL', ...photos.map((p) => (p['album'] ?? 'General').toString())}.toList();
-          final filtered = _activeAlbum == 'ALL'
-              ? photos
-              : photos.where((p) => (p['album'] ?? 'General') == _activeAlbum).toList();
-
-          return Column(
-            children: [
-              Container(
-                height: 48,
-                margin: const EdgeInsets.symmetric(vertical: 8),
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  itemCount: distinctAlbums.length,
-                  itemBuilder: (context, idx) {
-                    final album = distinctAlbums[idx];
-                    final isSelected = _activeAlbum == album;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(album),
-                        selected: isSelected,
-                        selectedColor: maroon,
-                        backgroundColor: const Color(0xFFF1F5F9),
-                        labelStyle: TextStyle(
-                          color: isSelected ? Colors.white : slate,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                          fontSize: 12,
-                        ),
-                        onSelected: (_) => setState(() => _activeAlbum = album),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              Expanded(
-                child: GridView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                    childAspectRatio: 0.9,
+                    onSelected: (_) => _switchAlbum(album),
                   ),
-                  itemCount: filtered.length,
-                  itemBuilder: (context, index) {
-                    final item = filtered[index];
-                    final url = resolveMediaUrl(item['url']);
-                    final caption = item['caption'] ?? 'Conference moment';
-                    final album = item['album'] ?? 'General';
+                );
+              },
+            ),
+          ),
+          Expanded(
+            child: !_initialLoaded && _isLoadingAllPhotos
+                ? const Center(child: CircularProgressIndicator(color: maroon))
+                : _allPhotos.isEmpty && !_isLoadingAllPhotos
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.photo_library_outlined, size: 64, color: Colors.grey.shade300),
+                              const SizedBox(height: 16),
+                              const Text(
+                                'No Conference Photos Yet',
+                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: slate),
+                              ),
+                              const SizedBox(height: 6),
+                              const Text(
+                                'Photos uploaded for this album will appear here.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(fontSize: 13, color: muted),
+                              ),
+                              const SizedBox(height: 16),
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(backgroundColor: maroon, foregroundColor: Colors.white),
+                                icon: const Icon(Icons.refresh, size: 16),
+                                label: const Text('Refresh'),
+                                onPressed: () => _loadAllPhotos(refresh: true),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : GridView.builder(
+                        controller: _allPhotosScroll,
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 10,
+                          childAspectRatio: 0.9,
+                        ),
+                        itemCount: _allPhotos.length + (_hasMoreAllPhotos ? 1 : 0),
+                        itemBuilder: (context, index) {
+                          if (index == _allPhotos.length) {
+                            return const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(16),
+                                child: CircularProgressIndicator(color: maroon, strokeWidth: 2.5),
+                              ),
+                            );
+                          }
 
-                    return GestureDetector(
-                      onTap: () => _openPhotoViewer(context, item, isMatched: false),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(14),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 6,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        clipBehavior: Clip.antiAlias,
-                        child: Stack(
-                          children: [
-                            Positioned.fill(
-                              child: Image.network(
-                                url,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(
-                                  color: Colors.grey.shade200,
-                                  child: const Icon(Icons.broken_image, color: Colors.grey),
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              top: 8,
-                              right: 8,
-                              child: InkWell(
-                                onTap: () {
-                                  launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.all(6),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.65),
-                                    shape: BoxShape.circle,
+                          final item = _allPhotos[index];
+                          final url = resolveMediaUrl(item['url']);
+                          final caption = item['caption'] ?? 'Conference moment';
+                          final album = item['album'] ?? 'General';
+
+                          return GestureDetector(
+                            onTap: () => _openPhotoViewer(context, item, isMatched: false),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(14),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.05),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
                                   ),
-                                  child: const Icon(Icons.download_rounded, color: Colors.white, size: 16),
-                                ),
+                                ],
                               ),
-                            ),
-                            Positioned(
-                              top: 8,
-                              left: 8,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.65),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  album,
-                                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              bottom: 0,
-                              left: 0,
-                              right: 0,
-                              child: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
+                              clipBehavior: Clip.antiAlias,
+                              child: Stack(
+                                children: [
+                                  Positioned.fill(
+                                    child: Image.network(
+                                      url,
+                                      fit: BoxFit.cover,
+                                      cacheWidth: 400,
+                                      cacheHeight: 400,
+                                      filterQuality: FilterQuality.low,
+                                      loadingBuilder: (ctx, child, progress) {
+                                        if (progress == null) return child;
+                                        return Container(
+                                          color: const Color(0xFFF1F5F9),
+                                          child: const Center(
+                                            child: SizedBox(
+                                              width: 22,
+                                              height: 22,
+                                              child: CircularProgressIndicator(
+                                                color: Color(0xFFC7A762),
+                                                strokeWidth: 2,
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      errorBuilder: (_, __, ___) => Container(
+                                        color: Colors.grey.shade200,
+                                        child: const Icon(Icons.broken_image, color: Colors.grey),
+                                      ),
+                                    ),
                                   ),
-                                ),
-                                child: Text(
-                                  caption,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
-                                ),
+                                  Positioned(
+                                    top: 8,
+                                    right: 8,
+                                    child: InkWell(
+                                      onTap: () {
+                                        launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.all(6),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withOpacity(0.65),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(Icons.download_rounded, color: Colors.white, size: 16),
+                                      ),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    top: 8,
+                                    left: 8,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withOpacity(0.65),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        album,
+                                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    bottom: 0,
+                                    left: 0,
+                                    right: 0,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
+                                          begin: Alignment.topCenter,
+                                          end: Alignment.bottomCenter,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        caption,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
-                        ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          );
-        },
+          ),
+        ],
       ),
     );
   }
 }
 
-// ----------------------------------------------------
-// CHAT & CONVERSATION SCREEN
+// ----------------------------------------------------// CHAT & CONVERSATION SCREEN
 // ----------------------------------------------------
 class ChatScreen extends StatelessWidget {
   const ChatScreen({super.key});

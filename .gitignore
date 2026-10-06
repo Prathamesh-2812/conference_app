@@ -23,4 +23,5 @@ pubspec.lock
 .DS_Store
 Thumbs.db
 scratch_*
+backend/src/patch_*
 *.apk
