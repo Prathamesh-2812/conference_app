@@ -5668,7 +5668,7 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
   }
 
   Future<void> _loadAllPhotos({bool refresh = false}) async {
-    if (_isLoadingAllPhotos) return;
+    if (_isLoadingAllPhotos && !refresh) return;
     if (refresh) {
       _currentPage = 1;
       _hasMoreAllPhotos = true;
@@ -5716,6 +5716,8 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
       _activeAlbum = album;
       _allPhotos.clear();
       _isLoadingAllPhotos = true;
+      _hasMoreAllPhotos = true;
+      _currentPage = 1;
     });
     _loadAllPhotos(refresh: true);
   }
