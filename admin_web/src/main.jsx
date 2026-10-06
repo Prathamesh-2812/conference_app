@@ -4594,7 +4594,10 @@ function Gallery({tab, notify}){
           <p style={{margin:0,fontSize:'14px',fontWeight:'600',color:'#1e293b',lineHeight:'1.4'}}>{x.caption||'Conference moment'}</p>
           <div style={{marginTop:'auto',display:'flex',justifyContent:'space-between',alignItems:'center',paddingTop:'8px',borderTop:'1px solid #f1f5f9'}}>
             <small style={{color:'#94a3b8'}}>{new Date(x.created_at).toLocaleDateString()}</small>
-            <button style={{color:'#ef4444',borderColor:'#fecaca',padding:'3px 8px',fontSize:'12px'}} onClick={async()=>{if(confirm('Delete photo?')){await req(`/admin/gallery/${x.id}`,{method:'DELETE'});load();notify('Photo deleted');}}}>Delete</button>
+            <div style={{display:'flex',gap:'6px',alignItems:'center'}}>
+              <a href={resolveMediaUrl(x.url)} download target="_blank" rel="noreferrer" style={{color:'#0284c7',borderColor:'#bae6fd',padding:'3px 8px',fontSize:'12px',textDecoration:'none',border:'1px solid #bae6fd',borderRadius:'6px',background:'#f0f9ff',display:'inline-flex',alignItems:'center',gap:'4px',fontWeight:'600'}}>⬇ Download</a>
+              <button style={{color:'#ef4444',borderColor:'#fecaca',padding:'3px 8px',fontSize:'12px'}} onClick={async()=>{if(confirm('Delete photo?')){await req(`/admin/gallery/${x.id}`,{method:'DELETE'});load();notify('Photo deleted');}}}>Delete</button>
+            </div>
           </div>
         </div>
       </div>)}

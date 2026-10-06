@@ -6053,6 +6053,23 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
                         ),
                       ),
                       Positioned(
+                        top: 8,
+                        right: 8,
+                        child: InkWell(
+                          onTap: () {
+                            launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.65),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.download_rounded, color: Colors.white, size: 16),
+                          ),
+                        ),
+                      ),
+                      Positioned(
                         bottom: 0,
                         left: 0,
                         right: 0,
@@ -6220,6 +6237,23 @@ class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProvider
                                 errorBuilder: (_, __, ___) => Container(
                                   color: Colors.grey.shade200,
                                   child: const Icon(Icons.broken_image, color: Colors.grey),
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              top: 8,
+                              right: 8,
+                              child: InkWell(
+                                onTap: () {
+                                  launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.65),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.download_rounded, color: Colors.white, size: 16),
                                 ),
                               ),
                             ),
