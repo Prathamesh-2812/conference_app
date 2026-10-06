@@ -126,9 +126,8 @@ def process_single_photo(p, base_upload_dir):
 
 def cmd_reindex():
     import time
-    from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    print("--- [Turbo AI Engine] Starting High-Speed Face Re-Indexing ---")
+    print("--- [AI Face Engine] Starting High-Speed Face Re-Indexing ---")
     conn = get_db_connection()
     if not conn:
         print("Database connection failed. Ensure .env has correct DB_USER and DB_PASSWORD.")
@@ -147,25 +146,18 @@ def cmd_reindex():
     # Clear old faces
     cursor.execute("TRUNCATE TABLE photo_faces")
     conn.commit()
-    print("Cleared old photo_faces table. Processing in parallel across all CPU cores...\n")
+    print("Cleared old photo_faces table.\n")
 
     base_upload_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'uploads'))
-    
-    num_workers = min(8, max(2, (os.cpu_count() or 4) * 2))
-    print(f"Using {num_workers} parallel workers with auto-image optimization for maximum speed.\n")
 
     start_time = time.time()
     faces_indexed = 0
     photos_with_faces = 0
-    completed = 0
     batch_insert = []
 
-    with ThreadPoolExecutor(max_workers=num_workers) as executor:
-        futures = [executor.submit(process_single_photo, p, base_upload_dir) for p in photos]
-        for future in as_completed(futures):
-            res = future.result()
-            completed += 1
-
+    for idx, p in enumerate(photos, 1):
+        try:
+            res = process_single_photo(p, base_upload_dir)
             if res['faces']:
                 photos_with_faces += 1
                 for f in res['faces']:
@@ -177,8 +169,7 @@ def cmd_reindex():
                     ))
                     faces_indexed += 1
 
-            # Batch commit every 50 photos or at the end
-            if len(batch_insert) >= 100 or completed == len(photos):
+            if len(batch_insert) >= 50 or idx == len(photos):
                 if batch_insert:
                     cursor.executemany(
                         "INSERT INTO photo_faces (photo_id, conference_id, bounding_box, embedding) VALUES (%s, %s, %s, %s)",
@@ -186,12 +177,14 @@ def cmd_reindex():
                     )
                     conn.commit()
                     batch_insert.clear()
+        except Exception as err:
+            pass
 
-            if completed % 50 == 0 or completed == len(photos):
-                elapsed = max(0.1, time.time() - start_time)
-                speed = completed / elapsed
-                percent = int((completed / len(photos)) * 100)
-                print(f"Progress: [{completed}/{len(photos)}] ({percent}%) | {faces_indexed} genuine faces indexed | Speed: {speed:.1f} photos/sec")
+        if idx % 50 == 0 or idx == len(photos):
+            elapsed = max(0.1, time.time() - start_time)
+            speed = idx / elapsed
+            percent = int((idx / len(photos)) * 100)
+            print(f"Progress: [{idx}/{len(photos)}] ({percent}%) | {faces_indexed} genuine faces indexed | Speed: {speed:.1f} photos/sec")
 
     cursor.close()
     conn.close()
